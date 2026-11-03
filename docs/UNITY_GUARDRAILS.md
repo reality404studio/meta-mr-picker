@@ -138,3 +138,8 @@
 ## 실기에서 바뀐 것
 
 _실기에서 다르게 나온 항목을 날짜와 함께 덧붙인다._
+
+---
+**Claude Code** · 2026-11-03 14:11
+
+실기에서 바뀐 것 (2026-11-03, Unity 6000.3.27f2 + Core 207.0.1, 파일로 확인): 생성된 AndroidManifest 의 액티비티가 com.unity3d.player.UnityPlayerGameActivity 다 (GameActivity). §6 의 am start -n <PKG>/com.unity3d.player.UnityPlayerActivity 는 이 프로젝트에선 <PKG>/com.unity3d.player.UnityPlayerGameActivity 로. 실기에서 한 번 더 확인할 것.
