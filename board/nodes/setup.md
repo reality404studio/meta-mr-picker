@@ -1,4 +1,4 @@
-# ⛔ Unity 셋업 + First Light
+# ✅ Unity 셋업 + First Light
 
 [← 보드로](../BOARD.md)
 
@@ -29,8 +29,6 @@
   <br><sub>GateFileChecks 에 주석 검사 (Assets/Scripts, Assets/Editor, unity/shared). 예외: MetaQuestVRSetup.cs(Meta 배포), 배치 실행 안내 머리말. 이유 주석(SceneSetup:62·85, FirstLight:3·82, Build:41)은 EditMode 테스트·게이트 검사로 바꾼 뒤 지운다</sub>
 - [x] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
-- [ ] ▶ **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증 ⛔ 막힘
-  <br><sub>First Light 빌드를 전철에 들고 가서. 설정 > 실험 기능 > Travel Mode (기차 지원, v71+). 공중에 띄운 물체가 차량 가감속에 미끄러지는지, 손 추적이 흔들림에 버티는지, PCA 가 도는지. 컨셉 전체가 여기에 걸려 있어 최대한 일찍</sub>
 
 ## 메모
 

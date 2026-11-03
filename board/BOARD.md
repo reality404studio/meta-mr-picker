@@ -2,7 +2,7 @@
 
 <sub>작업대 앱 id: mood-picker</sub>
 
-> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 01:03 KST · 과업 6/18 완료
+> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 01:59 KST · 과업 7/18 완료
 > 고칠 때는 작업대에서 (`npm run studio -- … --app mood-picker`), 그다음 `scripts/sync-docs.sh` → 커밋·푸시.
 
 범례: ✅ 완료 · 🔶 진행 중 · 👀 확인 필요 · ⬜ 대기 · ⛔ 막힘 · ▶ 과업 안에서 지금 차례
@@ -11,6 +11,7 @@
 
 | 누가 | 하위 과업 | 과업 | 상태 |
 | --- | --- | --- | --- |
+| 사람 | 테스트 영상 촬영: 윤슬 · 나뭇잎 · 바닥 타일 (+ 밤 불빛) | [Catch: 채집 사각형 · 크롭 · 원본 저장](nodes/catch.md) | ⬜ 대기 |
 
 ## 흐름
 
@@ -31,7 +32,7 @@ flowchart LR
     direction TB
     use_unity_guardrails["Unity 실기 가드레일 (패스스루 안 보임 방지)"]:::doing
     use_unity_version["Unity 버전"]:::done
-    setup["Unity 셋업 + First Light 11/12"]:::blocked
+    setup["Unity 셋업 + First Light 11/11"]:::done
   end
   subgraph s_build["구현"]
     direction TB
@@ -43,7 +44,7 @@ flowchart LR
   end
   subgraph s_review["마감"]
     direction TB
-    polish["폴리시 + 디자인 테스트 0/6"]:::todo
+    polish["폴리시 + 디자인 테스트 0/7"]:::blocked
     demo_video["데모 영상 (3분 미만) 0/4"]:::todo
     submit["제출 0/3"]:::todo
     post_mvp["MVP 이후 (보류) 0/4"]:::blocked
@@ -151,7 +152,7 @@ _11-03~04 · Quest에서 패스스루 + 손 + 카메라 텍스처 First Light_
 
 ### ✅ [Unity 버전](nodes/unity-version.md) · 공통
 
-### ⛔ [Unity 셋업 + First Light](nodes/setup.md) · 11/12
+### ✅ [Unity 셋업 + First Light](nodes/setup.md) · 11/11
 
 Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
 
@@ -177,8 +178,6 @@ Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
   <br><sub>GateFileChecks 에 주석 검사 (Assets/Scripts, Assets/Editor, unity/shared). 예외: MetaQuestVRSetup.cs(Meta 배포), 배치 실행 안내 머리말. 이유 주석(SceneSetup:62·85, FirstLight:3·82, Build:41)은 EditMode 테스트·게이트 검사로 바꾼 뒤 지운다</sub>
 - [x] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
-- [ ] ▶ **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증 ⛔ 막힘
-  <br><sub>First Light 빌드를 전철에 들고 가서. 설정 > 실험 기능 > Travel Mode (기차 지원, v71+). 공중에 띄운 물체가 차량 가감속에 미끄러지는지, 손 추적이 흔들림에 버티는지, PCA 가 도는지. 컨셉 전체가 여기에 걸려 있어 최대한 일찍</sub>
 
 ## 4. 구현
 
@@ -187,8 +186,6 @@ _11-05~14 · Catch → Loop → 포탈 → Dab → 내보내기. MVP = Catch + �
 ### ⬜ [Catch: 채집 사각형 · 크롭 · 원본 저장](nodes/catch.md) · 0/10
 
 11-05~07 · 머리 레이 + 양손 핀치로 정사각형 영역을 담는다. 찰칵(시야 원본 그대로 + 이음매 없는 타일) 모드가 MVP
-
-기다림: Unity 셋업 + First Light
 
 - [ ] ▶ **테스트 영상 촬영: 윤슬 · 나뭇잎 · 바닥 타일 (+ 밤 불빛)** · 사람 · 수집
   <br><sub>폰으로. 과목당 고정 10~15초 + 손에 든 10초, 노출·초점 잠금. 원본은 my-vr-colorpicker/footage/ (git 밖), 메모만 여기에</sub>
@@ -275,7 +272,7 @@ _11-05~14 · Catch → Loop → 포탈 → Dab → 내보내기. MVP = Catch + �
 
 _11-15~18 · 폴리시, 디자인 테스트, 데모 영상, 제출_
 
-### ⬜ [폴리시 + 디자인 테스트](nodes/polish.md) · 0/6
+### ⛔ [폴리시 + 디자인 테스트](nodes/polish.md) · 0/7
 
 11-15~17 · 첫 5분을 다듬고 대회 디자인 가이드라인 테스트를 통과한다
 
@@ -292,6 +289,8 @@ _11-15~18 · 폴리시, 디자인 테스트, 데모 영상, 제출_
   <br><sub>하드 요구사항. 디버그용으로 켰던 컨트롤러 의존(샘플의 A/B 버튼 등)이 남았는지 · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 - [ ] **비행기 좌석(60cm, 앉아서) · 버스 한 정거장 · 가져가 보기** · 사람 · 검증
   <br><sub>결과를 polish README 표에 · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
+- [ ] **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증 ⛔ 막힘
+  <br><sub>First Light 빌드를 전철에 들고 가서. 설정 > 실험 기능 > Travel Mode (기차 지원, v71+). 공중에 띄운 물체가 차량 가감속에 미끄러지는지, 손 추적이 흔들림에 버티는지, PCA 가 도는지. 컨셉 전체가 여기에 걸려 있어 최대한 일찍</sub>
 
 ### ⬜ [데모 영상 (3분 미만)](nodes/demo-video.md) · 0/4
 

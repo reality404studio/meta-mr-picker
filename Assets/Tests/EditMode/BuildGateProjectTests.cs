@@ -18,6 +18,14 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void DeskKeyboardScene_PassesBuildGateFileChecks()
+        {
+            var fails = GateFileChecks.RunAll(Root, new[] { "Assets/Scenes/DeskKeyboard.unity" })
+                .Where(r => r.Level == GateLevel.Fail).Select(r => r.ToString()).ToList();
+            Assert.That(fails, Is.Empty, string.Join("\n", fails));
+        }
+
+        [Test]
         public void GateConfigUsesMoodPickerLogTag()
         {
             Assert.That(GateConfig.Load(Root).LogTag, Is.EqualTo("MP"));

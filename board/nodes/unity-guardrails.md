@@ -177,3 +177,8 @@ _실기에서 다르게 나온 항목을 날짜와 함께 덧붙인다._
 **Claude Code** · 2026-11-03 15:14
 
 실기에서 바뀐 것 (2026-11-04, 실기 확인): ① metavr_unity_setup 으로 부트스트랩한 프로젝트는 URP 패키지만 있고 **URP 파이프라인 에셋이 없다** (Graphics·Quality 모두 None) → 에디터에선 티가 덜 나고 기기에선 URP 머티리얼이 전부 마젠타. 빌드 게이트 render-pipeline 검사가 이제 막는다. ② 아무도 참조하지 않는 런타임 asmdef(예: [RuntimeInitializeOnLoadMethod] 만 있는 것)는 IL2CPP 스트리핑이 어셈블리째 지운다 → [assembly: AlwaysLinkAssembly]. 게이트 후처리가 BuildGate 런타임 어셈블리 누락을 막는다. ③ PCA 는 install -g 로 깔면 권한 창 없이 바로 1280x960 으로 돈다 (권한 창 흐름은 별도 확인).
+
+---
+**Claude Code** · 2026-11-03 16:30
+
+실기에서 바뀐 것 (2026-11-04, 키보드 착시 실험 실기): ① 앱 시작 직후 OVRSkeleton 이 IsDataValid=true 인데 뼈가 전부 트래킹 원점(0,0,0)에 있는 프레임이 나온다 → 손 데이터는 OVRHand.IsTracked && IsDataHighConfidence 일 때만 쓴다 (OvrHandInput, 테스트 OvrHandInput_OnlyReportsTrackedHighConfidenceHands 가 강제). ② '손끝 0.6초 정지' 드웰은 공중에서 잠깐 멈춘 손도 잡는다 → 세 점 평면이 53° 기울어짐. 책상은 트래킹 공간 up(중력) 기준 수평으로 두고, 사람 결정대로 양손 사각형 높이로 잡는다 (RectCalibrator: 네 손끝 높이 차 2cm 이내, 손 간격 12~70cm, 1초 유지, 시작 1초 무시. 테스트가 기울어진 사각형·한 손을 거부). ③ Quest 오디오 출력 샘플레이트가 24000 으로 나옴 (DSP 버퍼 256).

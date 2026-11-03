@@ -6,7 +6,8 @@
         "UnityEditor.TestRunner",
         "Reality404.BuildGate",
         "Reality404.BuildGate.Editor",
-        "MoodPicker.Hands"
+        "MoodPicker.Hands",
+        "MoodPicker.DeskKeyboard"
     ],
     "includePlatforms": [
         "Editor"

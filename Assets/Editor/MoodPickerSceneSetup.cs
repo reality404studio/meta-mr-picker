@@ -60,9 +60,9 @@ public static class MoodPickerSceneSetup
         RenderSettings.skybox = null;
     }
 
-    static void BuildScene()
+    internal static GameObject NewPassthroughScene(out Scene scene)
     {
-        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         RenderSettings.skybox = null;
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
@@ -89,6 +89,14 @@ public static class MoodPickerSceneSetup
             var urp = cam.GetUniversalAdditionalCameraData();
             if (urp != null) urp.renderPostProcessing = false;
         }
+        return rig;
+    }
+
+    static void BuildScene()
+    {
+        var rig = NewPassthroughScene(out Scene scene);
+        var mgr = rig.GetComponent<OVRManager>();
+        var cams = rig.GetComponentsInChildren<Camera>(true);
 
         var pcaGo = new GameObject("PassthroughCameraAccess");
         SceneManager.MoveGameObjectToScene(pcaGo, scene);
@@ -150,7 +158,7 @@ public static class MoodPickerSceneSetup
         rso.ApplyModifiedPropertiesWithoutUndo();
     }
 
-    static OVRSkeleton AddHand(Transform anchor, OVRHand.Hand hand, OVRSkeleton.SkeletonType type)
+    internal static OVRSkeleton AddHand(Transform anchor, OVRHand.Hand hand, OVRSkeleton.SkeletonType type)
     {
         if (anchor == null) throw new Exception("hand anchor not found in OVRCameraRig");
         var go = new GameObject(hand == OVRHand.Hand.HandLeft ? "LeftHand" : "RightHand");
@@ -166,7 +174,7 @@ public static class MoodPickerSceneSetup
         return s;
     }
 
-    static GameObject Primitive(PrimitiveType t, string name, Transform parent, Material m, float size)
+    internal static GameObject Primitive(PrimitiveType t, string name, Transform parent, Material m, float size)
     {
         var go = GameObject.CreatePrimitive(t);
         go.name = name;
@@ -180,7 +188,7 @@ public static class MoodPickerSceneSetup
         return go;
     }
 
-    static Material UnlitMaterial(string name, Color c)
+    internal static Material UnlitMaterial(string name, Color c)
     {
         System.IO.Directory.CreateDirectory(MatDir);
         string path = MatDir + "/" + name + ".mat";

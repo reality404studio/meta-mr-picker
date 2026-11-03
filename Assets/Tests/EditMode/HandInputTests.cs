@@ -77,6 +77,14 @@ namespace MoodPicker.Tests
         static readonly string[] AllowedOvrDirs = { "Assets/Scripts/Hands/Ovr/", "Assets/Scripts/FirstLight/" };
 
         [Test]
+        public void OvrHandInput_OnlyReportsTrackedHighConfidenceHands()
+        {
+            string src = File.ReadAllText(Path.Combine(Application.dataPath, "Scripts", "Hands", "Ovr", "OvrHandInput.cs"));
+            Assert.That(Regex.IsMatch(src, @"!\s*hand\.IsTracked"), "앱 시작 직후 원점에 있는 빈 스켈레톤이 '추적 중'으로 새어 나감");
+            Assert.That(Regex.IsMatch(src, @"!\s*hand\.IsDataHighConfidence"), "저신뢰 프레임이 새어 나감");
+        }
+
+        [Test]
         public void HandsCoreAssembly_DoesNotReferenceOculus()
         {
             var refs = typeof(PinchDetector).Assembly.GetReferencedAssemblies().Select(a => a.Name).ToList();

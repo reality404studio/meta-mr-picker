@@ -11,6 +11,8 @@ namespace MoodPicker.Hands
         public bool tracked;
         public Vector3 thumbTip;
         public Vector3 indexTip;
+        public Vector3 middleTip;
+        public Vector3 ringTip;
         public Vector3 palm;
         public Vector3 palmNormal;
 

@@ -1,0 +1,10 @@
+{
+    "name": "MoodPicker.DeskKeyboard.Runtime",
+    "rootNamespace": "MoodPicker.DeskKeyboard",
+    "references": ["MoodPicker.Hands", "MoodPicker.DeskKeyboard"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

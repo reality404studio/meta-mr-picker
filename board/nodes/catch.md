@@ -4,7 +4,6 @@
 
 - **목표:** 11-05~07 · 머리 레이 + 양손 핀치로 정사각형 영역을 담는다. 찰칵(시야 원본 그대로 + 이음매 없는 타일) 모드가 MVP
 - **산출물:** Capture, CelExtract, PaintStore 스크립트 + 물감 JSON 샘플
-- **기다림:** Unity 셋업 + First Light
 
 ## 하위 과업
 
