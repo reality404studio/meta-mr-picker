@@ -23,7 +23,7 @@
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
 - [x] **EditMode 테스트 하네스 (배치모드)** · 에이전트 · 구현
   <br><sub>Unity -batchmode -runTests -testPlatform EditMode. 결과 XML 을 파일 칸에. 이후 모든 카드의 증거 경로</sub>
-- [ ] ▶ **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현
+- [ ] ▶ **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현 🔶 진행 중
   <br><sub>제스처 코드가 OVRHand 를 직접 읽지 않고 인터페이스로 읽는다. 녹화한 궤적(JSON)을 EditMode 에서 재생</sub>
 - [ ] **Unity 주석 린트 + 주석을 게이트·테스트로** · 에이전트 · 구현
   <br><sub>GateFileChecks 에 주석 검사 (Assets/Scripts, Assets/Editor, unity/shared). 예외: MetaQuestVRSetup.cs(Meta 배포), 배치 실행 안내 머리말. 이유 주석(SceneSetup:62·85, FirstLight:3·82, Build:41)은 EditMode 테스트·게이트 검사로 바꾼 뒤 지운다</sub>
