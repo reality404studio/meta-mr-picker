@@ -1,4 +1,3 @@
-// 가드레일 §1: Android IL2CPP + ARM64 + ASTC 를 명시적으로 고정한다 (batchmode -executeMethod 용).
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEngine;

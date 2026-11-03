@@ -2,7 +2,6 @@ using UnityEngine;
 
 namespace MoodPicker.Hands.Ovr
 {
-    /// OVRSkeleton(OpenXR 손 스켈레톤)을 IHandInput 으로. OVR 을 읽는 곳은 이 폴더뿐이다.
     public class OvrHandInput : MonoBehaviour, IHandInput
     {
         [SerializeField] OVRCameraRig rig;

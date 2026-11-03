@@ -10,7 +10,6 @@ namespace MoodPicker.Hands
         public Vector3 point;
     }
 
-    /// 엄지-검지 거리 히스테리시스로 핀치 시작·끝. 추적이 끊기면 진행 중인 핀치는 끝으로 친다.
     public class PinchDetector
     {
         public float startDistance = 0.015f;

@@ -1,4 +1,3 @@
-// 에이전트용 배치 빌드. 빌드 게이트(IPreprocessBuildWithReport)가 그대로 돈다.
 // Unity -batchmode -projectPath . -buildTarget Android -executeMethod MoodPickerBuild.BuildDevApkBatch   (-quit 없이)
 using System;
 using System.IO;
@@ -38,7 +37,6 @@ public static class MoodPickerBuild
         EditorApplication.update += Wait;
     }
 
-    // Meta SDK 에디터 초기화가 끝난 뒤 빌드 (매니페스트 전처리가 OVRProjectConfig 를 읽는다)
     static void Wait()
     {
         if (OVRProjectConfig.CachedProjectConfig == null && EditorApplication.timeSinceStartup < _deadline) return;

@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace MoodPicker.Hands
 {
-    /// 손 궤적 JSON (HandTrajectoryRecorder 가 쓰고, 테스트가 RecordedHandInput 으로 재생).
     [Serializable]
     public class HandTrajectory
     {
@@ -26,7 +25,6 @@ namespace MoodPicker.Hands
         }
     }
 
-    /// 녹화 궤적을 프레임 순서대로 내놓는다. 끝나면 false.
     public class RecordedHandInput : IHandInput
     {
         readonly HandTrajectory _traj;

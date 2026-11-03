@@ -3,8 +3,6 @@ using UnityEngine;
 
 namespace MoodPicker.Hands.Ovr
 {
-    /// 시작 후 seconds 동안 손 궤적을 기록해 persistentDataPath/hand_<시각>.json 에 저장.
-    /// 꺼내기: adb pull /sdcard/Android/data/<패키지>/files/hand_*.json
     public class HandTrajectoryRecorder : MonoBehaviour
     {
         [SerializeField] OvrHandInput input;

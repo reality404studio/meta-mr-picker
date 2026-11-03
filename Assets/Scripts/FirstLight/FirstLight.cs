@@ -1,6 +1,3 @@
-// First Light (setup-firstlight) — 기기 스크린샷 한 장에 넷이 같이 보이면 통과:
-//   1) 방(패스스루)  2) 정면 ~60cm Unlit 큐브  3) PCA 카메라 텍스처 쿼드  4) 손끝 점 (컨트롤러 꺼짐)
-// 가드레일 §3·§4·§5·§6: 머티리얼은 SerializeField, 권한 요청은 OVRManager 한 곳, 해상도는 CurrentResolution 을 읽는다.
 using System.Collections;
 using Meta.XR;
 using UnityEngine;
@@ -31,7 +28,7 @@ public class FirstLight : MonoBehaviour
         leftTip.gameObject.SetActive(false);
         rightTip.gameObject.SetActive(false);
 
-        yield return null; // 첫 프레임 뒤에야 머리 자세가 들어온다 (§4)
+        yield return null;
         PlaceInFront();
         LogStartup();
     }
@@ -39,7 +36,7 @@ public class FirstLight : MonoBehaviour
     void PlaceInFront()
     {
         Transform head = rig.centerEyeAnchor;
-        Vector3 fwd = Vector3.ProjectOnPlane(head.forward, Vector3.up); // yaw-only
+        Vector3 fwd = Vector3.ProjectOnPlane(head.forward, Vector3.up);
         if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
         fwd.Normalize();
         Vector3 right = Vector3.Cross(Vector3.up, fwd);
@@ -47,11 +44,10 @@ public class FirstLight : MonoBehaviour
         cube.position = head.position + fwd * cubeDistance - Vector3.up * 0.05f;
         cube.rotation = Quaternion.LookRotation(fwd);
 
-        // 쿼드는 큐브 오른쪽 위. 앞면이 사용자 쪽을 보게
         Transform q = cameraQuad.transform;
         q.position = cube.position + right * 0.22f + Vector3.up * 0.12f;
         q.rotation = Quaternion.LookRotation(fwd);
-        q.localScale = new Vector3(quadWidth, quadWidth * 0.75f, 1f); // 해상도 받기 전 4:3
+        q.localScale = new Vector3(quadWidth, quadWidth * 0.75f, 1f);
     }
 
     void LogStartup()
@@ -79,7 +75,6 @@ public class FirstLight : MonoBehaviour
         }
     }
 
-    // IsPlaying 은 권한이 승인되고 카메라가 돌기 시작한 뒤에만 true. 그 전 GetTexture() 는 에러 로그 + null
     void BindCameraTexture()
     {
         if (_textureBound || !cameraAccess.IsPlaying) return;
