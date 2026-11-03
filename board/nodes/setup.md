@@ -90,3 +90,8 @@ _setup-guardrails 하위 과업에서 에이전트가 덧붙인다._
 **Claude Code** · 2026-11-03 14:45
 
 2026-11-03 23:45 패스스루만 확인한 짧은 실기 빌드 (게이트·빌드 ID 없음 → setup-device 통과 아님). 사람: 패스스루 보임. 액티비티 com.DefaultCompany.moodpicker/com.unity3d.player.UnityPlayerGameActivity 로 실행됨. VrApi: FPS 72/72, CPU/GPU 레벨 2/2, App 1.7ms, CPU&GPU 3.5ms, GPU 24% CPU 19%. thermalservice Status 0, SoC 39°C, 배터리 32°C. 사람이 발열을 느낌 → 수치상 정상 범위, 빈 씬 기준선으로 남김.
+
+---
+**Claude Code** · 2026-11-03 15:17
+
+2026-11-04 setup-firstlight 는 증명 게이트 도입 전 경로로 done 됨 (proof 단계·성공 조건 없이). 증거 파일(firstlight_f0bcc74_logcat.txt, .png)과 사람 실기 확인(setup-device)이 있어 되돌리지 않음.
