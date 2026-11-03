@@ -6,13 +6,17 @@ Meta VR Start Developer Competition 2026 출품작 (Productivity · New Experien
 - 기기: Meta Quest 3 / 3S, 핸드트래킹만 (컨트롤러 없음), 72fps
 - 엔진: Unity 6 (6000.0.66f2+), Meta XR SDK, MRUK Passthrough Camera Access, XR 플러그인 OpenXR
 
+## 할 일 보드
+
+**[board/BOARD.md](board/BOARD.md)** — 단계·과업·하위 과업, 지금 할 일, 흐름도. 작업대 보드를 내보낸 읽기 전용 사본이에요 (`scripts/sync-docs.sh` 가 갱신).
+
 ## 이 레포와 작업대
 
 이 레포는 **앱 코드(Unity 프로젝트)** 를 담아요. 할 일 보드, 결정, 가드레일의 정본은 작업대 레포
 [my-mr-studio](https://github.com/reality404studio/my-mr-studio) 의 `studio/apps/mood-picker/` 와 `studio/shared/` 에 있어요.
 작업대 안에서는 `unity/mood-picker/` 위치에 이 레포를 둬요.
 
-`docs/` 는 읽기용 사본이에요. 고치지 말고 작업대에서 고친 뒤 `scripts/sync-docs.sh` 로 갱신해요.
+`docs/` 와 `board/` 는 읽기용 사본이에요. 고치지 말고 작업대에서 고친 뒤 `scripts/sync-docs.sh` 로 갱신해요.
 
 | 사본 | 내용 |
 | --- | --- |
