@@ -1,4 +1,4 @@
-# 🔶 Unity 셋업 + First Light
+# ⛔ Unity 셋업 + First Light
 
 [← 보드로](../BOARD.md)
 
@@ -21,7 +21,7 @@
   <br><sub>게이트와 같은 파일 검사 + Roslyn 컴파일 체크. 사람에게 빌드를 부탁하기 전에 매번 돌리고 결과를 note 로</sub>
 - [x] **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
-- [ ] ▶ **EditMode 테스트 하네스 (배치모드)** · 에이전트 · 구현
+- [ ] ▶ **EditMode 테스트 하네스 (배치모드)** · 에이전트 · 구현 🧪 증명
   <br><sub>Unity -batchmode -runTests -testPlatform EditMode. 결과 XML 을 파일 칸에. 이후 모든 카드의 증거 경로</sub>
 - [ ] **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현
   <br><sub>제스처 코드가 OVRHand 를 직접 읽지 않고 인터페이스로 읽는다. 녹화한 궤적(JSON)을 EditMode 에서 재생</sub>
@@ -29,7 +29,7 @@
   <br><sub>GateFileChecks 에 주석 검사 (Assets/Scripts, Assets/Editor, unity/shared). 예외: MetaQuestVRSetup.cs(Meta 배포), 배치 실행 안내 머리말. 이유 주석(SceneSetup:62·85, FirstLight:3·82, Build:41)은 EditMode 테스트·게이트 검사로 바꾼 뒤 지운다</sub>
 - [x] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
-- [ ] **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증
+- [ ] **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증 ⛔ 막힘
   <br><sub>First Light 빌드를 전철에 들고 가서. 설정 > 실험 기능 > Travel Mode (기차 지원, v71+). 공중에 띄운 물체가 차량 가감속에 미끄러지는지, 손 추적이 흔들림에 버티는지, PCA 가 도는지. 컨셉 전체가 여기에 걸려 있어 최대한 일찍</sub>
 
 ## 메모
