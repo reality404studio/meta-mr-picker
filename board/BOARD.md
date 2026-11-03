@@ -2,7 +2,7 @@
 
 <sub>작업대 앱 id: mood-picker</sub>
 
-> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 00:49 KST · 과업 6/18 완료
+> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 00:55 KST · 과업 6/18 완료
 > 고칠 때는 작업대에서 (`npm run studio -- … --app mood-picker`), 그다음 `scripts/sync-docs.sh` → 커밋·푸시.
 
 범례: ✅ 완료 · 🔶 진행 중 · 👀 확인 필요 · ⬜ 대기 · ⛔ 막힘 · ▶ 과업 안에서 지금 차례
@@ -11,7 +11,7 @@
 
 | 누가 | 하위 과업 | 과업 | 상태 |
 | --- | --- | --- | --- |
-| 에이전트 | 손 입력 추상화 + 손 궤적 픽스처 재생 | [Unity 셋업 + First Light](nodes/setup.md) | 🔶 진행 중 |
+| 에이전트 | Unity 주석 린트 + 주석을 게이트·테스트로 | [Unity 셋업 + First Light](nodes/setup.md) | ⬜ 대기 |
 
 ## 흐름
 
@@ -32,7 +32,7 @@ flowchart LR
     direction TB
     use_unity_guardrails["Unity 실기 가드레일 (패스스루 안 보임 방지)"]:::doing
     use_unity_version["Unity 버전"]:::done
-    setup["Unity 셋업 + First Light 9/12"]:::blocked
+    setup["Unity 셋업 + First Light 10/12"]:::blocked
   end
   subgraph s_build["구현"]
     direction TB
@@ -152,7 +152,7 @@ _11-03~04 · Quest에서 패스스루 + 손 + 카메라 텍스처 First Light_
 
 ### ✅ [Unity 버전](nodes/unity-version.md) · 공통
 
-### ⛔ [Unity 셋업 + First Light](nodes/setup.md) · 9/12
+### ⛔ [Unity 셋업 + First Light](nodes/setup.md) · 10/12
 
 Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
 
@@ -172,9 +172,9 @@ Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
 - [x] **EditMode 테스트 하네스 (배치모드)** · 에이전트 · 구현
   <br><sub>Unity -batchmode -runTests -testPlatform EditMode. 결과 XML 을 파일 칸에. 이후 모든 카드의 증거 경로</sub>
-- [ ] ▶ **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현 🔶 진행 중
+- [x] **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현
   <br><sub>제스처 코드가 OVRHand 를 직접 읽지 않고 인터페이스로 읽는다. 녹화한 궤적(JSON)을 EditMode 에서 재생</sub>
-- [ ] **Unity 주석 린트 + 주석을 게이트·테스트로** · 에이전트 · 구현
+- [ ] ▶ **Unity 주석 린트 + 주석을 게이트·테스트로** · 에이전트 · 구현
   <br><sub>GateFileChecks 에 주석 검사 (Assets/Scripts, Assets/Editor, unity/shared). 예외: MetaQuestVRSetup.cs(Meta 배포), 배치 실행 안내 머리말. 이유 주석(SceneSetup:62·85, FirstLight:3·82, Build:41)은 EditMode 테스트·게이트 검사로 바꾼 뒤 지운다</sub>
 - [x] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
