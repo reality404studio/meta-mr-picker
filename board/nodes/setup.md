@@ -95,3 +95,8 @@ _setup-guardrails 하위 과업에서 에이전트가 덧붙인다._
 **Claude Code** · 2026-11-03 15:17
 
 2026-11-04 setup-firstlight 는 증명 게이트 도입 전 경로로 done 됨 (proof 단계·성공 조건 없이). 증거 파일(firstlight_f0bcc74_logcat.txt, .png)과 사람 실기 확인(setup-device)이 있어 되돌리지 않음.
+
+---
+**Claude Code** · 2026-11-03 15:20
+
+2026-11-04 정정: 위 메모("setup-firstlight 는 증명 게이트 도입 전 경로로 done")는 틀렸다. 로그상 success → proof → 증거 2개 → done 으로 게이트를 정상 통과했다. 이후 Claude Code 일괄 스크립트가 done 된 카드의 성공 조건을 덮어썼고, 원문으로 복구함. 재발 방지: done 된 에이전트 카드의 success 변경을 저장소가 거절 (test/proof-gate.test.mjs).
