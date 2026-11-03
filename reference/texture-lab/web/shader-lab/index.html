@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Water Loop Shader Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed viewport (the "lens") + a glassy instrument rail on the right; bottom sheet on phones. Single dark look on purpose: the glasses display treats black as transparent. */
+:root{
+  --ink:#06080a;          /* viewport black = transparent on optical see-through */
+  --rail:#0d1216;
+  --line:#1f2a31;
+  --fg:#e3eaee;
+  --muted:#84939b;
+  --water:#a9d4df;        /* accent: silver-cyan of the glints */
+  --water-dim:#2a434b;
+  --font-ui:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-num:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--fg);font-family:var(--font-ui);font-size:13px;overflow:hidden}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px}
+.stage{position:relative;min-width:0;overflow:hidden}
+.world{position:absolute;inset:0;transition:background .4s}
+.world[data-bg="black"]{background:#000}
+.world[data-bg="day"]{background:
+  radial-gradient(120% 70% at 70% 10%, #f3f1e8 0%, transparent 60%),
+  linear-gradient(180deg,#bcd0da 0%,#a8b6b8 48%,#7b8580 52%,#5e6660 100%)}
+.world[data-bg="room"]{background:
+  radial-gradient(60% 50% at 25% 30%, #4a3a2c 0%, transparent 70%),
+  linear-gradient(180deg,#1d1a18 0%,#2a2521 60%,#14110f 100%)}
+canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage[data-additive="1"] canvas#gl{mix-blend-mode:screen}
+.hud{position:absolute;left:max(16px, env(safe-area-inset-left,0px));top:14px;display:flex;gap:10px;align-items:center;pointer-events:none}
+.hud .tag{font-family:var(--font-num);font-size:11px;letter-spacing:.06em;color:var(--water);background:rgba(6,8,10,.6);border:1px solid var(--water-dim);padding:4px 8px;border-radius:3px;text-transform:uppercase}
+.playgate{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55)}
+.playgate button{font:500 14px var(--font-ui);color:var(--ink);background:var(--water);border:0;padding:12px 20px;border-radius:999px;cursor:pointer}
+
+.rail{background:var(--rail);border-left:1px solid var(--line);overflow-y:auto;padding-block:16px 28px;padding-left:18px;padding-right:max(18px, env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+.rail h1{font-size:15px;font-weight:600;margin:0;letter-spacing:-.01em}
+.rail .sub{color:var(--muted);margin:4px 0 0;line-height:1.5}
+.group{display:flex;flex-direction:column;gap:8px}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline}
+.label output{font-family:var(--font-num);letter-spacing:0;text-transform:none;color:var(--fg)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 auto;font:500 12px var(--font-ui);color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:4px;padding:7px 9px;cursor:pointer;white-space:nowrap}
+.seg button small{font-family:var(--font-num);color:var(--muted);font-size:10px;margin-left:4px}
+.seg button:hover{border-color:var(--water-dim)}
+.seg button[aria-pressed="true"]{background:var(--water);color:var(--ink);border-color:var(--water)}
+.seg button[aria-pressed="true"] small{color:#2c4047}
+button:focus-visible,input:focus-visible,label.file:focus-within{outline:2px solid var(--water);outline-offset:2px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.modes button{text-align:left;font:500 12px var(--font-ui);color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:4px;padding:8px 9px;cursor:pointer}
+.modes button span{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:2px}
+.modes button[aria-pressed="true"]{border-color:var(--water);background:rgba(169,212,223,.08)}
+.modes button[aria-pressed="true"] span{color:var(--water)}
+.note{color:var(--muted);line-height:1.55;font-size:12px;margin:0}
+.note b{color:var(--fg);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--water)}
+.row{display:flex;gap:10px;align-items:center}
+.swatch{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+input[type=color]{width:30px;height:24px;border:1px solid var(--line);background:none;padding:0;border-radius:3px}
+.check{display:flex;gap:8px;align-items:center;color:var(--fg);cursor:pointer}
+.check input{accent-color:var(--water)}
+.monitor{display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;align-items:center}
+.monitor video{width:88px;height:88px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:#000;display:block}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:var(--water)}
+.meta{font-family:var(--font-num);font-size:11px;color:var(--muted);line-height:1.6}
+label.file{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--water);cursor:pointer;border:1px dashed var(--water-dim);padding:7px 10px;border-radius:4px}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+.err{color:#f0a8a0;font-size:12px}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,46%)}
+  .rail{border-left:0;border-top:1px solid var(--line);padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+}
+@media (prefers-reduced-motion:reduce){.world{transition:none}}
+</style>
+
+<div class="app">
+  <div class="stage" id="stage" data-additive="0">
+    <div class="world" id="world" data-bg="black"></div>
+    <canvas id="gl"></canvas>
+    <div class="hud"><span class="tag" id="hudMode">Glint</span><span class="tag" id="hudFps">— fps</span></div>
+    <div class="playgate" id="gate" hidden><button id="gateBtn" type="button">영상 텍스처 재생</button></div>
+  </div>
+
+  <aside class="rail">
+    <div>
+      <h1>물결 루프 → 텍스처 테스트</h1>
+      <p class="sub">촬영한 물결 2초를 루프로 만들어 셰이더 입력으로 씁니다. 드래그로 회전, 휠/핀치로 줌.</p>
+    </div>
+
+    <div class="group">
+      <div class="label">텍스처 소스</div>
+      <div class="monitor">
+        <video id="mon" muted playsinline></video>
+        <div>
+          <div class="meta" id="meta">loading…</div>
+          <div class="bar"><i id="prog"></i></div>
+        </div>
+      </div>
+      <div class="seg" id="loopSeg">
+        <button type="button" data-loop="loop_xfade" aria-pressed="true">크로스페이드<small>1.6s</small></button>
+        <button type="button" data-loop="loop_pingpong" aria-pressed="false">핑퐁<small>3.0s</small></button>
+        <button type="button" data-loop="loop_raw" aria-pressed="false">원본<small>2.0s</small></button>
+      </div>
+      <p class="note" id="loopNote"></p>
+      <label class="file">다른 영상으로 테스트<input type="file" id="file" accept="video/*"></label>
+      <div class="err" id="err" hidden></div>
+    </div>
+
+    <hr>
+
+    <div class="group">
+      <div class="label">셰이더</div>
+      <div class="modes" id="modes">
+        <button type="button" data-mode="1" aria-pressed="true">Glint<span>반짝임만 발광</span></button>
+        <button type="button" data-mode="2" aria-pressed="false">Liquid Chrome<span>물결=노멀, 금속 반사</span></button>
+        <button type="button" data-mode="3" aria-pressed="false">Caustic<span>물빛이 비친 무광 표면</span></button>
+        <button type="button" data-mode="4" aria-pressed="false">Hologram<span>휘도→무지개, 가산</span></button>
+        <button type="button" data-mode="5" aria-pressed="false">Contour<span>휘도 등고선</span></button>
+        <button type="button" data-mode="6" aria-pressed="false">Halftone<span>화면 망점</span></button>
+        <button type="button" data-mode="0" aria-pressed="false">Raw<span>그대로 + 음영</span></button>
+      </div>
+      <p class="note" id="modeNote"></p>
+    </div>
+
+    <div class="group">
+      <div class="label">오브젝트</div>
+      <div class="seg" id="objSeg">
+        <button type="button" data-obj="sphere" aria-pressed="true">구</button>
+        <button type="button" data-obj="knot" aria-pressed="false">노트</button>
+        <button type="button" data-obj="box" aria-pressed="false">박스</button>
+        <button type="button" data-obj="torus" aria-pressed="false">링</button>
+        <button type="button" data-obj="cyl" aria-pressed="false">컵</button>
+        <button type="button" data-obj="all" aria-pressed="false">전체</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="label">매핑</div>
+      <div class="seg" id="mapSeg">
+        <button type="button" data-map="1" aria-pressed="true">Triplanar<small>UV 불필요</small></button>
+        <button type="button" data-map="0" aria-pressed="false">UV<small>메시 UV</small></button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label class="label" for="sScale">타일 스케일 <output id="oScale"></output></label>
+      <input type="range" id="sScale" min="0.2" max="4" step="0.05" value="0.9">
+      <label class="label" for="sInt">강도 <output id="oInt"></output></label>
+      <input type="range" id="sInt" min="0" max="2.5" step="0.01" value="1.2">
+      <label class="label" for="sParam"><span id="paramName">임계값</span> <output id="oParam"></output></label>
+      <input type="range" id="sParam" min="0" max="1" step="0.005" value="0.5">
+      <label class="label" for="sDisp">정점 변위 <output id="oDisp"></output></label>
+      <input type="range" id="sDisp" min="0" max="0.4" step="0.005" value="0">
+      <label class="label" for="sSpeed">재생 속도 <output id="oSpeed"></output></label>
+      <input type="range" id="sSpeed" min="0.25" max="2" step="0.05" value="1">
+      <div class="row">
+        <label class="swatch" for="cTint"><input type="color" id="cTint" value="#cfefff"> 틴트</label>
+        <label class="swatch" for="cBase"><input type="color" id="cBase" value="#3a4249"> 베이스</label>
+        <label class="check" for="auto"><input type="checkbox" id="auto" checked> 자동 회전</label>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="group">
+      <div class="label">글래스 미리보기</div>
+      <div class="seg" id="bgSeg">
+        <button type="button" data-bg="black" aria-pressed="true">디스플레이</button>
+        <button type="button" data-bg="day" aria-pressed="false">밝은 야외</button>
+        <button type="button" data-bg="room" aria-pressed="false">어두운 실내</button>
+      </div>
+      <p class="note">광학 투과형 글래스는 빛을 <b>더하기만</b> 해서 검정은 투명하게 보여요. 야외/실내는 렌더를 배경 위에 screen 합성해 그 느낌을 흉내 냅니다. 어두운 몸통 + 밝은 반짝임 구조(Glint, Hologram)가 이 조건에서 가장 잘 살아남아요.</p>
+    </div>
+  </aside>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const $ = id => document.getElementById(id);
+const stage = $('stage'), canvas = $('gl');
+
+/* ---------- renderer ---------- */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false, preserveDrawingBuffer:false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+camera.position.set(0, 0.35, 4.2);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.minDistance = 1.6; controls.maxDistance = 14;
+
+/* ---------- video texture ---------- */
+const mp4ok = document.createElement('video').canPlayType('video/mp4; codecs="avc1.640028"') === 'probably';
+let video = null, vtex = null, currentLoop = 'loop_xfade', userURL = null;
+const loopNotes = {
+  loop_xfade: '끝 0.47초를 처음 0.47초에 겹쳐 녹인 루프. 이음매 프레임 차이가 일반 프레임 간 차이와 같은 수준이라 튀지 않아요.',
+  loop_pingpong: '정방향 → 역방향 재생. 블렌딩 잔상이 없지만, 반환점에서 물결이 "되감기"듯 방향이 바뀌는 게 보일 수 있어요.',
+  loop_raw: '자르기만 한 원본. 2초마다 툭 끊기는 지점을 비교용으로 보세요.',
+  user: '직접 올린 영상. 루프 처리 없이 그대로 반복됩니다.'
+};
+
+function makeVideo(src){
+  const v = document.createElement('video');
+  v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline','');
+  v.crossOrigin = 'anonymous'; v.preload = 'auto'; v.src = src;
+  v.playbackRate = +$('sSpeed').value;
+  return v;
+}
+function setSource(src, key){
+  $('err').hidden = true;
+  if (video){ video.pause(); video.removeAttribute('src'); video.load(); }
+  if (vtex) vtex.dispose();
+  video = makeVideo(src);
+  vtex = new THREE.VideoTexture(video);
+  vtex.colorSpace = THREE.NoColorSpace; // decoded manually in the shader (consistent across browsers)
+  vtex.minFilter = THREE.LinearFilter; vtex.magFilter = THREE.LinearFilter;
+  vtex.wrapS = vtex.wrapT = THREE.ClampToEdgeWrapping;
+  uniforms.uTex.value = vtex;
+  $('mon').srcObject = null; $('mon').src = src; $('mon').playbackRate = video.playbackRate;
+  $('loopNote').textContent = loopNotes[key] || '';
+  video.addEventListener('error', () => {
+    $('err').textContent = '이 영상은 브라우저에서 디코딩하지 못했어요. mp4(H.264)나 webm으로 다시 시도해 보세요.';
+    $('err').hidden = false;
+  }, { once:true });
+  video.addEventListener('loadedmetadata', () => {
+    $('meta').textContent = `${video.videoWidth}×${video.videoHeight} · ${video.duration.toFixed(2)}s`;
+  }, { once:true });
+  tryPlay();
+}
+function tryPlay(){
+  const p = video.play();
+  $('mon').play().catch(()=>{});
+  if (p && p.catch) p.then(()=>{ $('gate').hidden = true; }).catch(err=>{ if (err && err.name === 'NotAllowedError') $('gate').hidden = false; else console.warn('play', err && err.name); });
+}
+$('gateBtn').addEventListener('click', tryPlay);
+function loadLoop(name){
+  currentLoop = name;
+  setSource(name + (mp4ok ? '.mp4' : '.webm'), name);
+}
+
+/* ---------- shaders ---------- */
+const common = /* glsl */`
+uniform sampler2D uTex;
+uniform float uScale;
+uniform float uMap;
+uniform vec2 uRepeat;
+vec2 mir(vec2 t){ t = mod(t, 2.0); return 1.0 - abs(1.0 - t); }
+float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+vec3 lin(vec3 c){ return pow(c, vec3(2.2)); }
+vec3 triS(vec3 p, vec3 n, float lod){
+  vec3 w = pow(abs(n), vec3(4.0)); w /= (w.x + w.y + w.z);
+  float s = uScale * 0.8;
+  return textureLod(uTex, mir(p.zy*s + 0.13), lod).rgb * w.x
+       + textureLod(uTex, mir(p.xz*s + 0.37), lod).rgb * w.y
+       + textureLod(uTex, mir(p.xy*s + 0.71), lod).rgb * w.z;
+}
+vec3 vid(vec2 uv, vec3 p, vec3 n){
+  if (uMap < 0.5) return lin(textureLod(uTex, mir(uv * uRepeat * uScale), 0.0).rgb);
+  return lin(triS(p, n, 0.0));
+}
+// 8-tap ring blur: softer height field for normals / contours
+vec3 vidBlur(vec2 uv, vec3 p, vec3 n, float r){
+  vec3 acc = vid(uv, p, n);
+  for (int i = 0; i < 8; i++){
+    float a = float(i) * 0.785398;
+    vec2 o = vec2(cos(a), sin(a)) * r;
+    acc += vid(uv + o / max(uRepeat * uScale, vec2(0.01)), p + vec3(o.x, o.y, o.x - o.y) / max(uScale, 0.01), n);
+  }
+  return acc / 9.0;
+}`;
+
+const vert = /* glsl */`
+${common}
+uniform float uDisp;
+varying vec3 vWPos; varying vec3 vWNrm; varying vec3 vOPos; varying vec3 vONrm; varying vec2 vUv;
+void main(){
+  vUv = uv; vONrm = normal;
+  float h = uDisp > 0.0 ? lum(vid(uv, position, normal)) : 0.5;
+  vec3 p = position + normal * (h - 0.35) * uDisp;
+  vOPos = position;
+  vec4 wp = modelMatrix * vec4(p, 1.0);
+  vWPos = wp.xyz;
+  vWNrm = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const frag = /* glsl */`
+${common}
+uniform int uMode;
+uniform float uTime, uInt, uParam;
+uniform vec3 uTint, uBase;
+varying vec3 vWPos; varying vec3 vWNrm; varying vec3 vOPos; varying vec3 vONrm; varying vec2 vUv;
+
+vec3 bumpN(vec3 pos, vec3 n, float h, float k){
+  vec3 dpx = dFdx(pos), dpy = dFdy(pos);
+  float dhx = dFdx(h) * k, dhy = dFdy(h) * k;
+  vec3 r1 = cross(dpy, n), r2 = cross(n, dpx);
+  float det = dot(dpx, r1);
+  vec3 g = sign(det) * (dhx * r1 + dhy * r2);
+  return normalize(abs(det) * n - g);
+}
+vec3 env(vec3 r){
+  float y = r.y;
+  vec3 sky = mix(vec3(0.10,0.12,0.15), vec3(0.62,0.70,0.78), smoothstep(-0.05, 0.7, y));
+  vec3 gnd = mix(vec3(0.015), vec3(0.09,0.10,0.10), smoothstep(-1.0, 0.0, y));
+  vec3 c = y > 0.0 ? sky : gnd;
+  c += vec3(0.9) * exp(-abs(y - 0.02) * 60.0) * 0.5;
+  float a = atan(r.z, r.x);
+  c += vec3(1.0) * smoothstep(0.92, 0.97, sin(a * 3.0)) * smoothstep(0.15, 0.35, y) * smoothstep(0.85, 0.6, y) * 1.4;
+  c += vec3(1.0,0.96,0.88) * pow(max(dot(r, normalize(vec3(0.35,0.75,0.55))), 0.0), 300.0) * 12.0;
+  return c;
+}
+vec3 pal(float t){ return 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + t)); }
+
+void main(){
+  vec3 N = normalize(vWNrm);
+  if (!gl_FrontFacing) N = -N;
+  vec3 V = normalize(cameraPosition - vWPos);
+  vec3 L = normalize(vec3(0.5, 0.85, 0.45));
+
+  // sample once, outside any branch, so derivatives are valid
+  vec3 tex = (uMode == 3) ? lin(triS(vWPos, N, 0.0)) : vid(vUv, vOPos, normalize(vONrm));
+  float h = lum(tex);
+  float hs = (uMode == 2 || uMode == 5) ? lum(vidBlur(vUv, vOPos, normalize(vONrm), 0.012)) : h;
+  float fres = pow(1.0 - clamp(abs(dot(N, V)), 0.0, 1.0), 3.0);
+  float lines = mix(4.0, 22.0, uParam);
+  float hc = sqrt(hs) * lines;
+  float aa = fwidth(hc);
+  vec3 Nb = bumpN(vWPos, N, hs, mix(0.3, 6.0, uParam));
+
+  vec3 col;
+  if (uMode == 0){                       // Raw
+    float d = max(dot(N, L), 0.0);
+    col = tex * (0.3 + 0.8 * d) * uInt;
+    col += pow(max(dot(reflect(-L, N), V), 0.0), 40.0) * 0.25;
+  } else if (uMode == 1){                // Glint
+    float th = mix(0.3, 0.95, uParam);
+    float g = smoothstep(th, th + 0.08, h);
+    float core = smoothstep(th + 0.08, 1.0, h);
+    col = uTint * (g * 1.6 + core * 2.5) * uInt;
+    col += uTint * fres * 0.18;          // faint rim so the silhouette still reads
+    col += uBase * 0.04 * max(dot(N, L), 0.0);
+  } else if (uMode == 2){                // Liquid chrome
+    vec3 R = reflect(-V, Nb);
+    float F = 0.55 + 0.45 * pow(1.0 - max(dot(Nb, V), 0.0), 5.0);
+    col = env(R) * F * mix(vec3(1.0), uTint, 0.6) * uInt;
+    col += uTint * pow(h, 4.0) * 1.5 * uInt;
+  } else if (uMode == 3){                // Caustic (world-space projection)
+    float d = max(dot(N, L), 0.0);
+    float c = pow(h, mix(1.5, 5.0, uParam)) * 4.0;
+    col = uBase * (0.12 + 0.75 * d);
+    col += uTint * c * (0.35 + 0.65 * d) * uInt;
+  } else if (uMode == 4){                // Hologram
+    float scan = 0.7 + 0.3 * sin(vWPos.y * 160.0 - uTime * 5.0);
+    vec3 p = pal(sqrt(h) * mix(0.6, 2.0, uParam) + fres * 0.7 + uTime * 0.06);
+    col = p * (pow(h, 1.5) * 2.2 + fres * 0.8) * scan * uInt;
+    col *= mix(vec3(1.0), uTint, 0.35);
+  } else if (uMode == 5){                // Contour
+    float f = abs(fract(hc) - 0.5);
+    float ln = 1.0 - smoothstep(0.0, aa * 1.5, 0.5 - f);
+    float d = max(dot(N, L), 0.0);
+    col = uBase * (0.08 + 0.35 * d);
+    col += uTint * ln * (0.6 + 0.6 * h) * uInt;
+  } else {                               // Halftone
+    float cell = mix(5.0, 16.0, uParam);
+    vec2 g = gl_FragCoord.xy / cell;
+    vec2 f = fract(g) - 0.5;
+    float d = max(dot(N, L), 0.0);
+    float r = sqrt(clamp(sqrt(h) * (0.4 + 0.8 * d), 0.0, 1.0)) * 0.62;
+    float dotm = 1.0 - smoothstep(r - 0.06, r + 0.02, length(f));
+    col = uBase * 0.06 + uTint * dotm * uInt;
+  }
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+const uniforms = {
+  uTex:{ value:null }, uScale:{ value:0.9 }, uMap:{ value:1 }, uRepeat:{ value:new THREE.Vector2(2,1) },
+  uDisp:{ value:0 }, uMode:{ value:1 }, uTime:{ value:0 }, uInt:{ value:1.2 }, uParam:{ value:0.5 },
+  uTint:{ value:new THREE.Color('#cfefff') }, uBase:{ value:new THREE.Color('#3a4249') }
+};
+const material = new THREE.ShaderMaterial({ uniforms, vertexShader:vert, fragmentShader:frag, side:THREE.DoubleSide });
+material.extensions = { derivatives:true };
+
+/* ---------- objects ---------- */
+const geos = {
+  sphere:{ g:new THREE.SphereGeometry(1, 256, 160), rep:[2,1] },
+  knot:  { g:new THREE.TorusKnotGeometry(0.66, 0.24, 480, 96), rep:[10,1] },
+  box:   { g:new RoundedBoxGeometry(1.5, 1.5, 1.5, 12, 0.2), rep:[1,1] },
+  torus: { g:new THREE.TorusGeometry(0.85, 0.34, 128, 256), rep:[4,1] },
+  cyl:   { g:new THREE.CylinderGeometry(0.75, 0.62, 1.7, 192, 96, false), rep:[3,1.4] }
+};
+const group = new THREE.Group(); scene.add(group);
+// per-object material clones share the same uniforms object except uRepeat
+const mats = {};
+for (const k in geos){
+  const m = material.clone();
+  m.uniforms = { ...uniforms, uRepeat:{ value:new THREE.Vector2(...geos[k].rep) } };
+  m.extensions = { derivatives:true };
+  mats[k] = m;
+}
+let currentObj = 'sphere';
+function buildObjects(which){
+  group.clear();
+  const keys = which === 'all' ? ['sphere','knot','box','torus','cyl'] : [which];
+  keys.forEach((k, i) => {
+    const mesh = new THREE.Mesh(geos[k].g, mats[k]);
+    if (which === 'all'){
+      mesh.position.set((i - 2) * 1.55, (i % 2 ? -0.35 : 0.35), 0);
+      mesh.scale.setScalar(0.72);
+    }
+    if (k === 'cyl') mesh.rotation.x = 0.25;
+    group.add(mesh);
+  });
+  const fitZ = 4.6 / (Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  camera.position.set(0, 0.35, which === 'all' ? Math.max(9, fitZ) : 4.2);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+function setAdditive(on){
+  for (const k in mats){
+    mats[k].blending = on ? THREE.AdditiveBlending : THREE.NormalBlending;
+    mats[k].transparent = on; mats[k].depthWrite = !on;
+    mats[k].needsUpdate = true;
+  }
+}
+
+/* ---------- UI ---------- */
+const modeInfo = {
+  0:{ name:'Raw', p:'(없음)', note:'비교 기준. 텍스처를 그대로 감싸고 조명만 줬어요. 글래스에서는 회색 영역이 반투명 회색 막처럼 보여 탁해집니다.' },
+  1:{ name:'Glint', p:'임계값', note:'휘도가 임계값을 넘는 반짝임만 발광, 나머지는 검정(=투명). 오브젝트가 "물빛 입자로 된 껍질"처럼 보여요. 글래스용으로 가장 유력.' },
+  2:{ name:'Liquid Chrome', p:'범프 깊이', note:'영상 밝기를 높이 맵으로 보고 화면 미분으로 노멀을 흔든 뒤 환경 반사. 표면에 물결이 흐르는 수은 같은 느낌.' },
+  3:{ name:'Caustic', p:'대비', note:'영상을 월드 좌표로 투영해 "물에 반사된 빛이 오브젝트에 일렁이는" 효과. 물체를 돌려도 빛 패턴은 공간에 고정돼요.' },
+  4:{ name:'Hologram', p:'색 순환', note:'휘도와 프레넬로 무지개 팔레트를 고르고 스캔라인을 얹어 가산 합성. 투명 오브젝트처럼 겹쳐 보입니다.' },
+  5:{ name:'Contour', p:'선 개수', note:'휘도를 등고선으로 바꿔 물결이 지도선처럼 흘러요. 선이 얇아 디스플레이 점유가 적습니다.' },
+  6:{ name:'Halftone', p:'망점 크기', note:'화면 고정 망점 크기를 휘도로 조절. 저해상도 디스플레이에서도 형태가 또렷해요.' }
+};
+function pressed(segId, attr, val){
+  $(segId).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(val))));
+}
+function setMode(m){
+  m = +m; uniforms.uMode.value = m;
+  for (const k in mats) mats[k].uniforms.uMode = uniforms.uMode;
+  pressed('modes', 'mode', m);
+  $('hudMode').textContent = modeInfo[m].name;
+  $('paramName').textContent = modeInfo[m].p;
+  $('modeNote').textContent = modeInfo[m].note;
+  setAdditive(m === 4);
+}
+$('modes').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+$('objSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; currentObj = b.dataset.obj; pressed('objSeg','obj',currentObj); buildObjects(currentObj); });
+$('mapSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; uniforms.uMap.value = +b.dataset.map; pressed('mapSeg','map',b.dataset.map); });
+$('loopSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pressed('loopSeg','loop',b.dataset.loop); loadLoop(b.dataset.loop); });
+$('bgSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  pressed('bgSeg','bg',b.dataset.bg); $('world').dataset.bg = b.dataset.bg;
+  stage.dataset.additive = b.dataset.bg === 'black' ? '0' : '1';
+});
+$('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (userURL) URL.revokeObjectURL(userURL);
+  userURL = URL.createObjectURL(f);
+  pressed('loopSeg','loop','__none'); setSource(userURL, 'user');
+});
+const sliders = [
+  ['sScale','oScale', v => uniforms.uScale.value = v, v => v.toFixed(2)],
+  ['sInt','oInt', v => uniforms.uInt.value = v, v => v.toFixed(2)],
+  ['sParam','oParam', v => uniforms.uParam.value = v, v => v.toFixed(2)],
+  ['sDisp','oDisp', v => uniforms.uDisp.value = v, v => v.toFixed(3)],
+  ['sSpeed','oSpeed', v => { if (video) video.playbackRate = v; $('mon').playbackRate = v; }, v => v.toFixed(2) + '×']
+];
+for (const [s, o, fn, fmt] of sliders){
+  const el = $(s); const upd = () => { const v = +el.value; fn(v); $(o).textContent = fmt(v); };
+  el.addEventListener('input', upd); upd();
+}
+$('cTint').addEventListener('input', e => uniforms.uTint.value.set(e.target.value));
+$('cBase').addEventListener('input', e => uniforms.uBase.value.set(e.target.value));
+
+/* ---------- loop ---------- */
+function resize(){
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+const clock = new THREE.Clock(); let frames = 0, acc = 0;
+function tick(){
+  const dt = clock.getDelta();
+  uniforms.uTime.value += dt;
+  if ($('auto').checked) group.children.forEach(m => { m.rotation.y += dt * 0.25; });
+  controls.update();
+  renderer.render(scene, camera);
+  if (video && video.duration) $('prog').style.width = (video.currentTime / video.duration * 100).toFixed(2) + '%';
+  frames++; acc += dt;
+  if (acc > 0.5){ $('hudFps').textContent = Math.round(frames / acc) + ' fps'; frames = 0; acc = 0; }
+  requestAnimationFrame(tick);
+}
+
+buildObjects('sphere');
+setMode(1);
+loadLoop('loop_xfade');
+tick();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && video) tryPlay(); });
+</script>
+
+</body>
+</html>

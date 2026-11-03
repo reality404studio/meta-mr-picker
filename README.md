@@ -25,6 +25,10 @@ Meta VR Start Developer Competition 2026 출품작 (Productivity · New Experien
 | `docs/DECIDED.md` / `docs/REJECTED.md` | 사람이 정한 것 / 안 하기로 한 것 |
 | `docs/UNITY_GUARDRAILS.md` | Unity 실기 함정 (패스스루 안 보임 등). **Unity 작업 전에 읽기** |
 
+## 참고 구현
+
+**[reference/texture-lab/](reference/texture-lab/README.md)** — 루프 자동 탐색, 이음매 없는 타일, 플립북 규칙, 셰이더 함수의 참고 구현 (웹 프로토타입 + 오프라인 도구 + 검증된 C#/HLSL 포팅). catch · loop · dab · export 과업 전에 읽기.
+
 ## 빌드
 
 - Development Build 로 실기 확인. 빌드 게이트(`Assets/Editor/BuildGate`, 셋업 단계에서 추가)가 검사에 실패하면 빌드가 막혀요

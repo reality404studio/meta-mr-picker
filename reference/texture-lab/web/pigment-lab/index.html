@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Pigment Loop Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: tiled "paint" viewport on the left, instrument rail on the right (bottom sheet on phones). Single dark look, same family as the shader lab. */
+:root{
+  --ink:#06080a;
+  --rail:#0d1216;
+  --line:#1f2a31;
+  --fg:#e3eaee;
+  --muted:#84939b;
+  --water:#a9d4df;
+  --water-dim:#2a434b;
+  --warn:#e9c27a;
+  --bad:#f0a8a0;
+  --font-ui:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-num:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--fg);font-family:var(--font-ui);font-size:13px;overflow:hidden}
+.app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 340px}
+.stage{position:relative;min-width:0;overflow:hidden;background:#000}
+canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hud{position:absolute;left:max(14px, env(safe-area-inset-left,0px));top:14px;display:flex;flex-wrap:wrap;gap:8px;pointer-events:none;right:14px}
+.tag{font-family:var(--font-num);font-size:11px;letter-spacing:.05em;color:var(--water);background:rgba(6,8,10,.66);border:1px solid var(--water-dim);padding:4px 8px;border-radius:3px}
+.busy{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:rgba(6,8,10,.82);border:1px solid var(--water-dim);border-radius:6px;padding:10px 14px;min-width:240px;max-width:calc(100% - 32px)}
+.busy .t{font-size:12px;margin-bottom:6px}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--water);transition:width .1s}
+
+.rail{background:var(--rail);border-left:1px solid var(--line);overflow-y:auto;padding-block:16px 28px;padding-left:18px;padding-right:max(18px, env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+h1{font-size:15px;font-weight:600;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;line-height:1.5}
+.group{display:flex;flex-direction:column;gap:8px}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.label output{font-family:var(--font-num);letter-spacing:0;text-transform:none;color:var(--fg)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button,.btn{flex:1 1 auto;font:500 12px var(--font-ui);color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:4px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+.seg button:hover,.btn:hover{border-color:var(--water-dim)}
+.seg button[aria-pressed="true"]{background:var(--water);color:var(--ink);border-color:var(--water)}
+.btn.primary{background:var(--water);color:var(--ink);border-color:var(--water)}
+.btn:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible,label.file:focus-within,canvas:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+label.file{flex:1 1 auto;display:inline-flex;justify-content:center;align-items:center;font-size:12px;color:var(--water);cursor:pointer;border:1px dashed var(--water-dim);padding:7px 10px;border-radius:4px}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+input[type=range]{width:100%;accent-color:var(--water)}
+.check{display:flex;gap:8px;align-items:center;cursor:pointer}
+.check input{accent-color:var(--water)}
+.note{color:var(--muted);line-height:1.55;font-size:12px;margin:0}
+.note b{color:var(--fg);font-weight:500}
+.err{color:var(--bad);font-size:12px;margin:0}
+hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
+.heat{position:relative;width:100%;max-width:300px;aspect-ratio:1;border:1px solid var(--line);border-radius:3px;overflow:hidden;background:#000}
+.heat canvas{width:100%;height:100%;display:block;image-rendering:pixelated;cursor:crosshair}
+.stats{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-family:var(--font-num);font-size:11px;line-height:1.5}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;color:var(--fg);min-width:0}
+.pill{display:inline-block;padding:0 6px;border-radius:999px;font-size:10px;margin-left:4px;border:1px solid currentColor}
+.ok{color:var(--water)} .mid{color:var(--warn)} .no{color:var(--bad)}
+.palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:8px}
+.swatch{position:relative;aspect-ratio:1;border-radius:50%;overflow:hidden;border:1px solid var(--line);cursor:pointer;padding:0;background:#000}
+.swatch canvas{width:100%;height:100%;display:block}
+.swatch[aria-pressed="true"]{outline:2px solid var(--water);outline-offset:2px}
+.swatch .k{position:absolute;bottom:3px;left:0;right:0;text-align:center;font:10px var(--font-num);color:#fff;text-shadow:0 0 3px #000}
+.empty{color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:6px;padding:10px;text-align:center}
+[data-show]{display:none}
+body[data-mode="video"] [data-show~="video"],body[data-mode="photo"] [data-show~="photo"]{display:flex}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,50%)}
+  .rail{border-left:0;border-top:1px solid var(--line);padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px))}
+}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <canvas id="gl"></canvas>
+    <div class="hud" id="hud"><span class="tag" id="hudA">—</span><span class="tag" id="hudB">—</span></div>
+    <div class="busy" id="busy" hidden><div class="t" id="busyT">준비 중</div><div class="bar"><i id="busyP"></i></div></div>
+  </div>
+
+  <aside class="rail">
+    <div>
+      <h1>조각 → 물감 만들기</h1>
+      <p class="sub">영상은 가장 매끄러운 루프 구간을 찾아 이음매 없는 플립북으로, 사진은 이음매 없는 타일로 만듭니다.</p>
+    </div>
+
+    <div class="group">
+      <div class="label">모드</div>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="video" aria-pressed="true">영상</button>
+        <button type="button" data-mode="photo" aria-pressed="false">사진</button>
+      </div>
+      <div class="row" data-show="video">
+        <label class="file">영상 넣기<input type="file" id="fileV" accept="video/*"></label>
+        <button type="button" class="btn" id="sampleV">샘플 물결</button>
+      </div>
+      <div class="row" data-show="photo">
+        <label class="file">사진 넣기<input type="file" id="fileP" accept="image/*"></label>
+        <button type="button" class="btn" id="sampleP">샘플 물결</button>
+      </div>
+      <p class="err" id="err" hidden></p>
+    </div>
+
+    <hr>
+
+    <div class="group" data-show="video" style="flex-direction:column">
+      <div class="label">루프 탐색 <output id="oSrc"></output></div>
+      <div class="heat"><canvas id="heat" width="1" height="1" tabindex="0" aria-label="프레임 유사도 행렬. 눌러서 루프 지점을 직접 고를 수 있어요"></canvas></div>
+      <p class="note">가로·세로 모두 프레임 번호. <b>어두울수록 두 프레임이 닮았어요.</b> 점선 띠가 허용 길이 범위이고, 그 안의 가장 어두운 점(◯)이 자동으로 고른 루프예요. 직접 눌러서 바꿀 수도 있어요.</p>
+      <dl class="stats" id="stats"></dl>
+      <label class="label" for="sMin">최소 길이 <output id="oMin"></output></label>
+      <input type="range" id="sMin" min="0.5" max="4" step="0.1" value="1">
+      <label class="label" for="sMax">최대 길이 <output id="oMax"></output></label>
+      <input type="range" id="sMax" min="0.8" max="6" step="0.1" value="3">
+      <label class="label" for="sFade">크로스페이드 <output id="oFade"></output></label>
+      <input type="range" id="sFade" min="0" max="20" step="1" value="8">
+      <label class="check" for="stab"><input type="checkbox" id="stab"> 흔들림 보정 (전역 이동 상쇄)</label>
+      <p class="note">벽·바닥처럼 정지한 배경이 있는 장면에서 켜세요. 물처럼 무늬 자체가 흐르는 장면에서는 흐름을 손떨림으로 착각해 따라가 버려요.</p>
+    </div>
+
+    <hr data-show="video">
+
+    <div class="group">
+      <div class="label">타일 미리보기</div>
+      <div class="seg" id="viewSeg">
+        <button type="button" data-view="plane" aria-pressed="true">평면</button>
+        <button type="button" data-view="sphere" aria-pressed="false">구</button>
+      </div>
+      <label class="check" for="fix"><input type="checkbox" id="fix" checked> 이음매 제거 (주기화)</label>
+      <label class="check" for="grid"><input type="checkbox" id="grid"> 타일 경계 표시</label>
+      <label class="check" for="rnd"><input type="checkbox" id="rnd"> 반복 티 지우기 (무작위 섞기)</label>
+      <label class="label" for="sTiles">타일 수 <output id="oTiles"></output></label>
+      <input type="range" id="sTiles" min="1" max="8" step="0.5" value="3">
+      <label class="label" for="sSharp">섞임 경계 <output id="oSharp"></output></label>
+      <input type="range" id="sSharp" min="1" max="8" step="0.5" value="3">
+      <p class="note">"이음매 제거"는 가장자리의 밝기 차이만 부드럽게 흡수해서 타일 경계를 지워요(Moisan의 주기+평활 분해). "무작위 섞기"는 셰이더에서 타일을 무작위로 엇갈려 섞어 반복 패턴을 숨겨요. 엔진에서 쓰려면 같은 셰이더를 옮겨야 해요.</p>
+    </div>
+
+    <hr>
+
+    <div class="group">
+      <div class="label">팔레트</div>
+      <div class="palette" id="palette"></div>
+      <div class="empty" id="palEmpty">아직 담은 물감이 없어요. 결과가 마음에 들면 아래 버튼으로 담아두세요.</div>
+      <button type="button" class="btn primary" id="keep" disabled>지금 결과를 팔레트에 담기</button>
+    </div>
+
+    <div class="group">
+      <div class="label">내보내기</div>
+      <div class="row">
+        <button type="button" class="btn" id="exPng" disabled>PNG 저장</button>
+        <button type="button" class="btn" id="exJson" disabled>메타 JSON</button>
+      </div>
+      <p class="note" id="exNote">영상은 플립북 아틀라스(256px 프레임을 격자로 배치), 사진은 512px 타일로 저장해요. Unity·Unreal의 Flipbook 노드에 행·열·fps만 넣으면 돼요.</p>
+    </div>
+  </aside>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+const sleep0 = () => new Promise(r => setTimeout(r, 0));
+const FPS = 30, MAX_SEC = 6, SRC = 288, TILE = 256, PHOTO = 512, MAX_FRAMES = 64, AN = 64;
+
+/* ===================== FFT (radix-2, complex, in place) ===================== */
+const fftCache = new Map();
+function fftPlan(n){
+  if (fftCache.has(n)) return fftCache.get(n);
+  const rev = new Uint32Array(n), bits = Math.log2(n);
+  for (let i = 0; i < n; i++){ let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); rev[i] = r; }
+  const cos = new Float64Array(n/2), sin = new Float64Array(n/2);
+  for (let i = 0; i < n/2; i++){ cos[i] = Math.cos(2*Math.PI*i/n); sin[i] = Math.sin(2*Math.PI*i/n); }
+  const p = { rev, cos, sin }; fftCache.set(n, p); return p;
+}
+function fft1(re, im, off, stride, n, inv, plan, tr, ti){
+  for (let i = 0; i < n; i++){ const j = plan.rev[i]; tr[j] = re[off + i*stride]; ti[j] = im[off + i*stride]; }
+  for (let size = 2; size <= n; size <<= 1){
+    const half = size >> 1, step = n / size;
+    for (let s = 0; s < n; s += size){
+      for (let k = 0; k < half; k++){
+        const c = plan.cos[k*step], sn = inv ? plan.sin[k*step] : -plan.sin[k*step];
+        const a = s + k, b = a + half;
+        const xr = tr[b]*c - ti[b]*sn, xi = tr[b]*sn + ti[b]*c;
+        tr[b] = tr[a] - xr; ti[b] = ti[a] - xi; tr[a] += xr; ti[a] += xi;
+      }
+    }
+  }
+  for (let i = 0; i < n; i++){ re[off + i*stride] = tr[i]; im[off + i*stride] = ti[i]; }
+}
+function fft2(re, im, n, inv){
+  const plan = fftPlan(n), tr = new Float64Array(n), ti = new Float64Array(n);
+  for (let y = 0; y < n; y++) fft1(re, im, y*n, 1, n, inv, plan, tr, ti);
+  for (let x = 0; x < n; x++) fft1(re, im, x, n, n, inv, plan, tr, ti);
+}
+/* Periodic + smooth decomposition (Moisan 2011). Two real channels packed as re/im. */
+const denomCache = new Map();
+function denom(n){
+  if (denomCache.has(n)) return denomCache.get(n);
+  const d = new Float64Array(n*n);
+  for (let q = 0; q < n; q++) for (let r = 0; r < n; r++){
+    const v = 2*Math.cos(2*Math.PI*q/n) + 2*Math.cos(2*Math.PI*r/n) - 4;
+    d[q*n + r] = (q === 0 && r === 0) ? 0 : 1 / v;
+  }
+  denomCache.set(n, d); return d;
+}
+function smoothPair(a, b, n){ // a,b Float32Array n*n -> returns [sa, sb] smooth components
+  const re = new Float64Array(n*n), im = new Float64Array(n*n);
+  const add = (arr, ch) => {
+    const t = ch === 0 ? re : im;
+    for (let y = 0; y < n; y++){ const d = arr[y*n + n-1] - arr[y*n]; t[y*n] += d; t[y*n + n-1] -= d; }
+    for (let x = 0; x < n; x++){ const d = arr[(n-1)*n + x] - arr[x]; t[x] += d; t[(n-1)*n + x] -= d; }
+  };
+  add(a, 0); if (b) add(b, 1);
+  fft2(re, im, n, false);
+  const dn = denom(n);
+  for (let i = 0; i < n*n; i++){ re[i] *= dn[i]; im[i] *= dn[i]; }
+  fft2(re, im, n, true);
+  const k = 1 / (n*n);
+  for (let i = 0; i < n*n; i++){ re[i] *= k; im[i] *= k; }
+  return [re, im];
+}
+function periodicImage(img, n){ // ImageData n×n -> new ImageData (periodic)
+  const d = img.data, N2 = n*n;
+  const R = new Float32Array(N2), G = new Float32Array(N2), B = new Float32Array(N2);
+  for (let i = 0; i < N2; i++){ R[i] = d[i*4]; G[i] = d[i*4+1]; B[i] = d[i*4+2]; }
+  const [sR, sG] = smoothPair(R, G, n);
+  const [sB] = smoothPair(B, null, n);
+  const out = new ImageData(n, n), o = out.data;
+  for (let i = 0; i < N2; i++){
+    o[i*4] = R[i] - sR[i]; o[i*4+1] = G[i] - sG[i]; o[i*4+2] = B[i] - sB[i]; o[i*4+3] = 255;
+  }
+  return out;
+}
+function seamError(img, n){ // mean abs RGB jump across wrap edges vs. across interior neighbours
+  const d = img.data; let e = 0, c = 0, base = 0, cb = 0;
+  const px = (x, y, ch) => d[(y*n + x)*4 + ch];
+  for (let y = 0; y < n; y++) for (let ch = 0; ch < 3; ch++){ e += Math.abs(px(n-1,y,ch) - px(0,y,ch)); base += Math.abs(px(n/2,y,ch) - px(n/2-1,y,ch)); c++; }
+  for (let x = 0; x < n; x++) for (let ch = 0; ch < 3; ch++){ e += Math.abs(px(x,n-1,ch) - px(x,0,ch)); base += Math.abs(px(x,n/2,ch) - px(x,n/2-1,ch)); c++; }
+  return (e / c) / Math.max(1e-3, base / c);
+}
+
+/* ===================== state ===================== */
+const S = {
+  mode:'video', frames:[], gray:[], offs:[], N:0, srcName:'', D:null, base:1, shake:0,
+  loop:null, manual:null, result:null, palette:[], active:-1, busy:false
+};
+window.__lab = S;
+
+function setBusy(text, p){
+  if (text == null){ $('busy').hidden = true; return; }
+  $('busy').hidden = false; $('busyT').textContent = text; $('busyP').style.width = ((p ?? 0) * 100).toFixed(1) + '%';
+}
+function showErr(msg){ $('err').textContent = msg; $('err').hidden = !msg; }
+
+/* ===================== video extraction ===================== */
+function once(el, ev){ return new Promise((res, rej) => {
+  const ok = () => { el.removeEventListener('error', bad); res(); };
+  const bad = () => { el.removeEventListener(ev, ok); rej(new Error('media')); };
+  el.addEventListener(ev, ok, { once:true }); el.addEventListener('error', bad, { once:true });
+}); }
+async function openVideo(url){
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.setAttribute('playsinline',''); v.preload = 'auto'; v.crossOrigin = 'anonymous';
+  v.src = url;
+  await once(v, 'loadeddata');
+  try { await v.play(); v.pause(); } catch(e){}
+  return v;
+}
+async function seek(v, t){
+  if (Math.abs(v.currentTime - t) < 1e-4) return;
+  const p = once(v, 'seeked'); v.currentTime = t; await p;
+}
+/* Play through once and grab a frame per 30 fps slot. Seeking a paused video is unreliable
+   across browsers (some never repaint), so real playback + requestVideoFrameCallback is used. */
+function capture(v, dur, N, sx, sy, side){
+  v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none';
+  document.body.appendChild(v);
+  v.loop = false;
+  const frames = new Array(N); let last = -1, finished = false;
+  const grab = mt => {
+    const slot = Math.min(N - 1, Math.round(mt * FPS));
+    if (slot <= last) return;
+    const c = document.createElement('canvas'); c.width = c.height = SRC;
+    c.getContext('2d').drawImage(v, sx, sy, side, side, 0, 0, SRC, SRC);
+    for (let k = last + 1; k <= slot; k++) frames[k] = c;
+    last = slot;
+    setBusy(`프레임 수집 ${slot + 1}/${N}`, slot / N);
+  };
+  return new Promise(async res => {
+    const done = () => {
+      if (finished) return; finished = true; v.pause();
+      if (last < 0) grab(0);
+      for (let k = last + 1; k < N; k++) frames[k] = frames[last];
+      res(frames);
+    };
+    try { if (v.currentTime > 0.001){ await seek(v, 0); } } catch(e){}
+    v.addEventListener('ended', done, { once:true });
+    setTimeout(done, dur * 1000 / 0.9 + 4000);
+    if ('requestVideoFrameCallback' in v){
+      const cb = (now, md) => { if (finished) return; grab(md.mediaTime); if (md.mediaTime >= dur - 0.5 / FPS) return done(); v.requestVideoFrameCallback(cb); };
+      v.requestVideoFrameCallback(cb);
+    } else {
+      const loop = () => { if (finished) return; grab(v.currentTime); if (v.currentTime >= dur - 0.5 / FPS) return done(); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    }
+    try { await v.play(); } catch(e){ done(); }
+  });
+}
+async function extract(url, name){
+  S.busy = true; showErr('');
+  setBusy('영상 여는 중', 0);
+  let v;
+  try { v = await openVideo(url); }
+  catch(e){ setBusy(null); S.busy = false; throw e; }
+  const dur = Math.min(isFinite(v.duration) ? v.duration : MAX_SEC, MAX_SEC);
+  const N = Math.max(2, Math.floor(dur * FPS));
+  const vw = v.videoWidth, vh = v.videoHeight, side = Math.min(vw, vh);
+  const sx = (vw - side) / 2, sy = (vh - side) / 2;
+  const frames = await capture(v, dur, N, sx, sy, side);
+  v.pause(); v.remove(); v.removeAttribute('src'); v.load();
+  S.frames = frames; S.N = N; S.srcName = name;
+  S.info = `${vw}×${vh} · ${(N / FPS).toFixed(2)}s`;
+  S.manual = null;
+  await analyze();
+  S.busy = false;
+}
+
+/* ===================== stabilisation + similarity ===================== */
+const tmp72 = Object.assign(document.createElement('canvas'), { width:72, height:72 });
+const tmpAN = Object.assign(document.createElement('canvas'), { width:AN, height:AN });
+function lumaOf(canvas, w){
+  const d = canvas.getContext('2d', { willReadFrequently:true }).getImageData(0, 0, w, w).data;
+  const g = new Float32Array(w*w);
+  for (let i = 0; i < w*w; i++) g[i] = (d[i*4]*0.2126 + d[i*4+1]*0.7152 + d[i*4+2]*0.0722) / 255;
+  return g;
+}
+function estimateShift(ref, g, R){ // integer SAD search ±R on 72px, centre 52×52, parabolic subpixel
+  const W = 72, M = 10, best = { s:1e9, x:0, y:0 }, tab = {};
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++){
+    let s = 0;
+    for (let y = M; y < W - M; y += 1) for (let x = M; x < W - M; x += 1) s += Math.abs(ref[y*W + x] - g[(y+dy)*W + (x+dx)]);
+    tab[dx + ',' + dy] = s;
+    if (s < best.s){ best.s = s; best.x = dx; best.y = dy; }
+  }
+  const sub = (a, b, c) => { const den = a - 2*b + c; return den > 0 ? 0.5 * (a - c) / den : 0; };
+  const L = tab[(best.x-1)+','+best.y], Rr = tab[(best.x+1)+','+best.y], U = tab[best.x+','+(best.y-1)], Dn = tab[best.x+','+(best.y+1)];
+  return { x: best.x + (L != null && Rr != null ? sub(L, best.s, Rr) : 0), y: best.y + (U != null && Dn != null ? sub(U, best.s, Dn) : 0) };
+}
+function drawWindow(ctx, frame, off, size){ // stabilised TILE window out of SRC frame
+  const m = (SRC - TILE) / 2;
+  ctx.drawImage(frame, m + off.x, m + off.y, TILE, TILE, 0, 0, size, size);
+}
+async function analyze(){
+  const N = S.N, stab = $('stab').checked;
+  // 1) global motion vs. frame 0 (72px space, ±4 px = ±16 px at 288)
+  setBusy('흔들림 측정', 0);
+  const t72 = tmp72.getContext('2d', { willReadFrequently:true });
+  const ref = (t72.drawImage(S.frames[0], 0, 0, 72, 72), lumaOf(tmp72, 72));
+  const offs = [{ x:0, y:0 }]; let maxShift = 0;
+  for (let k = 1; k < N; k++){
+    t72.drawImage(S.frames[k], 0, 0, 72, 72);
+    const s = estimateShift(ref, lumaOf(tmp72, 72), 4);
+    const sc = SRC / 72, lim = (SRC - TILE) / 2;
+    const o = { x: Math.max(-lim, Math.min(lim, s.x * sc)), y: Math.max(-lim, Math.min(lim, s.y * sc)) };
+    maxShift = Math.max(maxShift, Math.hypot(o.x, o.y));
+    offs.push(stab ? o : { x:0, y:0 });
+    if (k % 10 === 0){ setBusy('흔들림 측정', k / N); await sleep0(); }
+  }
+  S.offs = offs; S.shake = maxShift;
+  // 2) stabilised 64px luma per frame
+  const ta = tmpAN.getContext('2d', { willReadFrequently:true });
+  S.gray = S.frames.map((f, k) => { drawWindow(ta, f, offs[k], AN); return lumaOf(tmpAN, AN); });
+  // 3) N×N mean-abs-difference matrix
+  setBusy('프레임 유사도 계산', 0.5); await sleep0();
+  const D = new Float32Array(N*N), P = AN*AN;
+  for (let i = 0; i < N; i++){
+    const a = S.gray[i];
+    for (let j = i + 1; j < N; j++){
+      const b = S.gray[j]; let s = 0;
+      for (let p = 0; p < P; p++){ const d = a[p] - b[p]; s += d < 0 ? -d : d; }
+      D[i*N + j] = D[j*N + i] = s / P;
+    }
+  }
+  const cons = []; for (let k = 0; k < N - 1; k++) cons.push(D[k*N + k + 1]);
+  cons.sort((x, y) => x - y);
+  S.D = D; S.base = Math.max(1e-4, cons[Math.floor(cons.length / 2)] || 1e-3);
+  findLoop();
+  await build();
+}
+
+/* ===================== loop search ===================== */
+function loopCost(i, j, F){
+  const N = S.N, D = S.D; let s = 0, c = 0;
+  for (let t = -1; t <= Math.max(F, 1); t++){
+    const a = i + t, b = j + t; if (a < 0 || b >= N) continue;
+    const w = (t >= 0 && t < Math.max(F,1)) ? 1 : 0.5;
+    s += D[a*N + b] * w; c += w;
+  }
+  return s / c;
+}
+function constraints(){
+  const F = +$('sFade').value;
+  let lo = Math.round(+$('sMin').value * FPS), hi = Math.round(+$('sMax').value * FPS);
+  if (hi < lo) hi = lo;
+  return { F, lo: Math.max(lo, F + 2, 6), hi };
+}
+function findLoop(){
+  const { F, lo, hi } = constraints(), N = S.N;
+  let best = null;
+  for (let i = 1; i < N; i++){
+    for (let L = lo; L <= hi; L++){
+      const j = i + L; if (j + Math.max(F, 1) > N - 1) break;
+      const c = loopCost(i, j, F) / S.base - 0.02 * (L / FPS);   // tiny bias toward longer loops
+      if (!best || c < best.c) best = { i, j, c };
+    }
+  }
+  if (!best){ // clip too short for the range: take the longest possible
+    const j = N - 1 - Math.max(F, 1), i = Math.max(0, j - lo);
+    best = { i, j: Math.max(i + 2, j), c: 0, forced:true };
+  }
+  S.loop = S.manual || best;
+  S.loop.score = loopCost(S.loop.i, S.loop.j, F) / S.base;
+  S.auto = best;
+}
+
+/* ===================== build atlas ===================== */
+const smooth = t => t * t * (3 - 2 * t);
+async function build(){
+  const { i, j } = S.loop, F = Math.min(+$('sFade').value, S.N - j);
+  const L = j - i;
+  const count = Math.min(L, MAX_FRAMES);
+  const idx = Array.from({ length:count }, (_, t) => Math.floor(t * L / count));
+  const fps = FPS * count / L;
+  const cols = Math.ceil(Math.sqrt(count)), rows = Math.ceil(count / cols);
+  const raw = document.createElement('canvas'); raw.width = cols * TILE; raw.height = rows * TILE;
+  const fix = document.createElement('canvas'); fix.width = raw.width; fix.height = raw.height;
+  const rc = raw.getContext('2d', { willReadFrequently:true }), fc = fix.getContext('2d');
+  const one = document.createElement('canvas'); one.width = one.height = TILE;
+  const oc = one.getContext('2d', { willReadFrequently:true });
+  let seamBefore = 0, seamAfter = 0;
+  for (let n = 0; n < count; n++){
+    const t = idx[n];
+    oc.globalAlpha = 1;
+    if (t < F){
+      drawWindow(oc, S.frames[j + t], S.offs[j + t], TILE);
+      oc.globalAlpha = smooth((t + 0.5) / F);
+      drawWindow(oc, S.frames[i + t], S.offs[i + t], TILE);
+      oc.globalAlpha = 1;
+    } else drawWindow(oc, S.frames[i + t], S.offs[i + t], TILE);
+    const img = oc.getImageData(0, 0, TILE, TILE);
+    const per = periodicImage(img, TILE);
+    const x = (n % cols) * TILE, y = Math.floor(n / cols) * TILE;
+    rc.putImageData(img, x, y); fc.putImageData(per, x, y);
+    if (n === 0){ seamBefore = seamError(img, TILE); seamAfter = seamError(per, TILE); }
+    if (n % 3 === 0){ setBusy(`타일화 ${n+1}/${count}`, n / count); await sleep0(); }
+  }
+  setBusy(null);
+  S.result = {
+    kind:'video', name: baseName(S.srcName), raw, fix, cols, rows, frames:count, fps, tile:TILE,
+    loopStart: i / FPS, loopEnd: j / FPS, crossfade:F, score:S.loop.score, seamBefore, seamAfter
+  };
+  finishResult();
+  drawHeat(); renderStats();
+}
+async function buildPhoto(img, name){
+  S.busy = true; showErr('');
+  setBusy('사진 타일화', 0.3); await sleep0();
+  const side = Math.min(img.naturalWidth || img.width, img.naturalHeight || img.height);
+  const c = document.createElement('canvas'); c.width = c.height = PHOTO;
+  const ctx = c.getContext('2d', { willReadFrequently:true });
+  ctx.drawImage(img, ((img.naturalWidth || img.width) - side) / 2, ((img.naturalHeight || img.height) - side) / 2, side, side, 0, 0, PHOTO, PHOTO);
+  const im = ctx.getImageData(0, 0, PHOTO, PHOTO);
+  const per = periodicImage(im, PHOTO);
+  const fix = document.createElement('canvas'); fix.width = fix.height = PHOTO; fix.getContext('2d').putImageData(per, 0, 0);
+  S.result = { kind:'photo', name: baseName(name), raw:c, fix, cols:1, rows:1, frames:1, fps:1, tile:PHOTO,
+    seamBefore: seamError(im, PHOTO), seamAfter: seamError(per, PHOTO) };
+  setBusy(null); S.busy = false;
+  finishResult(); renderStats();
+}
+function baseName(n){ return (n || 'piece').replace(/\.[^.]+$/, '').replace(/[^\w가-힣-]+/g, '_').slice(0, 40) || 'piece'; }
+
+/* ===================== UI: heatmap + stats ===================== */
+function drawHeat(){
+  const N = S.N, c = $('heat'); if (!S.D) return;
+  const scale = Math.max(1, Math.floor(300 / N));
+  c.width = c.height = N * scale;
+  const ctx = c.getContext('2d'), im = ctx.createImageData(N, N);
+  for (let k = 0; k < N*N; k++){
+    const v = Math.min(1, S.D[k] / (S.base * 4));
+    const t = Math.pow(v, 0.7);
+    im.data[k*4] = 10 + t * 205; im.data[k*4+1] = 14 + t * 220; im.data[k*4+2] = 18 + t * 230; im.data[k*4+3] = 255;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = tmp.height = N; tmp.getContext('2d').putImageData(im, 0, 0);
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(tmp, 0, 0, N * scale, N * scale);
+  const { lo, hi } = constraints();
+  ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(169,212,223,.55)'; ctx.lineWidth = 1;
+  for (const L of [lo, hi]){ ctx.beginPath(); ctx.moveTo(0, L * scale); ctx.lineTo((N - L) * scale, N * scale); ctx.stroke(); }
+  ctx.restore();
+  const { i, j } = S.loop;
+  ctx.strokeStyle = S.manual ? '#e9c27a' : '#a9d4df'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc((i + .5) * scale, (j + .5) * scale, Math.max(5, scale * 2.5), 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc((j + .5) * scale, (i + .5) * scale, Math.max(5, scale * 2.5), 0, Math.PI * 2); ctx.stroke();
+}
+function verdict(score){
+  if (score < 1.5) return ['ok','매끈함'];
+  if (score < 3.5) return ['mid','페이드로 가려짐'];
+  return ['no','티 남'];
+}
+function renderStats(){
+  const r = S.result; if (!r) return;
+  const rows = [];
+  if (r.kind === 'video'){
+    const [cls, word] = verdict(r.score);
+    const shake = S.shake < 4 ? ['ok','작음'] : S.shake < 12 ? ['mid','보통'] : ['no','큼'];
+    $('oSrc').textContent = S.info || '';
+    rows.push(['구간', `${r.loopStart.toFixed(2)}s → ${r.loopEnd.toFixed(2)}s (${(r.loopEnd - r.loopStart).toFixed(2)}s)${S.manual ? ' · 수동' : ''}`]);
+    rows.push(['이음매', `${r.score.toFixed(2)}× <span class="pill ${cls}">${word}</span>`]);
+    rows.push(['', '평소 프레임 간 변화 대비. 1.0이면 일반 프레임 전환과 같고, 물·불·나뭇잎처럼 불규칙한 장면은 2~3이어도 크로스페이드가 잔상 없이 녹여줘요.']);
+    rows.push(['전역 이동', `최대 ${S.shake.toFixed(1)}px <span class="pill ${shake[0]}">${shake[1]}</span>`]);
+    rows.push(['아틀라스', `${r.cols}×${r.rows} · ${r.frames}f · ${r.fps.toFixed(1)}fps · ${r.cols*r.tile}×${r.rows*r.tile}`]);
+  }
+  rows.push(['타일 경계', `${r.seamBefore.toFixed(2)}× → ${r.seamAfter.toFixed(2)}×`]);
+  $('stats').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+  $('hudA').textContent = r.kind === 'video' ? `LOOP ${(r.loopEnd - r.loopStart).toFixed(2)}s · ${r.frames}F` : `PHOTO ${r.tile}px`;
+  $('hudB').textContent = `SEAM ${r.seamBefore.toFixed(1)}× → ${r.seamAfter.toFixed(1)}×`;
+}
+$('heat').addEventListener('click', e => {
+  if (!S.D || S.busy) return;
+  const rect = e.target.getBoundingClientRect(), N = S.N;
+  let a = Math.floor((e.clientX - rect.left) / rect.width * N), b = Math.floor((e.clientY - rect.top) / rect.height * N);
+  let i = Math.min(a, b), j = Math.max(a, b);
+  const F = +$('sFade').value;
+  j = Math.min(j, N - 1 - Math.max(F, 1));
+  if (j - i < 6) return;
+  S.manual = { i, j }; findLoop(); runBuild();
+});
+async function runBuild(){ if (S.busy) return; S.busy = true; try { await build(); } finally { S.busy = false; } }
+let rt = null;
+function reSearch(){ clearTimeout(rt); rt = setTimeout(() => { if (!S.D || S.busy) return; S.manual = null; findLoop(); drawHeat(); runBuild(); }, 250); }
+for (const [s, o, f] of [['sMin','oMin', v => v.toFixed(1) + 's'], ['sMax','oMax', v => v.toFixed(1) + 's'], ['sFade','oFade', v => v + 'f']]){
+  const el = $(s); const upd = () => { $(o).textContent = f(+el.value); }; upd();
+  el.addEventListener('input', () => { upd(); reSearch(); });
+}
+$('stab').addEventListener('change', async () => { if (!S.frames.length || S.busy) return; S.busy = true; try { S.manual = null; await analyze(); } finally { S.busy = false; } });
+
+/* ===================== preview (three.js) ===================== */
+const canvas = $('gl'), stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // pass sRGB texels straight through
+const uniforms = {
+  uAtlas:{ value:null }, uCols:{ value:1 }, uRows:{ value:1 }, uFrame:{ value:0 }, uHalf:{ value:0.5/256 },
+  uTiles:{ value:3 }, uRand:{ value:0 }, uSharp:{ value:3 }, uGrid:{ value:0 }, uMean:{ value:new THREE.Vector3(.5,.5,.5) },
+  uRes:{ value:new THREE.Vector2(1,1) }, uPan:{ value:new THREE.Vector2(0,0) }
+};
+const fragCommon = /* glsl */`
+uniform sampler2D uAtlas; uniform float uCols, uRows, uFrame, uHalf, uTiles, uRand, uSharp, uGrid;
+uniform vec3 uMean;
+vec3 cell(vec2 uv){
+  vec2 c = clamp(fract(uv), vec2(uHalf), vec2(1.0 - uHalf));
+  float col = mod(uFrame, uCols), row = floor(uFrame / uCols);
+  vec2 a = vec2((col + c.x) / uCols, 1.0 - (row + 1.0 - c.y) / uRows);
+  return texture2D(uAtlas, a).rgb;
+}
+vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
+vec3 stochastic(vec2 uv){
+  vec2 g = uv * 1.6;
+  vec2 sk = vec2(g.x, -0.57735027 * g.x + 1.15470054 * g.y);
+  vec2 b = floor(sk); vec3 t = vec3(fract(sk), 0.0); t.z = 1.0 - t.x - t.y;
+  vec3 w; vec2 v1, v2, v3;
+  if (t.z > 0.0){ w = vec3(t.z, t.y, t.x); v1 = b; v2 = b + vec2(0,1); v3 = b + vec2(1,0); }
+  else { w = vec3(-t.z, 1.0 - t.y, 1.0 - t.x); v1 = b + vec2(1,1); v2 = b + vec2(1,0); v3 = b + vec2(0,1); }
+  w = pow(max(w, 0.0), vec3(uSharp)); w /= (w.x + w.y + w.z);
+  vec3 c1 = cell(uv + hash2(v1) * 7.0), c2 = cell(uv + hash2(v2) * 7.0), c3 = cell(uv + hash2(v3) * 7.0);
+  vec3 o = w.x * (c1 - uMean) + w.y * (c2 - uMean) + w.z * (c3 - uMean);
+  return uMean + o / sqrt(dot(w, w));     // variance-preserving blend
+}
+vec3 paint(vec2 uv){
+  vec3 c = uRand > 0.5 ? stochastic(uv) : cell(uv);
+  if (uGrid > 0.5){
+    vec2 f = abs(fract(uv + 0.5) - 0.5) / fwidth(uv);
+    float l = 1.0 - clamp(min(f.x, f.y) - 0.5, 0.0, 1.0);
+    c = mix(c, vec3(0.66, 0.83, 0.87), l * 0.9);
+  }
+  return c;
+}`;
+const planeMat = new THREE.ShaderMaterial({
+  uniforms,
+  vertexShader:`void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader:`uniform vec2 uRes; uniform vec2 uPan; ${fragCommon}
+  void main(){ vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y * uTiles + uPan; gl_FragColor = vec4(clamp(paint(uv), 0.0, 1.0), 1.0); }`,
+  depthTest:false
+});
+const sphereMat = new THREE.ShaderMaterial({
+  uniforms,
+  vertexShader:`varying vec2 vUv; varying vec3 vN; void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader:`varying vec2 vUv; varying vec3 vN; ${fragCommon}
+  void main(){ vec3 c = paint(vUv * vec2(2.0, 1.0) * uTiles); float d = max(dot(normalize(vN), normalize(vec3(.4,.7,.6))), 0.0);
+  gl_FragColor = vec4(clamp(c * (0.45 + 0.65 * d), 0.0, 1.0), 1.0); }`
+});
+const planeScene = new THREE.Scene(), orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const planeMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), planeMat); planeMesh.frustumCulled = false; planeScene.add(planeMesh);
+const sphereScene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(38, 1, 0.05, 50);
+cam.position.set(0, 0.3, 3.6);
+const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 128), sphereMat); sphereScene.add(sphere);
+const controls = new OrbitControls(cam, canvas); controls.enableDamping = true; controls.enabled = false;
+let view = 'plane';
+// drag to pan in plane view
+let drag = null;
+canvas.addEventListener('pointerdown', e => { if (view !== 'plane') return; drag = { x:e.clientX, y:e.clientY, p:uniforms.uPan.value.clone() }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => { if (!drag) return; const k = uniforms.uTiles.value / stage.clientHeight; uniforms.uPan.value.set(drag.p.x - (e.clientX - drag.x) * k, drag.p.y + (e.clientY - drag.y) * k); });
+canvas.addEventListener('pointerup', () => { drag = null; });
+
+let tex = null;
+function setTexture(r, useFix){
+  if (tex) tex.dispose();
+  tex = new THREE.CanvasTexture(useFix ? r.fix : r.raw);
+  tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+  uniforms.uAtlas.value = tex; uniforms.uCols.value = r.cols; uniforms.uRows.value = r.rows;
+  uniforms.uHalf.value = 0.5 / r.tile;
+  const ctx = (useFix ? r.fix : r.raw).getContext('2d');
+  const d = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height).data;
+  let a = 0, b = 0, c = 0, n = 0; for (let k = 0; k < d.length; k += 4 * 7){ a += d[k]; b += d[k+1]; c += d[k+2]; n++; }
+  uniforms.uMean.value.set(a / n / 255, b / n / 255, c / n / 255);
+}
+let shown = null;
+function show(r){ shown = r; setTexture(r, $('fix').checked); }
+function finishResult(){ show(S.result); S.active = -1; renderPalette(); $('keep').disabled = false; $('exPng').disabled = !dl; $('exJson').disabled = !dl; }
+
+$('fix').addEventListener('change', () => shown && show(shown));
+$('grid').addEventListener('change', e => uniforms.uGrid.value = e.target.checked ? 1 : 0);
+$('rnd').addEventListener('change', e => uniforms.uRand.value = e.target.checked ? 1 : 0);
+for (const [s, o, u] of [['sTiles','oTiles','uTiles'], ['sSharp','oSharp','uSharp']]){
+  const el = $(s); const upd = () => { uniforms[u].value = +el.value; $(o).textContent = (+el.value).toFixed(1); }; upd(); el.addEventListener('input', upd);
+}
+$('viewSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; view = b.dataset.view;
+  $('viewSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  controls.enabled = view === 'sphere';
+});
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  uniforms.uRes.value.set(r.width * renderer.getPixelRatio(), r.height * renderer.getPixelRatio());
+  cam.aspect = r.width / Math.max(1, r.height); cam.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+
+const clock = new THREE.Clock(); let T = 0;
+function tick(){
+  const dt = clock.getDelta(); T += dt;
+  if (shown) uniforms.uFrame.value = Math.floor(T * shown.fps) % shown.frames;
+  if (view === 'sphere'){ sphere.rotation.y += dt * 0.2; controls.update(); renderer.render(sphereScene, cam); }
+  else renderer.render(planeScene, orthoCam);
+  drawSwatches();
+  requestAnimationFrame(tick);
+}
+
+/* ===================== palette ===================== */
+function renderPalette(){
+  const p = $('palette'); p.innerHTML = '';
+  $('palEmpty').hidden = S.palette.length > 0;
+  S.palette.forEach((r, k) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch';
+    b.setAttribute('aria-pressed', String(k === S.active)); b.setAttribute('aria-label', r.name);
+    const c = document.createElement('canvas'); c.width = c.height = 64; b.appendChild(c);
+    const lab = document.createElement('span'); lab.className = 'k'; lab.textContent = r.kind === 'video' ? `${(r.loopEnd - r.loopStart).toFixed(1)}s` : 'img'; b.appendChild(lab);
+    b.addEventListener('click', () => { S.active = k; show(r); renderPalette(); });
+    r._c = c; p.appendChild(b);
+  });
+}
+function drawSwatches(){
+  for (const r of S.palette){
+    if (!r._c) continue;
+    const f = Math.floor(T * r.fps) % r.frames, ctx = r._c.getContext('2d');
+    ctx.drawImage(r.fix, (f % r.cols) * r.tile, Math.floor(f / r.cols) * r.tile, r.tile, r.tile, 0, 0, 64, 64);
+  }
+}
+$('keep').addEventListener('click', () => {
+  if (!S.result) return;
+  if (S.palette.includes(S.result)) return;
+  S.palette.push(S.result); S.active = S.palette.length - 1; renderPalette();
+});
+
+/* ===================== export ===================== */
+let dl = null;
+(async () => {
+  try { dl = window.claude?.use ? await window.claude.use('downloads') : null; } catch(e){ dl = null; }
+  if (!dl && !window.claude){
+    // 로컬 실행 (python -m http.server 등): 평범한 <a download> 로 저장
+    dl = { save: async ({ filename, data }) => {
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      return { status:'saved' };
+    } };
+  }
+  if (!dl) $('exNote').textContent = '이 보기에서는 파일 저장을 쓸 수 없어요. claude.ai에서 아티팩트를 열면 저장할 수 있어요.';
+  if (dl && shown){ $('exPng').disabled = false; $('exJson').disabled = false; }
+})();
+function meta(r){
+  const m = { name:r.name, kind:r.kind, tileSize:r.tile, seamlessTiling: $('fix').checked };
+  // HANDOFF §5 물감 데이터의 loop 필드와 같은 키 (frames = 시트 파일명) + 진단값. tools/texlab.py 출력과 같음
+  if (r.kind === 'video') Object.assign(m, { frames:fname(r, 'png'), frameCount:r.frames, fps:+r.fps.toFixed(3), cols:r.cols, rows:r.rows,
+    layout:'row-major, top-left first', loopStartSec:+r.loopStart.toFixed(3), loopEndSec:+r.loopEnd.toFixed(3),
+    crossfadeFrames:r.crossfade, seamScore:+r.score.toFixed(3) });
+  return m;
+}
+function fname(r, ext){
+  return r.kind === 'video'
+    ? `${r.name}_flipbook_${r.cols}x${r.rows}_${r.frames}f_${r.fps.toFixed(0)}fps.${ext}`
+    : `${r.name}_tile_${r.tile}.${ext}`;
+}
+async function save(filename, data){
+  try { await dl.save({ filename, data }); }
+  catch(e){
+    if (e?.code === 'declined') return;
+    showErr(e?.code === 'rate_limited' ? '저장 창이 이미 열려 있어요. 잠시 후 다시 눌러주세요.' : '이 보기에서는 저장할 수 없어요.');
+  }
+}
+$('exPng').addEventListener('click', () => {
+  const r = shown; if (!r || !dl) return;
+  (($('fix').checked ? r.fix : r.raw)).toBlob(b => b && save(fname(r, 'png'), b), 'image/png');
+});
+$('exJson').addEventListener('click', () => { const r = shown; if (r && dl) save(fname(r, 'json'), JSON.stringify(meta(r), null, 2)); });
+
+/* ===================== sources ===================== */
+const mp4ok = document.createElement('video').canPlayType('video/mp4; codecs="avc1.640028"') === 'probably';
+async function loadVideoUrl(url, name){
+  try { await extract(url, name); }
+  catch(e){ S.busy = false; setBusy(null); throw e; }
+}
+async function loadVideoFile(f){
+  try { await loadVideoUrl(URL.createObjectURL(f), f.name); }
+  catch(e){
+    // some viewers refuse blob: media; retry as data URL
+    try {
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      await loadVideoUrl(url, f.name);
+    } catch(e2){ showErr('이 영상을 열지 못했어요. mp4(H.264)나 mov로 다시 시도해 보세요.'); }
+  }
+}
+function loadImage(url){ return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; }); }
+async function loadPhotoFile(f){
+  try { await buildPhoto(await loadImage(URL.createObjectURL(f)), f.name); }
+  catch(e){
+    try {
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      await buildPhoto(await loadImage(url), f.name);
+    } catch(e2){ S.busy = false; setBusy(null); showErr('이 사진을 열지 못했어요. jpg나 png로 다시 시도해 보세요.'); }
+  }
+}
+const sampleVideo = () => loadVideoUrl('loop_raw.' + (mp4ok ? 'mp4' : 'webm'), 'water_sample').catch(() => showErr('샘플 영상을 불러오지 못했어요.'));
+const samplePhoto = async () => { try { await buildPhoto(await loadImage('sample_photo.jpg'), 'water_photo'); } catch(e){ S.busy = false; setBusy(null); showErr('샘플 사진을 불러오지 못했어요.'); } };
+$('fileV').addEventListener('change', e => { const f = e.target.files[0]; if (f && !S.busy) loadVideoFile(f); e.target.value = ''; });
+$('fileP').addEventListener('change', e => { const f = e.target.files[0]; if (f && !S.busy) loadPhotoFile(f); e.target.value = ''; });
+$('sampleV').addEventListener('click', () => !S.busy && sampleVideo());
+$('sampleP').addEventListener('click', () => !S.busy && samplePhoto());
+
+let videoResult = null, photoResult = null;
+$('modeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || S.busy) return;
+  if (S.result) (S.mode === 'video' ? (videoResult = S.result) : (photoResult = S.result));
+  S.mode = b.dataset.mode; document.body.dataset.mode = S.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  const back = S.mode === 'video' ? videoResult : photoResult;
+  if (back){ S.result = back; show(back); renderStats(); }
+  else if (S.mode === 'photo') samplePhoto();
+  else sampleVideo();
+});
+
+document.body.dataset.mode = 'video';
+tick();
+sampleVideo();
+</script>
+
+</body>
+</html>
