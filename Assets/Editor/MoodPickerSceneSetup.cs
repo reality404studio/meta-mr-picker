@@ -55,6 +55,7 @@ public static class MoodPickerSceneSetup
     // ---- 프로젝트 설정 (OculusProjectConfig.asset → 매니페스트)
     static void ConfigureProject()
     {
+        MoodPickerUrpSetup.Ensure();
         var cfg = OVRProjectConfig.CachedProjectConfig;
         cfg.insightPassthroughSupport = OVRProjectConfig.FeatureSupport.Required;
         cfg.isPassthroughCameraAccessEnabled = true;

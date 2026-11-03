@@ -100,7 +100,7 @@ public class FirstLight : MonoBehaviour
             for (int i = 0; i < skel.Bones.Count; i++)
                 if (skel.Bones[i].Id == OVRSkeleton.BoneId.XRHand_IndexTip) { index = i; break; }
         }
-        ok = ok && index >= 0 && index < skel.Bones.Count; // &= 는 단락 평가가 안 돼서 skel null 에서 터진다
+        ok = ok && index >= 0 && index < skel.Bones.Count;
         if (dot.gameObject.activeSelf != ok) dot.gameObject.SetActive(ok);
         if (ok) dot.position = skel.Bones[index].Transform.position;
     }
