@@ -2,7 +2,7 @@
 
 <sub>작업대 앱 id: mood-picker</sub>
 
-> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-03 23:42 KST · 과업 6/16 완료
+> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 00:03 KST · 과업 6/16 완료
 > 고칠 때는 작업대에서 (`npm run studio -- … --app mood-picker`), 그다음 `scripts/sync-docs.sh` → 커밋·푸시.
 
 범례: ✅ 완료 · 🔶 진행 중 · 👀 확인 필요 · ⬜ 대기 · ⛔ 막힘 · ▶ 과업 안에서 지금 차례
@@ -11,7 +11,7 @@
 
 | 누가 | 하위 과업 | 과업 | 상태 |
 | --- | --- | --- | --- |
-| 에이전트 | 빌드 게이트 + 빌드 ID (unity/shared/BuildGate/) | [Unity 셋업 + First Light](nodes/setup.md) | ⬜ 대기 |
+| 에이전트 | First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점 | [Unity 셋업 + First Light](nodes/setup.md) | 🔶 진행 중 |
 
 ## 흐름
 
@@ -32,7 +32,7 @@ flowchart LR
     direction TB
     use_unity_guardrails["Unity 실기 가드레일 (패스스루 안 보임 방지)"]:::doing
     use_unity_version["Unity 버전"]:::done
-    setup["Unity 셋업 + First Light 4/9"]:::doing
+    setup["Unity 셋업 + First Light 6/9"]:::doing
   end
   subgraph s_build["구현"]
     direction TB
@@ -71,6 +71,7 @@ flowchart LR
   classDef done fill:#dff3e4,stroke:#2e7d4f,color:#123
   classDef doing fill:#fff1cc,stroke:#c28a00,color:#321
   classDef review fill:#ece4ff,stroke:#6a4fc2,color:#213
+  classDef proof fill:#dceaff,stroke:#3f7fd6,color:#123
   classDef todo fill:#f4f4f4,stroke:#999,color:#333
   classDef blocked fill:#ffdede,stroke:#c22,color:#311
 ```
@@ -148,7 +149,7 @@ _11-03~04 · Quest에서 패스스루 + 손 + 카메라 텍스처 First Light_
 
 ### ✅ [Unity 버전](nodes/unity-version.md) · 공통
 
-### 🔶 [Unity 셋업 + First Light](nodes/setup.md) · 4/9
+### 🔶 [Unity 셋업 + First Light](nodes/setup.md) · 6/9
 
 Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
 
@@ -160,11 +161,11 @@ Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
   <br><sub>가드레일 §1~§3 의 [M] 항목: ProjectSettings, packages-lock, XR 로더 asset, AndroidManifest 권한. 결과를 setup 메모에</sub>
 - [x] **씬: Camera Rig + Passthrough + 손 추적 + 카메라 접근 켜기** · 사람 · 구현
   <br><sub>가드레일 §3. OVRManager 의 Passthrough Support / Enable Passthrough / Passthrough Camera Access, Skybox None</sub>
-- [ ] ▶ **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
+- [x] **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
   <br><sub>IPreprocessBuildWithReport. 실패: XR 로더 1개, HEADSET_CAMERA 권한, Skybox None, 카메라 1대, 외곽선 _Cull 1, 금지 API(Shader.Find·ReadPixels·WebCamTexture·OVRInput). 경고만: Development Build 꺼짐. 빌드 ID(git 짧은 해시+시각)를 박고 앱 첫 로그에 [MP] build=… 출력</sub>
-- [ ] **사전 점검 스크립트 (에이전트용)** · 에이전트 · 구현
+- [x] **사전 점검 스크립트 (에이전트용)** · 에이전트 · 구현
   <br><sub>게이트와 같은 파일 검사 + Roslyn 컴파일 체크. 사람에게 빌드를 부탁하기 전에 매번 돌리고 결과를 note 로</sub>
-- [ ] **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현
+- [ ] ▶ **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현 🔶 진행 중
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
 - [ ] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>

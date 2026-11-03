@@ -15,11 +15,11 @@
   <br><sub>가드레일 §1~§3 의 [M] 항목: ProjectSettings, packages-lock, XR 로더 asset, AndroidManifest 권한. 결과를 setup 메모에</sub>
 - [x] **씬: Camera Rig + Passthrough + 손 추적 + 카메라 접근 켜기** · 사람 · 구현
   <br><sub>가드레일 §3. OVRManager 의 Passthrough Support / Enable Passthrough / Passthrough Camera Access, Skybox None</sub>
-- [ ] ▶ **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
+- [x] **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
   <br><sub>IPreprocessBuildWithReport. 실패: XR 로더 1개, HEADSET_CAMERA 권한, Skybox None, 카메라 1대, 외곽선 _Cull 1, 금지 API(Shader.Find·ReadPixels·WebCamTexture·OVRInput). 경고만: Development Build 꺼짐. 빌드 ID(git 짧은 해시+시각)를 박고 앱 첫 로그에 [MP] build=… 출력</sub>
-- [ ] **사전 점검 스크립트 (에이전트용)** · 에이전트 · 구현
+- [x] **사전 점검 스크립트 (에이전트용)** · 에이전트 · 구현
   <br><sub>게이트와 같은 파일 검사 + Roslyn 컴파일 체크. 사람에게 빌드를 부탁하기 전에 매번 돌리고 결과를 note 로</sub>
-- [ ] **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현
+- [ ] ▶ **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현 🔶 진행 중
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
 - [ ] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
@@ -81,3 +81,8 @@ _setup-guardrails 하위 과업에서 에이전트가 덧붙인다._
 **Mac 에서 안 되는 것:** Link 패스스루 불가, XR Simulator 에서 PCA 안 됨 → 패스스루·PCA·손·72fps 는 APK 실기에서만.
 
 **새 도구 (2026-11-03 조사):** Meta XR Unity MCP Extension(Unity 6000.0.66f2+, SDK v78+, Unity MCP 패키지 위에), Meta XR Operator(Core v207+, OpenXR 1.17+, Mac 은 XR Simulator, 실험). setup-project 는 metavr `metavr_unity_setup`(apply)으로 에이전트가 대신 돌릴 수 있음 — 사람 하위 과업이라 사람 승인 후.
+
+---
+**Claude Code** · 2026-11-03 14:45
+
+2026-11-03 23:45 패스스루만 확인한 짧은 실기 빌드 (게이트·빌드 ID 없음 → setup-device 통과 아님). 사람: 패스스루 보임. 액티비티 com.DefaultCompany.moodpicker/com.unity3d.player.UnityPlayerGameActivity 로 실행됨. VrApi: FPS 72/72, CPU/GPU 레벨 2/2, App 1.7ms, CPU&GPU 3.5ms, GPU 24% CPU 19%. thermalservice Status 0, SoC 39°C, 배터리 32°C. 사람이 발열을 느낌 → 수치상 정상 범위, 빈 씬 기준선으로 남김.

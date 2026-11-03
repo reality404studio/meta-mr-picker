@@ -19,8 +19,8 @@ const nodesDir = path.join(outDir, 'nodes');
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(nodesDir, { recursive: true });
 
-const ICON = { done: '✅', doing: '🔶', review: '👀', todo: '⬜', blocked: '⛔' };
-const KO = { done: '완료', doing: '진행 중', review: '확인 필요', todo: '대기', blocked: '막힘' };
+const ICON = { done: '✅', doing: '🔶', review: '👀', proof: '🧪', todo: '⬜', blocked: '⛔' };
+const KO = { done: '완료', doing: '진행 중', review: '확인 필요', proof: '증명', todo: '대기', blocked: '막힘' };
 const KIND = { decide: '결정', collect: '수집', analyze: '분석', write: '작성', make: '생성', build: '구현', verify: '검증' };
 const WHO = { agent: '에이전트', human: '사람' };
 const esc = (s = '') => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
@@ -104,6 +104,7 @@ md.push(
   '  classDef done fill:#dff3e4,stroke:#2e7d4f,color:#123',
   '  classDef doing fill:#fff1cc,stroke:#c28a00,color:#321',
   '  classDef review fill:#ece4ff,stroke:#6a4fc2,color:#213',
+  '  classDef proof fill:#dceaff,stroke:#3f7fd6,color:#123',
   '  classDef todo fill:#f4f4f4,stroke:#999,color:#333',
   '  classDef blocked fill:#ffdede,stroke:#c22,color:#311',
   '```', '');
