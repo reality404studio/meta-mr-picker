@@ -1,0 +1,5 @@
+{
+  "logTag": "MP",
+  "requireCameraPermission": true,
+  "forbiddenApis": ["Shader.Find", "ReadPixels", "WebCamTexture", "OVRInput"]
+}

@@ -27,6 +27,12 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.reality404.buildgate": {
+      "version": "file:../../shared/BuildGate",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.9",
       "depth": 0,

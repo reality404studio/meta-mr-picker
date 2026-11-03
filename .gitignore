@@ -24,3 +24,10 @@
 crashlytics-buildid.txt
 sysinfo.txt
 .DS_Store
+
+# 빌드 게이트가 빌드마다 쓰는 빌드 ID
+/Assets/BuildGateGenerated/
+/Assets/BuildGateGenerated.meta
+
+# Unity 임시
+/.utmp/
