@@ -172,3 +172,8 @@ _실기에서 다르게 나온 항목을 날짜와 함께 덧붙인다._
 **Claude Code** · 2026-11-03 14:42
 
 2026-11-03 사람 결정: §0 원칙 4 추가 — 실기 시연 전 수치·감각 결정은 베이스라인, 초안대로 구현하고 값은 한곳에 모아 실기에서 조정
+
+---
+**Claude Code** · 2026-11-03 15:14
+
+실기에서 바뀐 것 (2026-11-04, 실기 확인): ① metavr_unity_setup 으로 부트스트랩한 프로젝트는 URP 패키지만 있고 **URP 파이프라인 에셋이 없다** (Graphics·Quality 모두 None) → 에디터에선 티가 덜 나고 기기에선 URP 머티리얼이 전부 마젠타. 빌드 게이트 render-pipeline 검사가 이제 막는다. ② 아무도 참조하지 않는 런타임 asmdef(예: [RuntimeInitializeOnLoadMethod] 만 있는 것)는 IL2CPP 스트리핑이 어셈블리째 지운다 → [assembly: AlwaysLinkAssembly]. 게이트 후처리가 BuildGate 런타임 어셈블리 누락을 막는다. ③ PCA 는 install -g 로 깔면 권한 창 없이 바로 1280x960 으로 돈다 (권한 창 흐름은 별도 확인).
