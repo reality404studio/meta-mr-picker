@@ -2,7 +2,7 @@
 
 <sub>작업대 앱 id: mood-picker</sub>
 
-> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 00:14 KST · 과업 6/16 완료
+> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-04 00:17 KST · 과업 6/18 완료
 > 고칠 때는 작업대에서 (`npm run studio -- … --app mood-picker`), 그다음 `scripts/sync-docs.sh` → 커밋·푸시.
 
 범례: ✅ 완료 · 🔶 진행 중 · 👀 확인 필요 · ⬜ 대기 · ⛔ 막힘 · ▶ 과업 안에서 지금 차례
@@ -11,7 +11,7 @@
 
 | 누가 | 하위 과업 | 과업 | 상태 |
 | --- | --- | --- | --- |
-| 사람 | 실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에 | [Unity 셋업 + First Light](nodes/setup.md) | ⬜ 대기 |
+| 에이전트 | EditMode 테스트 하네스 (배치모드) | [Unity 셋업 + First Light](nodes/setup.md) | ⬜ 대기 |
 
 ## 흐름
 
@@ -32,21 +32,23 @@ flowchart LR
     direction TB
     use_unity_guardrails["Unity 실기 가드레일 (패스스루 안 보임 방지)"]:::doing
     use_unity_version["Unity 버전"]:::done
-    setup["Unity 셋업 + First Light 7/9"]:::doing
+    setup["Unity 셋업 + First Light 8/11"]:::doing
   end
   subgraph s_build["구현"]
     direction TB
     catch["Catch: 채집 원 · 크롭 · 2톤 0/10"]:::todo
     loop["루프 온 모드: 물결 루프 0/4"]:::todo
     portal["팔레트 포탈 (왼손바닥) 0/3"]:::todo
-    dab["Dab: 푝 + 셀 셰이더 1/6"]:::doing
-    export["내보내기 + 저장·재개 0/4"]:::todo
+    dab["Dab: 푝 + 셀 셰이더 1/8"]:::doing
+    export["내보내기 + 저장·재개 0/1"]:::todo
   end
   subgraph s_review["마감"]
     direction TB
     polish["폴리시 + 디자인 테스트 0/6"]:::todo
     demo_video["데모 영상 (3분 미만) 0/4"]:::todo
     submit["제출 0/3"]:::todo
+    post_mvp["MVP 이후 (보류) 0/4"]:::blocked
+    acceptance["합격 측정 (실기) 0/2"]:::todo
   end
   brief --> usage_flow
   use_unity_version --> setup
@@ -68,6 +70,7 @@ flowchart LR
   world --> interface
   interface --> polish
   interface --> demo_video
+  dab --> acceptance
   classDef done fill:#dff3e4,stroke:#2e7d4f,color:#123
   classDef doing fill:#fff1cc,stroke:#c28a00,color:#321
   classDef review fill:#ece4ff,stroke:#6a4fc2,color:#213
@@ -149,7 +152,7 @@ _11-03~04 · Quest에서 패스스루 + 손 + 카메라 텍스처 First Light_
 
 ### ✅ [Unity 버전](nodes/unity-version.md) · 공통
 
-### 🔶 [Unity 셋업 + First Light](nodes/setup.md) · 7/9
+### 🔶 [Unity 셋업 + First Light](nodes/setup.md) · 8/11
 
 Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
 
@@ -167,7 +170,11 @@ Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
   <br><sub>게이트와 같은 파일 검사 + Roslyn 컴파일 체크. 사람에게 빌드를 부탁하기 전에 매번 돌리고 결과를 note 로</sub>
 - [x] **First Light 스크립트: 정면 Unlit 큐브 + 카메라 텍스처 쿼드 + 손끝 점** · 에이전트 · 구현
   <br><sub>가드레일 §4·§5. SerializeField 머티리얼, PassthroughCameraAccess 1280×960 요청 후 CurrentResolution 로그, 권한 요청은 한 곳</sub>
-- [ ] ▶ **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
+- [ ] ▶ **EditMode 테스트 하네스 (배치모드)** · 에이전트 · 구현
+  <br><sub>Unity -batchmode -runTests -testPlatform EditMode. 결과 XML 을 파일 칸에. 이후 모든 카드의 증거 경로</sub>
+- [ ] **손 입력 추상화 + 손 궤적 픽스처 재생** · 에이전트 · 구현
+  <br><sub>제스처 코드가 OVRHand 를 직접 읽지 않고 인터페이스로 읽는다. 녹화한 궤적(JSON)을 EditMode 에서 재생</sub>
+- [x] **실기 First Light: 방 + 가상 + 카메라 텍스처 + 손이 한 화면에** · 사람 · 검증
   <br><sub>Development Build 설치. 에이전트가 logcat·screencap 으로 같이 확인 (가드레일 §6) · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 - [ ] **전철 실기: Travel Mode 에서 패스스루 · 손 · 카메라 · 공중에 둔 물체** · 사람 · 검증
   <br><sub>First Light 빌드를 전철에 들고 가서. 설정 > 실험 기능 > Travel Mode (기차 지원, v71+). 공중에 띄운 물체가 차량 가감속에 미끄러지는지, 손 추적이 흔들림에 버티는지, PCA 가 도는지. 컨셉 전체가 여기에 걸려 있어 최대한 일찍</sub>
@@ -185,23 +192,23 @@ _11-05~14 · Catch → Loop → 포탈 → Dab → 내보내기. MVP = Catch + �
 - [ ] ▶ **테스트 영상 촬영: 윤슬 · 나뭇잎 · 바닥 타일 (+ 밤 불빛)** · 사람 · 수집
   <br><sub>폰으로. 과목당 고정 10~15초 + 손에 든 10초, 노출·초점 잠금. 원본은 my-vr-colorpicker/footage/ (git 밖), 메모만 여기에</sub>
 - [ ] **테스트 영상으로 CelExtract·Loop 오프라인 검증 (Mac)** · 에이전트 · 분석
-  <br><sub>실기 전에 2톤 추출·빛 방향·루프 이음매를 영상 크롭으로 미리 맞춘다. 결과 이미지를 catch 파일 칸에</sub>
+  <br><sub>실기 전에 램프 파라미터·빛 방향·타일 이음매·루프 이음매를 영상 크롭으로 미리 맞춘다. 원본은 바꾸지 않는다 (DECIDED 2026-11-04 ①). 결과 이미지를 catch 파일 칸에</sub>
 - [ ] **머리 방향 레이로 채집 중심** · 에이전트 · 구현
   <br><sub>Quest 3엔 눈 추적 없음. 응시를 클릭 대용으로 쓰지 않는다 (HANDOFF §4-1)</sub>
 - [ ] **양손 핀치 → 정사각형 채집 영역 크기, 기록 시간이 지나면 자동으로 담김** · 에이전트 · 구현
   <br><sub>DECIDED 2026-11-03. 원 대신 정사각형(타일과 같은 모양). 손 떼고도 영역 유지되는지, 자동 담기 타이머는 HUD 타임코드로 보임</sub>
 - [ ] **월드 → 카메라 이미지 투영, 영역만 크롭** · 에이전트 · 구현
-  <br><sub>PassthroughCameraAccess.WorldToViewportPoint, CurrentResolution 기준. AsyncGPUReadback. 원본 전체 프레임 저장 금지</sub>
-- [ ] **CelExtract: 2~3톤 + 빛 방향 근사** · 에이전트 · 구현
-  <br><sub>k-means, 디라이팅 없음. 밝은 쪽 방향 = lightDir</sub>
+  <br><sub>PassthroughCameraAccess.WorldToViewportPoint, CurrentResolution 기준. AsyncGPUReadback. 원본 전체 프레임 저장 금지. 크롭은 원본 그대로 (DECIDED 2026-11-04 ①)</sub>
+- [ ] **CelExtract: 원본은 그대로, 2톤 램프·빛 방향은 파라미터로** · 에이전트 · 구현
+  <br><sub>DECIDED 2026-11-04 ①. k-means 로 2~3톤 + 밝은 쪽 = lightDir 을 뽑아 물감 JSON 에 파라미터로 저장. 텍스처 픽셀은 바꾸지 않는다. 셀 변환은 CelShader 에서</sub>
 - [ ] **모드 토글: 한 손 핀치 1회 = 찰칵 / 루프 온 전환** · 에이전트 · 구현
   <br><sub>양손 핀치(크기)와 구분: 한 손만 핀치 = 토글. 손바닥이 얼굴 쪽일 땐 무시(Quest 시스템 메뉴)</sub>
-- [ ] **찰칵: 무늬 보존 2톤 + 이음매 없는 타일** · 에이전트 · 구현
-  <br><sub>옷감·벽·타일처럼 무늬가 재료인 것. 크롭을 픽셀마다 2톤으로(톤만 뽑으면 무늬가 사라짐) + 가장자리 이음매 제거해서 트라이플래너로 반복해도 티 안 나게. 테스트 영상의 타일로 먼저 비교</sub>
+- [ ] **찰칵: 원본 그대로 + 이음매 없는 타일** · 에이전트 · 구현
+  <br><sub>DECIDED 2026-11-04 ①. 크롭 원본을 유지하고 가장자리만 이음매 제거해 트라이플래너 반복에 티 안 나게. 테스트 영상의 타일로 먼저 비교</sub>
 - [ ] **PaintStore: 물감 JSON 저장·로드** · 에이전트 · 구현
   <br><sub>HANDOFF §5 데이터 구조 + mode: snap \| loop. snap 은 loop 없음. Application.persistentDataPath</sub>
 - [ ] **실기: 실내·창밖에서 담아 보기** · 사람 · 검증
-  <br><sub>흔들려도 원이 따라오는지, 톤이 그럴듯한지. MQDH 캐스팅으로 같이 본다 · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
+  <br><sub>흔들려도 정사각형이 따라오는지, 담긴 장면이 시야 그대로인지. MQDH 캐스팅으로 같이 본다 · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 
 ### ⬜ [루프 온 모드: 물결 루프](nodes/loop.md) · 0/4
 
@@ -231,7 +238,7 @@ _11-05~14 · Catch → Loop → 포탈 → Dab → 내보내기. MVP = Catch + �
 - [ ] **실기: 두 손이 가까워도 추적이 안 흔들리고 시스템 메뉴가 안 뜨는지** · 사람 · 검증
   <br><sub>증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 
-### 🔶 [Dab: 푝 + 셀 셰이더](nodes/dab.md) · 1/6
+### 🔶 [Dab: 푝 + 셀 셰이더](nodes/dab.md) · 1/8
 
 11-10~12 · 오브제를 손끝으로 찌르면 닿은 지점부터 셀 재질이 번진다 (여기까지 MVP)
 
@@ -239,30 +246,29 @@ _11-05~14 · Catch → Loop → 포탈 → Dab → 내보내기. MVP = Catch + �
 
 - [x] **결정: 집 무대(CRT 세계 유지?), 오브제 목록, 손 판단 방식** · 사람 · 결정
   <br><sub>HANDOFF §8-2, 5, 6. 에이전트는 선택지만 메모로 정리하고 멈춘다</sub>
-- [ ] ▶ **CelShader: 트라이플래너 + 2톤 램프 + lightDir + 남색 외곽선 + 플립북** · 에이전트 · 구현
-  <br><sub>가드레일 §5 (알파 쓰기, ColorMask RGB 금지, 외곽선 Render Face Back). 광원 없이 동작</sub>
+- [ ] ▶ **CelShader: 트라이플래너 + 2톤 램프 + lightDir** · 에이전트 · 구현
+  <br><sub>가드레일 §5 (알파 쓰기, ColorMask RGB 금지). 광원 없이 동작. 담은 원본에 물감 JSON 의 램프·lightDir 로 2톤을 입힌다 (DECIDED 2026-11-04 ①)</sub>
+- [ ] **CelShader 외곽선: 클라인 #15317C, 뒷면** · 에이전트 · 구현
+  <br><sub>가드레일 §5 외곽선 Render Face Back. 색은 DECIDED 인터페이스 B안</sub>
+- [ ] **CelShader 플립북 (루프 물감)** · 에이전트 · 구현
+  <br><sub>loop-seam 시트 형식과 같은 타입을 입력으로</sub>
 - [ ] **DabPaint: 접촉점 → 페인트 마스크 번짐** · 에이전트 · 구현
   <br><sub>거리 + 노이즈. 오브제별 렌더 텍스처는 작게 (72fps)</sub>
 - [ ] **HandJudge 휴리스틱: 톡 / 꾹** · 에이전트 · 구현
   <br><sub>접근 속도, 관통 깊이, 손가락 굽힘. 휴리스틱만 (ML 분류기 안 함, 2026-11-03 결정)</sub>
 - [ ] **오브제: 페트병 하나 먼저 (나머지는 시간 남으면)** · 에이전트 · 생성
   <br><sub>폴리 예산 지키기. 의자·머그는 MVP 이후</sub>
-- [ ] **실기: 페트병에 "푝" → 셀 물결이 흐르고 72fps** · 사람 · 검증
+- [ ] **실기: 페트병에 "푝" → 셀 물결이 흐르고 60fps 합격선** · 사람 · 검증
   <br><sub>증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 
-### ⬜ [내보내기 + 저장·재개](nodes/export.md) · 0/4
+### ⬜ [내보내기 + 저장·재개](nodes/export.md) · 0/1
 
 11-13~14 · 만든 걸 게임 에셋으로 꺼내고, 껐다 켜도 이어진다
 
 기다림: Dab: 푝 + 셀 셰이더, 루프 온 모드: 물결 루프
 
-- [ ] ▶ **GLB (메시 + 정지 텍스처), glTFast** · 에이전트 · 구현
-- [ ] **루프 스프라이트 시트 PNG + 셰이더 파라미터 JSON** · 에이전트 · 구현
-  <br><sub>glTF엔 애니메이션 텍스처 표준이 없어 따로 낸다</sub>
-- [ ] **저장·재개 + 빠른 시작** · 에이전트 · 구현
-  <br><sub>버스 한 정거장 테스트: 벗었다 다시 써도 그 자리에서 이어짐</sub>
-- [ ] **실기: 내보낸 파일을 adb pull 해서 PC에서 열어 보기** · 사람 · 검증
-  <br><sub>증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
+- [ ] ▶ **저장·재개** · 에이전트 · 구현
+  <br><sub>버스 한 정거장 테스트: 벗었다 다시 써도 그 자리에서 이어짐. 빠른 시작은 실기 측정이라 사람 카드에서</sub>
 
 ## 5. 마감
 
@@ -275,12 +281,12 @@ _11-15~18 · 폴리시, 디자인 테스트, 데모 영상, 제출_
 기다림: 내보내기 + 저장·재개
 
 - [ ] ▶ **첫 실행용 기본 물감 번들** · 에이전트 · 구현
-  <br><sub>물감 0개로 시작해도 바로 푝 하도록 샘플 물감 몇 개 + '내 방에서 담아 보기' 안내. 실제 한강 물감은 demo-shoot-commute 에서 담은 걸 넣고, 그 전엔 임시 물감</sub>
+  <br><sub>물감 0개로 시작해도 바로 푝 하도록 샘플 물감 몇 개. '내 방에서 담아 보기'는 글 대신 보이는 단서 (방 안 사물에 채집 사각형이 잠깐 떴다 사라짐, DECIDED 2026-11-04 ③). 실제 한강 물감은 demo-shoot-commute 에서 담은 걸 넣고, 그 전엔 임시 물감</sub>
 - [ ] **첫 5분 온보딩** · 에이전트 · 구현
   <br><sub>Best First Five Minutes. 설명 없이 알아채게. usage-flow 표 기준</sub>
-- [ ] **사운드 + 셀 외곽선 정리** · 에이전트 · 구현
-- [ ] **(선택) 눈 추적 층** · 에이전트 · 구현
-  <br><sub>감지되면 켜고, 없으면 머리 레이. 시간 남을 때만</sub>
+- [ ] **사운드 (귀는 동화)** · 에이전트 · 구현
+- [ ] **셀 외곽선 정리 (실기 뒤)** · 에이전트 · 구현
+  <br><sub>무엇을 정리할지는 dab-device 실기 뒤에 정한다. 그때 성공 조건을 쓴다</sub>
 - [ ] **핸즈 온리 완주: 컨트롤러 끄고 처음부터 끝까지** · 사람 · 검증
   <br><sub>하드 요구사항. 디버그용으로 켰던 컨트롤러 의존(샘플의 A/B 버튼 등)이 남았는지 · 증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
 - [ ] **비행기 좌석(60cm, 앉아서) · 버스 한 정거장 · 가져가 보기** · 사람 · 검증
@@ -310,6 +316,29 @@ _11-15~18 · 폴리시, 디자인 테스트, 데모 영상, 제출_
   <br><sub>submit README 에</sub>
 - [ ] **APK를 "Competition" 릴리스 채널에 업로드, 초대 URL 확인** · 사람 · 구현
 - [ ] **Devpost 제출 + 확인** · 사람 · 검증
+
+### ⛔ [MVP 이후 (보류)](nodes/post-mvp.md) · 0/4
+
+합격 기준 A5 흐름 밖이라 미룬 카드. 아무 과업도 이걸 기다리지 않는다
+
+- [ ] ▶ **GLB (메시 + 정지 텍스처), glTFast** · 에이전트 · 구현 ⛔ 막힘
+- [ ] **루프 스프라이트 시트 PNG + 셰이더 파라미터 JSON** · 에이전트 · 구현 ⛔ 막힘
+  <br><sub>glTF엔 애니메이션 텍스처 표준이 없어 따로 낸다</sub>
+- [ ] **실기: 내보낸 파일을 adb pull 해서 PC에서 열어 보기** · 사람 · 검증 ⛔ 막힘
+  <br><sub>증거: 빌드 ID가 찍힌 logcat 발췌 + 스크린샷을 첨부해야 done</sub>
+- [ ] **(선택) 눈 추적 층** · 에이전트 · 구현 ⛔ 막힘
+  <br><sub>감지되면 켜고, 없으면 머리 레이. 시간 남을 때만</sub>
+
+### ⬜ [합격 측정 (실기)](nodes/acceptance.md) · 0/2
+
+합격 기준 A2·A3 를 기기에서 숫자로 확인한다
+
+기다림: Dab: 푝 + 셀 셰이더
+
+- [ ] ▶ **제스처 벤치: 반응·오탐** · 에이전트 · 검증
+  <br><sub>핀치(양손·한 손), 손바닥 포탈, 담그기, 톡/꾹 각각 실제 10회. 제스처 시작~피드백 로그 타임스탬프 차이. 헤드셋 adb 연결 필요</sub>
+- [ ] **타겟씬 성능 트레이스** · 에이전트 · 검증
+  <br><sub>Catch → 포탈 → Dab 한 바퀴를 30초 Perfetto 트레이스. metavr perf 도구</sub>
 
 ---
 
