@@ -2,7 +2,7 @@
 
 <sub>작업대 앱 id: mood-picker</sub>
 
-> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-03 23:11 KST · 과업 5/16 완료
+> 작업대 `my-mr-studio` 의 보드를 내보낸 **읽기 전용** 사본이에요. 갱신: 2026-11-03 23:16 KST · 과업 5/16 완료
 > 고칠 때는 작업대에서 (`npm run studio -- … --app mood-picker`), 그다음 `scripts/sync-docs.sh` → 커밋·푸시.
 
 범례: ✅ 완료 · 🔶 진행 중 · 👀 확인 필요 · ⬜ 대기 · ⛔ 막힘 · ▶ 과업 안에서 지금 차례
@@ -12,7 +12,7 @@
 | 누가 | 하위 과업 | 과업 | 상태 |
 | --- | --- | --- | --- |
 | 에이전트 | 폰트 후보: 도면 레터링 · 에디토리얼 세리프 · 한글 | [인터페이스 언어: 모던 매지션](nodes/interface.md) | ⬜ 대기 |
-| 에이전트 | 설정 파일 점검 | [Unity 셋업 + First Light](nodes/setup.md) | 👀 확인 필요 |
+| 에이전트 | 빌드 게이트 + 빌드 ID (unity/shared/BuildGate/) | [Unity 셋업 + First Light](nodes/setup.md) | ⬜ 대기 |
 
 ## 흐름
 
@@ -33,7 +33,7 @@ flowchart LR
     direction TB
     use_unity_guardrails["Unity 실기 가드레일 (패스스루 안 보임 방지)"]:::doing
     use_unity_version["Unity 버전"]:::done
-    setup["Unity 셋업 + First Light 2/9"]:::review
+    setup["Unity 셋업 + First Light 4/9"]:::doing
   end
   subgraph s_build["구현"]
     direction TB
@@ -149,7 +149,7 @@ _11-03~04 · Quest에서 패스스루 + 손 + 카메라 텍스처 First Light_
 
 ### ✅ [Unity 버전](nodes/unity-version.md) · 공통
 
-### 👀 [Unity 셋업 + First Light](nodes/setup.md) · 2/9
+### 🔶 [Unity 셋업 + First Light](nodes/setup.md) · 4/9
 
 Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
 
@@ -157,11 +157,11 @@ Quest 3에서 패스스루, 손, 카메라 텍스처가 한 화면에 보인다
   <br><sub>show unity-guardrails --app shared. 정해진 Unity 버전 기준으로 §1~§4를 체크리스트로 setup 메모에 덧붙인다</sub>
 - [x] **Unity 프로젝트 생성 + Meta SDK·MRUK 임포트 + XR 플러그인** · 사람 · 구현
   <br><sub>unity/mood-picker/ 는 이미 git 레포(reality404studio/meta-mr-picker)라 비어 있지 않음 → Hub에서 URP 프로젝트를 unity/_new/mood-picker 에 만들고, 에이전트가 Assets·Packages·ProjectSettings 를 unity/mood-picker/ 로 옮긴다. Android 전환, ASTC. XR 플러그인은 OpenXR 하나 (가드레일 §2). Project Setup Tool Fix All</sub>
-- [ ] ▶ **설정 파일 점검** · 에이전트 · 검증 👀 확인 필요
+- [x] **설정 파일 점검** · 에이전트 · 검증
   <br><sub>가드레일 §1~§3 의 [M] 항목: ProjectSettings, packages-lock, XR 로더 asset, AndroidManifest 권한. 결과를 setup 메모에</sub>
-- [ ] **씬: Camera Rig + Passthrough + 손 추적 + 카메라 접근 켜기** · 사람 · 구현
+- [x] **씬: Camera Rig + Passthrough + 손 추적 + 카메라 접근 켜기** · 사람 · 구현
   <br><sub>가드레일 §3. OVRManager 의 Passthrough Support / Enable Passthrough / Passthrough Camera Access, Skybox None</sub>
-- [ ] **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
+- [ ] ▶ **빌드 게이트 + 빌드 ID (unity/shared/BuildGate/)** · 에이전트 · 구현
   <br><sub>IPreprocessBuildWithReport. 실패: XR 로더 1개, HEADSET_CAMERA 권한, Skybox None, 카메라 1대, 외곽선 _Cull 1, 금지 API(Shader.Find·ReadPixels·WebCamTexture·OVRInput). 경고만: Development Build 꺼짐. 빌드 ID(git 짧은 해시+시각)를 박고 앱 첫 로그에 [MP] build=… 출력</sub>
 - [ ] **사전 점검 스크립트 (에이전트용)** · 에이전트 · 구현
   <br><sub>게이트와 같은 파일 검사 + Roslyn 컴파일 체크. 사람에게 빌드를 부탁하기 전에 매번 돌리고 결과를 note 로</sub>

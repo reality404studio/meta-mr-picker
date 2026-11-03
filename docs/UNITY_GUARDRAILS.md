@@ -143,3 +143,8 @@ _실기에서 다르게 나온 항목을 날짜와 함께 덧붙인다._
 **Claude Code** · 2026-11-03 14:11
 
 실기에서 바뀐 것 (2026-11-03, Unity 6000.3.27f2 + Core 207.0.1, 파일로 확인): 생성된 AndroidManifest 의 액티비티가 com.unity3d.player.UnityPlayerGameActivity 다 (GameActivity). §6 의 am start -n <PKG>/com.unity3d.player.UnityPlayerActivity 는 이 프로젝트에선 <PKG>/com.unity3d.player.UnityPlayerGameActivity 로. 실기에서 한 번 더 확인할 것.
+
+---
+**Claude Code** · 2026-11-03 14:16
+
+실기에서 바뀐 것 (2026-11-03, Core 207.0.1, 파일로 확인): OVRProjectConfig 에 Passthrough Camera Access 를 켜 두면 OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest 가 HEADSET_CAMERA 를 자동으로 넣는다 (§3 의 '다시 만들면 빠진다'는 이 버전에선 안 그랬음). 다만 손으로 매니페스트를 고쳤다면 매번 grep 으로 확인.
