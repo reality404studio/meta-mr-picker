@@ -1,0 +1,10 @@
+{
+    "name": "MoodPicker.Hands",
+    "rootNamespace": "MoodPicker.Hands",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

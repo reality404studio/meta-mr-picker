@@ -151,6 +151,17 @@ public static class MoodPickerSceneSetup
         so.FindProperty("leftTip").objectReferenceValue = leftTip.transform;
         so.FindProperty("rightTip").objectReferenceValue = rightTip.transform;
         so.ApplyModifiedPropertiesWithoutUndo();
+
+        var handInput = root.AddComponent<MoodPicker.Hands.Ovr.OvrHandInput>();
+        var hi = new SerializedObject(handInput);
+        hi.FindProperty("rig").objectReferenceValue = cameraRig;
+        hi.FindProperty("leftSkeleton").objectReferenceValue = leftSkel;
+        hi.FindProperty("rightSkeleton").objectReferenceValue = rightSkel;
+        hi.ApplyModifiedPropertiesWithoutUndo();
+        var rec = root.AddComponent<MoodPicker.Hands.Ovr.HandTrajectoryRecorder>();
+        var rso = new SerializedObject(rec);
+        rso.FindProperty("input").objectReferenceValue = handInput;
+        rso.ApplyModifiedPropertiesWithoutUndo();
     }
 
     static OVRSkeleton AddHand(Transform anchor, OVRHand.Hand hand, OVRSkeleton.SkeletonType type)

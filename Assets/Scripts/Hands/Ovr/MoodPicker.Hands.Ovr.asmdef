@@ -1,0 +1,14 @@
+{
+    "name": "MoodPicker.Hands.Ovr",
+    "rootNamespace": "MoodPicker.Hands.Ovr",
+    "references": [
+        "MoodPicker.Hands",
+        "Oculus.VR",
+        "Reality404.BuildGate"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

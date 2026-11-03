@@ -5,15 +5,22 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Reality404.BuildGate",
-        "Reality404.BuildGate.Editor"
+        "Reality404.BuildGate.Editor",
+        "MoodPicker.Hands"
     ],
-    "includePlatforms": ["Editor"],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
-    "precompiledReferences": ["nunit.framework.dll"],
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
     "autoReferenced": false,
-    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
     "versionDefines": [],
     "noEngineReferences": false
 }

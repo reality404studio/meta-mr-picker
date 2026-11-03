@@ -1,0 +1,51 @@
+using UnityEngine;
+
+namespace MoodPicker.Hands.Ovr
+{
+    /// OVRSkeleton(OpenXR 손 스켈레톤)을 IHandInput 으로. OVR 을 읽는 곳은 이 폴더뿐이다.
+    public class OvrHandInput : MonoBehaviour, IHandInput
+    {
+        [SerializeField] OVRCameraRig rig;
+        [SerializeField] OVRSkeleton leftSkeleton;
+        [SerializeField] OVRSkeleton rightSkeleton;
+
+        readonly int[] _thumb = { -1, -1 }, _index = { -1, -1 }, _palm = { -1, -1 };
+
+        public bool TryGetFrame(out HandFrame frame)
+        {
+            frame = new HandFrame
+            {
+                t = Time.time,
+                left = Read(leftSkeleton, 0),
+                right = Read(rightSkeleton, 1),
+            };
+            return true;
+        }
+
+        HandPose Read(OVRSkeleton s, int h)
+        {
+            if (s == null || !s.IsInitialized || !s.IsDataValid || s.Bones == null) return default;
+            if (_thumb[h] < 0)
+            {
+                for (int i = 0; i < s.Bones.Count; i++)
+                {
+                    var id = s.Bones[i].Id;
+                    if (id == OVRSkeleton.BoneId.XRHand_ThumbTip) _thumb[h] = i;
+                    else if (id == OVRSkeleton.BoneId.XRHand_IndexTip) _index[h] = i;
+                    else if (id == OVRSkeleton.BoneId.XRHand_Palm) _palm[h] = i;
+                }
+                if (_thumb[h] < 0 || _index[h] < 0 || _palm[h] < 0) { _thumb[h] = -1; return default; }
+            }
+            Transform space = rig.trackingSpace;
+            Transform palm = s.Bones[_palm[h]].Transform;
+            return new HandPose
+            {
+                tracked = true,
+                thumbTip = space.InverseTransformPoint(s.Bones[_thumb[h]].Transform.position),
+                indexTip = space.InverseTransformPoint(s.Bones[_index[h]].Transform.position),
+                palm = space.InverseTransformPoint(palm.position),
+                palmNormal = space.InverseTransformDirection(-palm.up),
+            };
+        }
+    }
+}
