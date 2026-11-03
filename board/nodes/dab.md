@@ -31,3 +31,8 @@ HANDOFF §4-5, §5 (DabPaint, CelShader, HandJudge). 셀 셰이더는 공통 "Un
 - 집 무대: **셀 애니 스타일만, CRT 데스크 세계관은 뺀다.** 오브제는 그냥 책상 위에
 - 손 판단: **휴리스틱만** (ML 분류기 안 함)
 - 오브제: **페트병 하나 먼저.** 의자·머그는 시간 남으면
+
+---
+**Claude Code** · 2026-11-03 13:56
+
+2026-11-03: three.js 데모의 포팅 기준이 meta-mr-picker PR #1 (`reference/texture-lab/`, 미머지)에 있음. 연결표는 그 README '보드 과업과 연결'. Assets 에 넣는 건 PigmentCore/*.cs + PigmentCommon.hlsl 만. shader-lab 7모드는 탐색일 뿐 (셀 룩 위에 얹을지는 사람 결정).

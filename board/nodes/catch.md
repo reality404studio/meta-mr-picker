@@ -34,3 +34,8 @@
 HANDOFF §4-1, §4-2, §5 (Capture, CelExtract, PaintStore). 실기 전 공통 "Unity 실기 가드레일" §3 카메라 접근, §5 손.
 - 원본 전체 프레임 저장 금지. 크롭한 영역만
 - 응시는 클릭 대용이 아니다. 응시 시간은 진하기·루프 길이로만 쓴다
+
+---
+**Claude Code** · 2026-11-03 13:56
+
+2026-11-03: three.js 데모의 포팅 기준이 meta-mr-picker PR #1 (`reference/texture-lab/`, 미머지)에 있음. 연결표는 그 README '보드 과업과 연결'. Assets 에 넣는 건 PigmentCore/*.cs + PigmentCommon.hlsl 만. shader-lab 7모드는 탐색일 뿐 (셀 룩 위에 얹을지는 사람 결정).
