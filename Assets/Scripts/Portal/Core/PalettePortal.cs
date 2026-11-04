@@ -61,7 +61,11 @@ namespace MoodPicker.Portal
         int _entryChip;
         int _chipCount;
         bool _hasSweep;
-        float _sweepLast, _sweepAccum;
+        float _sweepLast, _sweepAccum, _sweepZ, _sweepT;
+        float _leftPinchReleased = float.NegativeInfinity;
+        bool _leftPinching;
+
+        public bool LeftPinchBlocks(float t) => _leftPinching || t - _leftPinchReleased < _s.leftPinchReleaseSeconds;
 
         public PalettePortal(PortalSettings settings) { _s = settings; }
 
@@ -89,16 +93,21 @@ namespace MoodPicker.Portal
             }
             _lostSince = -1f;
 
+            bool pinching = l.PinchDistance < _s.leftPinchDistance;
+            if (_leftPinching && !pinching) _leftPinchReleased = f.t;
+            _leftPinching = pinching;
+            bool blocked = LeftPinchBlocks(f.t);
+
             Vector3 n = PalmNormal(l).normalized;
             float up = Vector3.Dot(n, Vector3.up);
             float speed = _hasPalm && dt > 0f ? (l.palm - _lastPalm).magnitude / dt : 0f;
             _lastPalm = l.palm;
             _hasPalm = true;
-            _gateHot = up > _s.closeUpDot;
+            _gateHot = up > _s.closeUpDot && !blocked;
 
             if (!IsOpen)
             {
-                if (up >= _s.openUpDot && speed <= _s.maxPalmSpeed)
+                if (!blocked && up >= _s.openUpDot && speed <= _s.maxPalmSpeed)
                 {
                     if (_upSince < 0f) _upSince = f.t;
                     if (f.t - _upSince >= _s.openHoldSeconds) Open(f.t, n);
@@ -172,6 +181,7 @@ namespace MoodPicker.Portal
                 else if (!overDisk) _wasAbove = false;
                 if (_wasAbove && overDisk && p.z <= -_s.dipDepth)
                 {
+                    EndSweep(f.t, false);
                     _inside = true;
                     _enteredAt = f.t;
                     _entryChip = DipTarget(new Vector2(p.x, p.y));
@@ -193,9 +203,13 @@ namespace MoodPicker.Portal
         {
             float r = new Vector2(p.x, p.y).magnitude;
             bool inBand = !_inside && r >= _s.rimInner && r <= _s.rimOuter && p.z >= -_s.rimBelow && p.z <= _s.rimAbove;
-            if (!inBand) { EndSweep(t, true); return; }
+            if (!inBand) { EndSweep(t, p.z >= -_s.rimBelow); return; }
             float a = Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg;
-            if (!_hasSweep) { _hasSweep = true; _sweepLast = a; _sweepAccum = 0f; return; }
+            if (!_hasSweep) { _hasSweep = true; _sweepLast = a; _sweepAccum = 0f; _sweepZ = p.z; _sweepT = t; return; }
+            float vz = t > _sweepT ? Mathf.Abs(p.z - _sweepZ) / (t - _sweepT) : 0f;
+            _sweepZ = p.z;
+            _sweepT = t;
+            if (!Sweeping && vz > _s.sweepMaxVerticalSpeed) { _sweepAccum = 0f; _sweepLast = a; return; }
             _sweepAccum += Mathf.DeltaAngle(_sweepLast, a);
             _sweepLast = a;
             if (!Sweeping && Mathf.Abs(_sweepAccum) >= _s.sweepEngageDegrees && _chipCount > 0) Sweeping = true;

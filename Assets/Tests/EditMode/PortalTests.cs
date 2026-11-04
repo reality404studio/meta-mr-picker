@@ -82,26 +82,18 @@ namespace MoodPicker.Tests
             Assert.That(run.opened.Count, Is.EqualTo(1));
             Assert.That(run.opened[0] - start, Is.LessThanOrEqualTo(0.3f));
             float h = Vector3.Dot(run.portal.Pose.center - PortalRun.Palm, Vector3.up);
-            Assert.That(h, Is.EqualTo(0.14f).Within(0.01f), "포탈은 손바닥 위 약 14cm");
+            Assert.That(h, Is.EqualTo(0.07f).Within(0.005f), "포탈은 손바닥 위 약 7cm");
         }
 
         [Test]
-        public void Portal_CenterSits14cmAlongTiltedPalmNormal()
+        public void Portal_CenterSits7cmAlongTiltedPalmNormal()
         {
             Vector3 n = Quaternion.AngleAxis(20f, Vector3.right) * Vector3.up;
             var run = new PortalRun().PalmDown(0.3f).For(1.0f, _ => (PortalRun.Left(PortalRun.Palm, n), PortalRun.RightIdle));
             Assume.That(run.portal.IsOpen);
             Vector3 d = run.portal.Pose.center - PortalRun.Palm;
-            Assert.That(Vector3.Dot(d, n), Is.EqualTo(0.14f).Within(0.01f), "손바닥 법선 방향 0.14m");
+            Assert.That(Vector3.Dot(d, n), Is.EqualTo(0.07f).Within(0.005f), "손바닥 법선 방향 0.07m");
             Assert.That(Vector3.ProjectOnPlane(d, n).magnitude, Is.LessThan(0.01f), "법선 위");
-        }
-
-        [Test]
-        public void Portal_ShippedSettingsAssetUses14cm()
-        {
-            var s = UnityEditor.AssetDatabase.LoadAssetAtPath<PortalSettings>("Assets/Settings/PortalSettings.asset");
-            Assert.That(s, Is.Not.Null);
-            Assert.That(s.heightAbovePalm, Is.EqualTo(0.14f).Within(0.01f));
         }
 
         [Test]

@@ -21,7 +21,7 @@ namespace MoodPicker.Portal
 
         [Header("Look (baseline)")]
         [SerializeField] float lineWidth = 0.0015f;
-        [SerializeField] float chipSize = 0.026f;
+        [SerializeField] float chipSize = 0.036f;
         [SerializeField] float tipSize = 0.014f;
 
         static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
