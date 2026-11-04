@@ -82,7 +82,6 @@ public static class CatchSceneSetup
         dso.FindProperty("settings").objectReferenceValue = DabBottleAssets.EnsureSettings();
         dso.FindProperty("target").objectReferenceValue = bottle.GetComponent<MeshRenderer>();
         dso.FindProperty("contactCollider").objectReferenceValue = cols[0];
-        dso.FindProperty("uvCollider").objectReferenceValue = cols[1];
         dso.ApplyModifiedPropertiesWithoutUndo();
 
         EditorSceneManager.SaveScene(scene, ScenePath);

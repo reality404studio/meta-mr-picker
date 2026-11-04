@@ -18,7 +18,6 @@ namespace MoodPicker.Dab
         [SerializeField] DabSettings settings;
         [SerializeField] Renderer target;
         [SerializeField] MeshCollider contactCollider;
-        [SerializeField] MeshCollider uvCollider;
 
         [Header("Placement (baseline)")]
         [SerializeField] float placeDistance = 0.45f;
@@ -26,26 +25,23 @@ namespace MoodPicker.Dab
         [SerializeField] float tipRadius = 0.005f;
 
         IHandInput _input;
-        HandJudge _judge;
-        PaintMask _mask;
+        DabBucket<PaintRecord> _bucket;
         Texture2D _maskTex;
-        byte[] _maskBytes;
+        readonly byte[] _maskByte = new byte[1];
         Material _mat;
         SphereCollider _tip;
         PaintRecord _paint;
-        Vector2 _contactUV;
-        bool _hasContactUV, _wasContact;
+        Texture2D _paintTile;
+        float _shownFill = -1f;
 
         void Awake()
         {
             _input = handInputSource as IHandInput;
             if (settings == null) settings = DabSettings.Defaults();
-            _judge = new HandJudge(settings);
-            _judge.Judged += OnJudged;
-            _mask = new PaintMask(settings);
-            _maskTex = new Texture2D(_mask.Size, _mask.Size, TextureFormat.R8, false, true) { wrapModeU = TextureWrapMode.Repeat, wrapModeV = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
-            _maskBytes = new byte[_mask.Size * _mask.Size];
-            UploadMask();
+            _bucket = new DabBucket<PaintRecord>(settings);
+            _bucket.Filled += OnFilled;
+            _maskTex = new Texture2D(1, 1, TextureFormat.R8, false, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point };
+            SetFill(0f);
             _mat = target.material;
             _mat.SetTexture(PaintMaskId, _maskTex);
             var tipGo = new GameObject("DabTipProbe");
@@ -55,7 +51,7 @@ namespace MoodPicker.Dab
             _tip.isTrigger = true;
             _tip.enabled = false;
             if (portal != null) portal.PaintPicked += OnPaintPicked;
-            Debug.Log($"{Tag} dab ready mask={_mask.Size}px tris={MeshTris()} paint=none");
+            Debug.Log($"{Tag} dab ready bucket fill={settings.fillSeconds:0.00}s tris={MeshTris()} paint=none");
         }
 
         int MeshTris()
@@ -84,8 +80,17 @@ namespace MoodPicker.Dab
         void OnPaintPicked(PaintRecord r, Texture2D tile)
         {
             _paint = r;
-            CelPaint.Apply(_mat, r, tile);
-            Debug.Log($"{Tag} dab paint No.{r.number:000} light={r.lightTone} shadow={r.shadowTone}");
+            _paintTile = tile;
+            Debug.Log($"{Tag} dab fingertip paint No.{r.number:000} light={r.lightTone} shadow={r.shadowTone}");
+        }
+
+        PaintRecord Fingertip() => portal != null && portal.CurrentPaint == null ? null : _paint;
+
+        void OnFilled(PaintRecord r, float t)
+        {
+            CelPaint.Apply(_mat, r, _paintTile);
+            SetFill(0f);
+            Debug.Log($"{Tag} dab bucket fill No.{r.number:000} t={t:0.000}");
         }
 
         void Update()
@@ -94,19 +99,13 @@ namespace MoodPicker.Dab
             if (_input != null && _input.TryGetFrame(out HandFrame f))
             {
                 bool tracked = f.right.tracked;
-                float d = 1f;
-                if (tracked)
-                {
-                    Vector3 tip = trackingSpace.TransformPoint(f.right.indexTip);
-                    d = SignedDistance(tip, out Vector3 normal);
-                    _judge.Update(t, d, true);
-                    if (_judge.InContact && !_wasContact) _hasContactUV = TryUV(tip, normal, out _contactUV);
-                }
-                else _judge.Update(t, d, false);
-                _wasContact = _judge.InContact;
+                float d = tracked ? SignedDistance(trackingSpace.TransformPoint(f.right.indexTip), out _) : 1f;
+                bool wasTouching = _bucket.Touching;
+                _bucket.Update(t, d, tracked, Fingertip());
+                if (_bucket.Touching && !wasTouching && Fingertip() == null) Debug.Log($"{Tag} dab touch ignored: no paint on fingertip");
             }
-            _mask.Update(t);
-            if (_mask.Dirty) UploadMask();
+            float fill = _bucket.Fill(t);
+            if (!Mathf.Approximately(fill, _shownFill)) SetFill(fill);
         }
 
         float SignedDistance(Vector3 tip, out Vector3 normal)
@@ -127,28 +126,11 @@ namespace MoodPicker.Dab
             return tipRadius - pen;
         }
 
-        bool TryUV(Vector3 tip, Vector3 normal, out Vector2 uv)
+        void SetFill(float v)
         {
-            uv = default;
-            var ray = new Ray(tip + normal * 0.05f, -normal);
-            if (!uvCollider.Raycast(ray, out RaycastHit hit, 0.1f)) return false;
-            uv = hit.textureCoord;
-            return true;
-        }
-
-        void OnJudged(DabJudgement j)
-        {
-            if (portal != null && portal.CurrentPaint == null) _paint = null;
-            if (_paint == null) { Debug.Log($"{Tag} dab {j.kind} ignored: no paint on fingertip"); return; }
-            if (!_hasContactUV) { Debug.Log($"{Tag} dab {j.kind} ignored: no contact uv"); return; }
-            _mask.Stamp(_contactUV, 1f, Time.time, j.kind == DabKind.Press);
-            Debug.Log($"{Tag} dab {j.kind} uv={_contactUV} depth={j.maxDepth * 1000f:0.0}mm speed={j.approachSpeed:0.00}m/s judge={(j.t - j.contactT) * 1000f:0}ms");
-        }
-
-        void UploadMask()
-        {
-            _mask.CopyTo(_maskBytes);
-            _maskTex.LoadRawTextureData(_maskBytes);
+            _shownFill = v;
+            _maskByte[0] = (byte)Mathf.RoundToInt(Mathf.Clamp01(v) * 255f);
+            _maskTex.LoadRawTextureData(_maskByte);
             _maskTex.Apply(false, false);
         }
     }

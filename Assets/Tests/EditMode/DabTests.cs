@@ -9,83 +9,83 @@ using UnityEngine;
 
 namespace MoodPicker.Tests
 {
-    public class DabMaskTests
+    public class DabBucketTests
     {
-        static DabSettings S()
-        {
-            var s = DabSettings.Defaults();
-            s.noiseAmount = 0.2f;
-            return s;
-        }
+        const float Dt = 1f / 72f;
 
-        [Test]
-        public void Mask_PeaksAtContactAndFallsWithDistance()
+        class Run
         {
-            var m = new PaintMask(S());
-            var c = new Vector2(0.5f, 0.5f);
-            m.Stamp(c, 1f, 0f, true);
-            m.Update(1f);
-            float prev = m.Sample(c);
-            Assert.That(prev, Is.EqualTo(1f).Within(0.01f), "접촉 UV 에서 최대");
-            for (int i = 1; i <= 8; i++)
+            public readonly DabBucket<string> bucket = new DabBucket<string>(DabSettings.Defaults());
+            public readonly List<(string paint, float t)> filled = new List<(string, float)>();
+            public float t, contactT = -1f;
+            public Run() { bucket.Filled += (p, x) => filled.Add((p, x)); }
+            public Run Path(float seconds, Func<float, float> dist, string paint, bool tracked = true)
             {
-                float v = m.Sample(c + new Vector2(i * 0.03f, 0f));
-                Assert.That(v, Is.LessThanOrEqualTo(prev + 0.15f), $"step {i}");
-                prev = Mathf.Min(prev, v);
+                float t0 = t, end = t + seconds;
+                while (t < end - 1e-6f)
+                {
+                    float d = dist(t - t0);
+                    if (contactT < 0f && tracked && d <= 0f) contactT = t;
+                    bucket.Update(t, d, tracked, paint);
+                    t += Dt;
+                }
+                return this;
             }
-            Assert.That(m.Sample(c + new Vector2(0.3f, 0f)), Is.EqualTo(0f), "멀면 0");
         }
 
-        static float Area(PaintMask m) => m.Values.Count(v => v > 0.5f) / (float)m.Values.Length;
+        static float Touch(float x) => x < 0.3f ? 0.05f - 0.2f * x : x < 0.6f ? -0.01f : -0.01f + 0.2f * (x - 0.6f);
 
         [Test]
-        public void Mask_RadiusGrowsOverTime()
+        public void Bucket_OneTouchWithPaintFillsWholeObjectWithin300ms()
         {
-            var s = S();
-            var a = new PaintMask(s);
-            a.Stamp(new Vector2(0.3f, 0.5f), 1f, 0f, false);
-            var areas = new List<float>();
-            foreach (float t in new[] { 0.05f, 0.2f, 0.4f, 0.8f })
-            {
-                var m = new PaintMask(s);
-                m.Stamp(new Vector2(0.3f, 0.5f), 1f, 0f, false);
-                m.Update(t);
-                areas.Add(Area(m));
-            }
-            for (int i = 1; i < areas.Count; i++) Assert.That(areas[i], Is.GreaterThan(areas[i - 1]), string.Join(",", areas));
-            var press = new PaintMask(s);
-            press.Stamp(new Vector2(0.3f, 0.5f), 1f, 0f, true);
-            press.Update(1f);
-            Assert.That(Area(press), Is.GreaterThan(areas.Last()), "꾹 > 톡");
+            var r = new Run().Path(1.2f, Touch, "paint7");
+            Assert.That(r.filled.Count, Is.EqualTo(1));
+            Assert.That(r.filled[0].paint, Is.EqualTo("paint7"));
+            Assert.That(r.bucket.Paint, Is.EqualTo("paint7"), "오브제 전체가 그 물감");
+            float full = -1f;
+            for (float t = r.contactT; t < r.contactT + 1f; t += Dt) if (r.bucket.Fill(t) >= 1f) { full = t; break; }
+            Assert.That(full - r.contactT, Is.InRange(0f, 0.3f), "접촉부터 0.3초 안에 다 채워짐");
         }
 
         [Test]
-        public void Mask_WrapsAroundBottleSeam()
+        public void Bucket_EmptyFingertipChangesNothing()
         {
-            var m = new PaintMask(S());
-            m.Stamp(new Vector2(0.01f, 0.5f), 1f, 0f, true);
-            m.Update(1f);
-            Assert.That(m.Sample(new Vector2(0.97f, 0.5f)), Is.GreaterThan(0.5f), "U 가 이어짐");
+            var r = new Run().Path(1.2f, Touch, null);
+            Assert.That(r.filled, Is.Empty);
+            Assert.That(r.bucket.Paint, Is.Null);
+            Assert.That(r.bucket.Fill(r.t), Is.EqualTo(0f));
         }
 
         [Test]
-        public void Mask_ResolutionIsCapped()
+        public void Bucket_NewPaintReplacesOnNextTouchAndHoldingDoesNotRefill()
         {
-            var s = DabSettings.Defaults();
-            s.maskResolution = 2048;
-            Assert.That(new PaintMask(s).Size, Is.EqualTo(DabSettings.MaxMaskResolution));
-            Assert.That(DabSettings.ClampResolution(4096), Is.LessThanOrEqualTo(256));
-            var asset = AssetDatabase.LoadAssetAtPath<DabSettings>(DabBottleAssets.SettingsPath);
-            if (asset != null) Assert.That(asset.maskResolution, Is.LessThanOrEqualTo(DabSettings.MaxMaskResolution));
+            var r = new Run().Path(0.45f, Touch, "a");
+            Assume.That(r.filled.Count, Is.EqualTo(1));
+            r.Path(2f, _ => -0.01f, "b");
+            Assert.That(r.filled.Count, Is.EqualTo(1), "대고 있는 동안 다시 안 채움");
+            r.Path(0.3f, _ => 0.05f, "b").Path(1.2f, Touch, "b");
+            Assert.That(r.filled.Select(x => x.paint), Is.EqualTo(new[] { "a", "b" }));
+            Assert.That(r.bucket.Paint, Is.EqualTo("b"));
         }
 
         [Test]
-        public void Mask_RuntimeTakesPaintFromPortal()
+        public void Bucket_SlowBringCountsHoverDoesNot()
+        {
+            var slow = new Run().Path(4f, x => 0.03f - 0.012f * x, "p");
+            Assert.That(slow.filled.Count, Is.EqualTo(1), "천천히 가져다 대도 채움");
+            var hover = new Run().Path(2f, _ => 0.002f, "p");
+            Assert.That(hover.filled, Is.Empty);
+        }
+
+        [Test]
+        public void Bucket_RuntimeUsesPortalPaintAndSkipsWashedFingertip()
         {
             string src = File.ReadAllText(Path.Combine(Application.dataPath, "Scripts", "Dab", "Runtime", "DabController.cs"));
             StringAssert.Contains("portal.PaintPicked +=", src);
-            StringAssert.Contains("CelPaint.Apply(", src);
             StringAssert.Contains("portal.CurrentPaint == null", src);
+            StringAssert.Contains("DabBucket<PaintRecord>", src);
+            StringAssert.Contains("CelPaint.Apply(", src);
+            Assert.That(File.Exists(Path.Combine(Application.dataPath, "Scripts", "Dab", "Core", "PaintMask.cs")), Is.False, "번짐 마스크는 버킷으로 대체 (REJECTED 2026-11-04)");
         }
     }
 

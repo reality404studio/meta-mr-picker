@@ -5,16 +5,8 @@ namespace MoodPicker.Dab
     [CreateAssetMenu(menuName = "Mood Picker/Dab Settings", fileName = "DabSettings")]
     public class DabSettings : ScriptableObject
     {
-        public const int MaxMaskResolution = 256;
-
-        [Header("Mask (baseline)")]
-        public int maskResolution = 128;
-        public float spreadSeconds = 0.8f;
-        public float tapRadius = 0.08f;
-        public float pressRadius = 0.18f;
-        public float noiseAmount = 0.35f;
-        public float noiseScale = 9f;
-        public float edgeSoftness = 0.25f;
+        [Header("Bucket (baseline)")]
+        public float fillSeconds = 0.2f;
 
         [Header("Judge (baseline)")]
         public float contactDepth = 0.003f;
@@ -24,10 +16,6 @@ namespace MoodPicker.Dab
         public float pressHoldSeconds = 0.25f;
         public float decideSeconds = 0.25f;
         public float maxContactSeconds = 2f;
-
-        void OnValidate() => maskResolution = ClampResolution(maskResolution);
-
-        public static int ClampResolution(int r) => Mathf.Clamp(Mathf.ClosestPowerOfTwo(Mathf.Max(16, r)), 16, MaxMaskResolution);
 
         public static DabSettings Defaults() => CreateInstance<DabSettings>();
     }
