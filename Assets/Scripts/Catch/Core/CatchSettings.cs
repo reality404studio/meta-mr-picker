@@ -15,7 +15,9 @@ namespace MoodPicker.Catch
 
         [Header("Left drag (baseline)")]
         public float dragGain = 1f;
-        public float maxOffset = 0.2f;
+        public float maxOffset = 0.1f;
+        public float offsetReturnSeconds = 0.08f;
+        public float gazeSmoothSeconds = 0.05f;
 
         [Header("Toggle (baseline)")]
         public float toggleTapMaxSeconds = 0.5f;
@@ -27,6 +29,7 @@ namespace MoodPicker.Catch
         public float leverOpenDegrees = 28f;
         public float leverHingeGap = 0.008f;
         public float leverPinchClearance = 0.012f;
+        public float leverTipMargin = 0.012f;
         public float cueDashLength = 0.006f;
         public float cueDashGap = 0.004f;
         public float cueLineWidth = 0.0025f;

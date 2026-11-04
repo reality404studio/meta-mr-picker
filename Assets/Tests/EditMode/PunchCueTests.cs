@@ -125,17 +125,18 @@ namespace MoodPicker.Tests
         [Test]
         public void Lever_IsLegibleAtArmLength()
         {
-            Vector3 anchor = Run.RightRest(Head);
-            LeverPose lp = PunchCue.Lever(anchor, Head, 0f, S);
+            HandPose hand = Hand(Run.RightRest(Head), false);
+            Vector3 anchor = hand.palm;
+            LeverPose lp = PunchCue.Lever(hand, Head, 0f, S);
             float dist = Vector3.Distance(anchor, Head.position);
-            float armDeg = 2f * Mathf.Atan(S.leverLength * 0.5f / dist) * Mathf.Rad2Deg;
+            float len = Vector3.Distance(lp.armTip, lp.hinge);
+            float armDeg = 2f * Mathf.Atan(len * 0.5f / dist) * Mathf.Rad2Deg;
             float plateDeg = 2f * Mathf.Atan(S.leverPlateHeight * 0.5f / dist) * Mathf.Rad2Deg;
             Assert.That(armDeg, Is.GreaterThanOrEqualTo(8f), "레버 길이 시야각 ≥ 8°");
             Assert.That(plateDeg, Is.GreaterThanOrEqualTo(1.5f), "받침 두께 시야각 ≥ 1.5°");
-            Assert.That(Vector3.Distance(lp.armTip, lp.hinge), Is.EqualTo(S.leverLength).Within(1e-4f));
-            float open = Vector3.Distance(lp.armTip, lp.plate[3]);
+            Assert.That(len, Is.GreaterThanOrEqualTo(S.leverLength - 1e-4f), "레버 길이 하한");
+            float open = Vector3.Distance(lp.armTip, lp.plate[2]);
             Assert.That(open, Is.GreaterThan(0.02f), "열린 레버 끝이 받침에서 2cm 넘게 떨어져 보임");
-            Assert.That(Vector3.Dot(lp.plate[2] - anchor, lp.up), Is.LessThan(0f), "받침은 핀치점 아래 (손가락 사이)");
         }
     }
 }

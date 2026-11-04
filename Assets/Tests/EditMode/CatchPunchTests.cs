@@ -62,7 +62,7 @@ namespace MoodPicker.Tests
             Vector2 held = run.punch.Offset;
             Vector3 p = Run.LeftRest(Head) + new Vector3(0.10f, 0f, 0f);
             run.For(0.5f, x => (Hand(p + new Vector3(0f, 0.1f * (x % 1f), 0f), false), Hand(Run.RightRest(Head), false)));
-            Assert.That(run.punch.Offset, Is.EqualTo(held), "놓으면 멈춤");
+            Assert.That(run.punch.Offset.magnitude, Is.LessThan(0.005f), "놓으면 시선 중심으로 돌아감 (L2)");
             Assert.That(run.caught, Is.Empty);
             Assert.That(run.toggles, Is.Empty);
         }
@@ -98,7 +98,115 @@ namespace MoodPicker.Tests
         public void Drag_OffsetIsClamped()
         {
             var run = new Run().Idle(0.3f).LeftDrag(new Vector3(0.5f, 0f, 0f), 0.6f);
-            Assert.That(run.punch.Offset.magnitude, Is.LessThanOrEqualTo(CatchSettings.Defaults().maxOffset + 1e-4f));
+            float lim = CatchSettings.Defaults().maxOffset;
+            Assert.That(Mathf.Abs(run.punch.Offset.x), Is.LessThanOrEqualTo(lim + 1e-4f));
+            Assert.That(Mathf.Abs(run.punch.Offset.y), Is.LessThanOrEqualTo(lim + 1e-4f));
+            Assert.That(lim, Is.EqualTo(0.1f).Within(1e-4f), "L2 한도 ±10cm");
+        }
+    }
+
+    public class CatchPunchL2Tests
+    {
+        [Test]
+        public void L2_LeftPinchMoveFollowsImmediatelyWithinTenCentimetres()
+        {
+            var run = new Run().Idle(0.3f);
+            Vector3 start = Run.LeftRest(Head);
+            run.For(0.1f, _ => (Hand(start, true), Hand(Run.RightRest(Head), false)));
+            float moveT = run.t;
+            float reached = -1f;
+            Vector3 moved = start + new Vector3(0.05f, 0f, 0f);
+            for (int i = 0; i < 30; i++)
+            {
+                run.For(Dt, _ => (Hand(moved, true), Hand(Run.RightRest(Head), false)));
+                if (reached < 0f && Mathf.Abs(run.punch.Offset.x - 0.05f) < 0.0025f) reached = run.t;
+            }
+            Assert.That(reached, Is.GreaterThan(0f), "5cm 이동 → 오프셋 5cm");
+            Assert.That(reached - moveT, Is.LessThanOrEqualTo(0.1f), "반응 지연 ≤ 0.1초");
+            Assert.That(run.punch.Offset.y, Is.EqualTo(0f).Within(0.003f), "같은 방향");
+            run.For(0.3f, _ => (Hand(start + new Vector3(0.3f, -0.3f, 0f), true), Hand(Run.RightRest(Head), false)));
+            Assert.That(run.punch.Offset.x, Is.EqualTo(0.1f).Within(1e-4f), "한도 +10cm");
+            Assert.That(run.punch.Offset.y, Is.EqualTo(-0.1f).Within(1e-4f), "한도 -10cm");
+        }
+
+        [Test]
+        public void L2_ReleaseReturnsToGazeCenterWithin300ms()
+        {
+            var run = new Run().Idle(0.3f).LeftDrag(new Vector3(0.08f, 0.05f, 0f), 0.4f);
+            Assume.That(run.punch.Offset.magnitude, Is.GreaterThan(0.08f));
+            run.Idle(0.3f);
+            Vector3 gazeCenter = CatchPunch.PlaceHole(Head, CatchSettings.Defaults().punchDistance, 0.1f, Vector2.zero).center;
+            Assert.That((run.punch.Hole.center - gazeCenter).magnitude, Is.LessThan(0.005f), "0.3초 안에 시선 중심 복귀");
+        }
+
+        [Test]
+        public void L2_HeadJitterShakesHoleLessThanRawGaze()
+        {
+            var s = CatchSettings.Defaults();
+            var run = new Run();
+            var rnd = new System.Random(5);
+            var smooth = new List<Vector3>();
+            var raw = new List<Vector3>();
+            for (int i = 0; i < 288; i++)
+            {
+                var jitter = Quaternion.Euler((float)(rnd.NextDouble() * 3 - 1.5), (float)(rnd.NextDouble() * 3 - 1.5), 0f);
+                var head = new Pose(Head.position, jitter);
+                run.Idle(Dt, head);
+                if (i < 36) continue;
+                smooth.Add(run.punch.Hole.center);
+                raw.Add(CatchPunch.PlaceHole(head, s.punchDistance, s.punchSize, Vector2.zero).center);
+            }
+            float Shake(List<Vector3> v) { float sum = 0f; for (int i = 1; i < v.Count; i++) sum += (v[i] - v[i - 1]).magnitude; return sum / (v.Count - 1); }
+            float sm = Shake(smooth), rw = Shake(raw);
+            Assert.That(sm, Is.LessThan(rw * 0.6f), $"프레임당 흔들림 {sm * 1000f:0.00}mm vs 기존 {rw * 1000f:0.00}mm");
+        }
+    }
+
+    public class PunchLeverSizeTests
+    {
+        static readonly CatchSettings S = CatchSettings.Defaults();
+
+        static HandPose OpenHand(float scale)
+        {
+            Vector3 palm = Run.RightRest(Head) + new Vector3(0f, -0.02f, -0.05f);
+            return new HandPose
+            {
+                tracked = true,
+                palm = palm,
+                palmNormal = Vector3.down,
+                indexTip = palm + new Vector3(-0.02f, 0.03f, 0.10f) * scale,
+                thumbTip = palm + new Vector3(-0.04f, -0.01f, 0.055f) * scale,
+                middleTip = palm + new Vector3(0f, 0.02f, 0.105f) * scale,
+                ringTip = palm + new Vector3(0.015f, 0.015f, 0.095f) * scale,
+            };
+        }
+
+        [TestCase(0.8f)]
+        [TestCase(1.0f)]
+        [TestCase(1.25f)]
+        public void Lever_CoversThumbTipToIndexTip(float scale)
+        {
+            HandPose h = OpenHand(scale);
+            foreach (float progress in new[] { 0f, 0.5f, 1f })
+            {
+                LeverPose lp = PunchCue.Lever(h, Head, progress, S);
+                float cov = PunchCue.Coverage(lp, h.thumbTip, h.indexTip);
+                Assert.That(cov, Is.GreaterThanOrEqualTo(0.9f), $"손 {scale} 진행 {progress}: 덮음 {cov:P0}");
+            }
+            HandPose pinched = h;
+            pinched.thumbTip = pinched.indexTip;
+            float lenOpen = Vector3.Distance(PunchCue.Lever(h, Head, 0f, S).hinge, PunchCue.Lever(h, Head, 0f, S).armTip);
+            float lenPinch = Vector3.Distance(PunchCue.Lever(pinched, Head, 0f, S).hinge, PunchCue.Lever(pinched, Head, 0f, S).armTip);
+            Assert.That(lenPinch, Is.GreaterThanOrEqualTo(lenOpen * 0.85f), "핀치로 손가락이 모여도 레버가 줄어들지 않음");
+        }
+
+        [Test]
+        public void Lever_GrowsWithHand()
+        {
+            float small = Vector3.Distance(PunchCue.Lever(OpenHand(0.8f), Head, 0f, S).hinge, PunchCue.Lever(OpenHand(0.8f), Head, 0f, S).armTip);
+            float large = Vector3.Distance(PunchCue.Lever(OpenHand(1.25f), Head, 0f, S).hinge, PunchCue.Lever(OpenHand(1.25f), Head, 0f, S).armTip);
+            Assert.That(large, Is.GreaterThan(small));
+            Assert.That(small, Is.GreaterThanOrEqualTo(S.leverLength - 1e-4f));
         }
     }
 

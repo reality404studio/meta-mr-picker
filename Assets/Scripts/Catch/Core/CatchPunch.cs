@@ -34,7 +34,11 @@ namespace MoodPicker.Catch
         HandFrame _frame;
         float _t, _holdStart;
         bool _holdFired;
-        Vector3 _dragLast;
+        Vector3 _dragStart;
+        Vector2 _offsetAtGrab;
+        Quaternion _gaze;
+        bool _hasGaze;
+        float _lastT = float.NaN;
 
         public CatchPunch(CatchSettings settings)
         {
@@ -64,21 +68,27 @@ namespace MoodPicker.Catch
             _t = f.t;
             _pinch.Update(f);
 
+            float dt = float.IsNaN(_lastT) ? 0f : Mathf.Max(0f, f.t - _lastT);
+            _lastT = f.t;
+            if (!_hasGaze) { _gaze = head.rotation; _hasGaze = true; }
+            else _gaze = Quaternion.Slerp(_gaze, head.rotation, 1f - Mathf.Exp(-dt / Mathf.Max(1e-3f, _s.gazeSmoothSeconds)));
+            Pose gaze = new Pose(head.position, _gaze);
+
+            if (Dragging && (!f.left.tracked || !_pinch.IsPinching(Handedness.Left))) Dragging = false;
             if (Dragging)
             {
-                if (!f.left.tracked || !_pinch.IsPinching(Handedness.Left)) Dragging = false;
-                else
-                {
-                    Vector3 p = f.left.PinchPoint;
-                    Vector3 d = p - _dragLast;
-                    _dragLast = p;
-                    Quaternion rot = LevelRotation(head);
-                    Vector2 step = new Vector2(Vector3.Dot(d, rot * Vector3.right), Vector3.Dot(d, rot * Vector3.up)) * _s.dragGain;
-                    Offset = Vector2.ClampMagnitude(Offset + step, _s.maxOffset);
-                }
+                Vector3 d = f.left.PinchPoint - _dragStart;
+                Quaternion rot = LevelRotation(gaze);
+                Vector2 move = new Vector2(Vector3.Dot(d, rot * Vector3.right), Vector3.Dot(d, rot * Vector3.up)) * _s.dragGain;
+                Offset = ClampAxes(_offsetAtGrab + move, _s.maxOffset);
+            }
+            else if (Offset != Vector2.zero)
+            {
+                Offset *= Mathf.Exp(-dt / Mathf.Max(1e-3f, _s.offsetReturnSeconds));
+                if (Offset.sqrMagnitude < 1e-8f) Offset = Vector2.zero;
             }
 
-            Hole = PlaceHole(head, _s.punchDistance, _s.punchSize, Offset);
+            Hole = PlaceHole(gaze, _s.punchDistance, _s.punchSize, Offset);
 
             if (Holding && !_holdFired && f.t - _holdStart >= _s.holdSeconds)
             {
@@ -94,7 +104,8 @@ namespace MoodPicker.Catch
             if (e.hand == Handedness.Left)
             {
                 Dragging = true;
-                _dragLast = p.PinchPoint;
+                _dragStart = p.PinchPoint;
+                _offsetAtGrab = Offset;
                 return;
             }
             Holding = true;
@@ -126,5 +137,8 @@ namespace MoodPicker.Catch
         }
 
         public void ResetOffset() => Offset = Vector2.zero;
+
+        public static Vector2 ClampAxes(Vector2 v, float limit) =>
+            new Vector2(Mathf.Clamp(v.x, -limit, limit), Mathf.Clamp(v.y, -limit, limit));
     }
 }

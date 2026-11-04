@@ -54,7 +54,7 @@ namespace MoodPicker.Catch
             bool rightReady = r.tracked && !punch.PalmFacesHead(r);
             st.lever = punch.Holding ? CueLine.Solid : rightReady ? CueLine.Dotted : CueLine.Hidden;
             float p = punch.HoldProgress;
-            if (st.lever != CueLine.Hidden) st.leverPose = Lever(r.PinchPoint, head, p, s);
+            if (st.lever != CueLine.Hidden) st.leverPose = Lever(r, head, p, s);
 
             st.blade = st.lever;
             st.bladeProgress = p;
@@ -65,27 +65,53 @@ namespace MoodPicker.Catch
             return st;
         }
 
-        public static LeverPose Lever(Vector3 anchor, Pose head, float progress, CatchSettings s)
+        public static LeverPose Lever(HandPose hand, Pose head, float progress, CatchSettings s)
         {
+            Vector3 anchor = hand.palm;
             Vector3 view = anchor - head.position;
             if (view.sqrMagnitude < 1e-6f) view = head.rotation * Vector3.forward;
-            Quaternion q = Quaternion.LookRotation(view, Vector3.up);
-            Vector3 right = q * Vector3.right, up = q * Vector3.up;
-            float half = s.leverLength * 0.5f, ph = s.leverPlateHeight * 0.5f;
-            Vector3 plateTop = anchor - up * s.leverPinchClearance;
-            Vector3 plateMid = plateTop - up * ph;
+            Vector3 viewDir = view.normalized;
+            Vector3 u = Vector3.ProjectOnPlane(hand.indexTip - hand.palm, viewDir);
+            if (u.sqrMagnitude < 1e-6f) u = Quaternion.LookRotation(viewDir, Vector3.up) * Vector3.right;
+            u.Normalize();
+            Vector3 up = Vector3.Cross(viewDir, u).normalized;
+            if (Vector3.Dot(up, Vector3.up) < 0f) up = -up;
+
+            float reach = Mathf.Max(Vector3.Dot(hand.indexTip - anchor, u), Vector3.Dot(hand.thumbTip - anchor, u));
+            float back = Mathf.Max(0f, -Mathf.Min(Vector3.Dot(hand.thumbTip - anchor, u), 0f));
+            Vector3 start = anchor - u * (back + s.leverTipMargin);
+            float length = Mathf.Max(s.leverLength, reach + back + 2f * s.leverTipMargin);
+            float ph = s.leverPlateHeight * 0.5f;
+            Vector3 plateMid = start + u * (length * 0.5f) - up * (s.leverPinchClearance + ph);
+            float half = length * 0.5f;
             var plate = new[]
             {
-                plateMid - right * half - up * ph,
-                plateMid + right * half - up * ph,
-                plateMid + right * half + up * ph,
-                plateMid - right * half + up * ph,
+                plateMid - u * half - up * ph,
+                plateMid + u * half - up * ph,
+                plateMid + u * half + up * ph,
+                plateMid - u * half + up * ph,
             };
-            Vector3 hinge = plateTop + right * half + up * s.leverHingeGap;
+            Vector3 hinge = plate[3] + up * s.leverHingeGap;
             float angle = s.leverOpenDegrees * (1f - Mathf.Clamp01(progress));
             float a = angle * Mathf.Deg2Rad;
-            Vector3 tip = hinge + (-right * Mathf.Cos(a) + up * Mathf.Sin(a)) * s.leverLength;
-            return new LeverPose { anchor = anchor, hinge = hinge, armTip = tip, right = right, up = up, progress = Mathf.Clamp01(progress), angleDegrees = angle, plate = plate };
+            Vector3 tip = hinge + (u * Mathf.Cos(a) + up * Mathf.Sin(a)) * length;
+            return new LeverPose { anchor = anchor, hinge = hinge, armTip = tip, right = u, up = up, progress = Mathf.Clamp01(progress), angleDegrees = angle, plate = plate };
+        }
+
+        public static float Coverage(LeverPose lp, Vector3 thumbTip, Vector3 indexTip, int samples = 50)
+        {
+            Vector3 a = lp.plate[0], b = lp.plate[1];
+            float len = Vector3.Distance(a, b);
+            if (len < 1e-6f) return 0f;
+            Vector3 u = (b - a) / len;
+            int inside = 0;
+            for (int i = 0; i <= samples; i++)
+            {
+                Vector3 p = Vector3.Lerp(thumbTip, indexTip, i / (float)samples);
+                float x = Vector3.Dot(p - a, u);
+                if (x >= 0f && x <= len) inside++;
+            }
+            return inside / (float)(samples + 1);
         }
 
         public static void Dash(Vector3 a, Vector3 b, float dash, float gap, List<(Vector3, Vector3)> into)
