@@ -118,7 +118,7 @@ namespace MoodPicker.Catch
             }
         }
 
-        bool PalmFacesHead(HandPose p)
+        public bool PalmFacesHead(HandPose p)
         {
             Vector3 toHead = _head.position - p.palm;
             if (toHead.sqrMagnitude < 1e-6f || p.palmNormal.sqrMagnitude < 1e-6f) return false;

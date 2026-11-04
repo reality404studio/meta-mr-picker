@@ -33,7 +33,9 @@ namespace MoodPicker.Catch
         IPinchGate _gate;
         CatchPunch _punch;
         PaintStore _store;
-        LineRenderer _frame, _progress, _marker;
+        LineRenderer _marker;
+        PunchCueView _cue;
+        HandFrame _gated;
         Transform _dot;
         Renderer _chip;
         Texture2D _chipTex;
@@ -56,14 +58,13 @@ namespace MoodPicker.Catch
             _punch.Caught += OnCaught;
             _store = new PaintStore(PaintStore.DefaultRoot);
 
-            _frame = Line("CatchFrame", lineMaterial, true);
-            _progress = Line("CatchProgress", lineMaterial, false);
+            _cue = new PunchCueView(transform, lineMaterial, dotMaterial, settings);
             _marker = Line("CatchMode", lineMaterial, true);
             _dot = Quad("CatchRecDot", dotMaterial).transform;
             _chip = Quad("CatchChip", chipMaterial);
             _chip.gameObject.SetActive(false);
             _dot.gameObject.SetActive(false);
-            Debug.Log($"{Tag} catch ready paints={_store.LoadAll().Count} root={_store.Root} hold={settings.holdSeconds}s punch={settings.punchSize * 100f:0}cm@{settings.punchDistance:0.00}m");
+            Debug.Log($"{Tag} catch ready paints={_store.LoadAll().Count} root={_store.Root} hold={settings.holdSeconds}s punch={settings.punchSize * 100f:0}cm@{settings.punchDistance:0.00}m cue=leader+lever lever={settings.leverLength * 100f:0}cm");
         }
 
         LineRenderer Line(string name, Material m, bool loop)
@@ -104,7 +105,10 @@ namespace MoodPicker.Catch
         void Update()
         {
             if (_input == null || rig == null || !_input.TryGetFrame(out HandFrame f)) return;
-            _punch.Update(PinchGate.Apply(f, _gate), HeadInTrackingSpace());
+            _gated = PinchGate.Apply(f, _gate);
+            Pose head = HeadInTrackingSpace();
+            _punch.Update(_gated, head);
+            _cue.Draw(PunchCue.Compute(_punch, _gated, head, settings), _punch.Hole, rig.trackingSpace.localToWorldMatrix, rig.centerEyeAnchor.position);
             if (_wasDragging && !_punch.Dragging) Debug.Log($"{Tag} catch drag offset=({_punch.Offset.x * 100f:0.0},{_punch.Offset.y * 100f:0.0})cm");
             _wasDragging = _punch.Dragging;
             DrawHud();
@@ -116,26 +120,6 @@ namespace MoodPicker.Catch
             CatchSquareView sq = _punch.Hole;
             Vector3[] c = sq.Corners();
             for (int i = 0; i < 4; i++) c[i] = space.TransformPoint(c[i]);
-            _frame.positionCount = 4;
-            _frame.SetPositions(c);
-
-            var pts = new List<Vector3>();
-            float p = _punch.HoldProgress;
-            if (p > 0f)
-            {
-                Vector3[] path = { c[3], c[2], c[1], c[0], c[3] };
-                float todo = p * 4f;
-                pts.Add(path[0]);
-                for (int i = 0; i < 4 && todo > 0f; i++)
-                {
-                    float seg = Mathf.Min(1f, todo);
-                    pts.Add(Vector3.Lerp(path[i], path[i + 1], seg));
-                    todo -= seg;
-                }
-            }
-            _progress.widthMultiplier = lineWidth * 2f;
-            _progress.positionCount = pts.Count;
-            _progress.SetPositions(pts.ToArray());
 
             Vector3 right = space.TransformDirection(sq.Right), up = space.TransformDirection(sq.Up);
             Vector3 anchor = c[3] + up * 0.012f + right * 0.006f;
