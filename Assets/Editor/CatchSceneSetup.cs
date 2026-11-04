@@ -3,6 +3,7 @@ using System;
 using Meta.XR;
 using MoodPicker.Catch;
 using MoodPicker.Hands.Ovr;
+using MoodPicker.Portal;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -12,6 +13,7 @@ public static class CatchSceneSetup
 {
     public const string ScenePath = "Assets/Scenes/Catch.unity";
     public const string SettingsPath = "Assets/Settings/CatchSettings.asset";
+    public const string PortalSettingsPath = "Assets/Settings/PortalSettings.asset";
 
     public static readonly Color Line = new Color(0xF0 / 255f, 0xEE / 255f, 0xE6 / 255f, 1f);
     public static readonly Color Dot = new Color(0xD2 / 255f, 0x3A / 255f, 0x2C / 255f, 1f);
@@ -44,12 +46,22 @@ public static class CatchSceneSetup
         rso.FindProperty("input").objectReferenceValue = input;
         rso.ApplyModifiedPropertiesWithoutUndo();
 
+        var portal = root.AddComponent<PortalController>();
+        var pso = new SerializedObject(portal);
+        pso.FindProperty("trackingSpace").objectReferenceValue = rig.transform.Find("TrackingSpace");
+        pso.FindProperty("handInputSource").objectReferenceValue = input;
+        pso.FindProperty("settings").objectReferenceValue = EnsureAsset<PortalSettings>(PortalSettingsPath);
+        pso.FindProperty("lineMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Line", Line);
+        pso.FindProperty("chipMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Chip", Color.white);
+        pso.ApplyModifiedPropertiesWithoutUndo();
+
         var ctl = root.AddComponent<CatchController>();
         var cso = new SerializedObject(ctl);
         cso.FindProperty("rig").objectReferenceValue = cameraRig;
         cso.FindProperty("cameraAccess").objectReferenceValue = pca;
         cso.FindProperty("handInputSource").objectReferenceValue = input;
-        cso.FindProperty("settings").objectReferenceValue = EnsureSettings();
+        cso.FindProperty("pinchGateSource").objectReferenceValue = portal;
+        cso.FindProperty("settings").objectReferenceValue = EnsureAsset<CatchSettings>(SettingsPath);
         cso.FindProperty("lineMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Line", Line);
         cso.FindProperty("dotMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Dot", Dot);
         cso.FindProperty("chipMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Chip", Color.white);
@@ -60,13 +72,13 @@ public static class CatchSceneSetup
         Debug.Log("[MP] catch scene: " + ScenePath);
     }
 
-    public static CatchSettings EnsureSettings()
+    public static T EnsureAsset<T>(string path) where T : ScriptableObject
     {
-        var s = AssetDatabase.LoadAssetAtPath<CatchSettings>(SettingsPath);
+        var s = AssetDatabase.LoadAssetAtPath<T>(path);
         if (s != null) return s;
-        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(SettingsPath));
-        s = ScriptableObject.CreateInstance<CatchSettings>();
-        AssetDatabase.CreateAsset(s, SettingsPath);
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+        s = ScriptableObject.CreateInstance<T>();
+        AssetDatabase.CreateAsset(s, path);
         return s;
     }
 

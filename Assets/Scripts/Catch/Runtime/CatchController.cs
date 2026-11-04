@@ -16,6 +16,7 @@ namespace MoodPicker.Catch
         [SerializeField] OVRCameraRig rig;
         [SerializeField] PassthroughCameraAccess cameraAccess;
         [SerializeField] MonoBehaviour handInputSource;
+        [SerializeField] MonoBehaviour pinchGateSource;
         [SerializeField] CatchSettings settings;
         [SerializeField] Material lineMaterial;
         [SerializeField] Material dotMaterial;
@@ -29,6 +30,7 @@ namespace MoodPicker.Catch
         static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
 
         IHandInput _input;
+        IPinchGate _gate;
         CatchSquare _square;
         PaintStore _store;
         LineRenderer _frame, _progress, _marker;
@@ -44,6 +46,7 @@ namespace MoodPicker.Catch
         void Awake()
         {
             _input = handInputSource as IHandInput;
+            _gate = pinchGateSource as IPinchGate;
             if (settings == null) settings = CatchSettings.Defaults();
             _square = new CatchSquare(settings);
             _square.SquareShown += t => { _shownAt = t; Debug.Log($"{Tag} catch sizing t={t:0.000}"); };
@@ -101,7 +104,7 @@ namespace MoodPicker.Catch
         void Update()
         {
             if (_input == null || rig == null || !_input.TryGetFrame(out HandFrame f)) return;
-            _square.Update(f, HeadInTrackingSpace());
+            _square.Update(PinchGate.Apply(f, _gate), HeadInTrackingSpace());
             DrawHud();
         }
 

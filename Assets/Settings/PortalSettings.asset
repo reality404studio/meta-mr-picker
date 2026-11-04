@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: PortalSettings
+  m_EditorClassIdentifier: MoodPicker.Portal:MoodPicker.Portal:PortalSettings
+  openUpDot: 0.8
+  closeUpDot: 0.5
+  openHoldSeconds: 0.12
+  closeHoldSeconds: 0.3
+  lostCloseSeconds: 0.5
+  maxPalmSpeed: 0.6
+  invertPalmNormal: 0
+  heightAbovePalm: 0.07
+  radius: 0.06
+  normalSmoothing: 12
+  dipDepth: 0.01
+  exitHeight: 0.005
+  dipMaxSeconds: 1.5
+  chipCols: 3
+  chipPitch: 0.032
+  pinchCooldownSeconds: 0.5
