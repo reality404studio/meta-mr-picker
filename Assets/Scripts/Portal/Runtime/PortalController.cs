@@ -11,7 +11,7 @@ namespace MoodPicker.Portal
     public class PortalController : MonoBehaviour, IPinchGate
     {
         const string Tag = "[MP]";
-        const int MaxChips = 9;
+        const int MaxChips = 12;
 
         [SerializeField] Transform trackingSpace;
         [SerializeField] MonoBehaviour handInputSource;
@@ -33,7 +33,7 @@ namespace MoodPicker.Portal
         IHandInput _input;
         PalettePortal _portal;
         PaintStore _store;
-        LineRenderer _ring;
+        LineRenderer _ring, _front;
         readonly List<Renderer> _chips = new List<Renderer>();
         readonly List<PaintRecord> _shown = new List<PaintRecord>();
         readonly Dictionary<string, Texture2D> _tiles = new Dictionary<string, Texture2D>();
@@ -53,19 +53,27 @@ namespace MoodPicker.Portal
             _portal.Opened += OnOpened;
             _portal.Closed += t => { SetVisible(false); Debug.Log($"{Tag} portal closed t={t:0.000} open={t - _openedAt:0.00}s"); };
             _portal.Dipped += OnDipped;
+            _portal.Rotated += (i, t) => Debug.Log($"{Tag} portal wheel front={i} chip={_portal.FrontChip} t={t:0.000}");
 
-            _ring = new GameObject("PortalRing").AddComponent<LineRenderer>();
-            _ring.transform.SetParent(transform, false);
-            _ring.sharedMaterial = lineMaterial;
-            _ring.useWorldSpace = true;
-            _ring.loop = true;
-            _ring.widthMultiplier = lineWidth;
-            _ring.shadowCastingMode = ShadowCastingMode.Off;
-            _ring.receiveShadows = false;
+            _ring = Line("PortalRing");
+            _front = Line("PortalFrontSlot");
             for (int i = 0; i < MaxChips; i++) _chips.Add(Quad("PortalChip" + i));
             _tip = Quad("FingertipPaint");
             _tip.gameObject.SetActive(false);
             SetVisible(false);
+        }
+
+        LineRenderer Line(string name)
+        {
+            var lr = new GameObject(name).AddComponent<LineRenderer>();
+            lr.transform.SetParent(transform, false);
+            lr.sharedMaterial = lineMaterial;
+            lr.useWorldSpace = true;
+            lr.loop = true;
+            lr.widthMultiplier = lineWidth;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            return lr;
         }
 
         Renderer Quad(string name)
@@ -84,6 +92,7 @@ namespace MoodPicker.Portal
         void SetVisible(bool on)
         {
             _ring.enabled = on;
+            _front.enabled = on;
             for (int i = 0; i < _chips.Count; i++) _chips[i].gameObject.SetActive(on && i < _shown.Count);
         }
 
@@ -139,20 +148,30 @@ namespace MoodPicker.Portal
             PortalPose p = _portal.Pose;
             Vector3 c = trackingSpace.TransformPoint(p.center);
             Vector3 n = trackingSpace.TransformDirection(p.normal), r = trackingSpace.TransformDirection(p.right), fw = trackingSpace.TransformDirection(p.forward);
-            const int seg = 40;
-            _ring.positionCount = seg;
-            for (int i = 0; i < seg; i++)
-            {
-                float a = i * Mathf.PI * 2f / seg;
-                _ring.SetPosition(i, c + (r * Mathf.Cos(a) + fw * Mathf.Sin(a)) * settings.radius);
-            }
+            Circle(_ring, c, r, fw, settings.radius, 40);
+            float size = _portal.ChipSize(chipSize);
+            Vector2 fs = _portal.FrontSlot;
+            Vector3 fc = trackingSpace.TransformPoint(p.ToWorld(fs)) + n * 0.001f;
+            float h = size * 0.5f + 0.003f;
+            _front.positionCount = 4;
+            _front.SetPositions(new[] { fc - r * h - fw * h, fc + r * h - fw * h, fc + r * h + fw * h, fc - r * h + fw * h });
             Quaternion face = Quaternion.LookRotation(-n, fw);
             for (int i = 0; i < _shown.Count; i++)
             {
                 Transform t = _chips[i].transform;
                 t.position = trackingSpace.TransformPoint(p.ToWorld(_portal.ChipSlot(i)));
                 t.rotation = face;
-                t.localScale = Vector3.one * chipSize;
+                t.localScale = Vector3.one * size;
+            }
+        }
+
+        static void Circle(LineRenderer lr, Vector3 c, Vector3 r, Vector3 fw, float radius, int seg)
+        {
+            lr.positionCount = seg;
+            for (int i = 0; i < seg; i++)
+            {
+                float a = i * Mathf.PI * 2f / seg;
+                lr.SetPosition(i, c + (r * Mathf.Cos(a) + fw * Mathf.Sin(a)) * radius);
             }
         }
 

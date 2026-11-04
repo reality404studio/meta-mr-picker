@@ -33,11 +33,22 @@ namespace MoodPicker.Portal
 
         public bool IsOpen { get; private set; }
         public PortalPose Pose { get; private set; }
-        public int ChipCount { get; set; }
+        public int ChipCount
+        {
+            get => _chipCount;
+            set { _chipCount = Mathf.Max(0, value); FrontIndex = 0; WheelDrag = 0f; Sweeping = false; _hasSweep = false; }
+        }
+        public int SlotCount => Mathf.Max(_chipCount, Mathf.Max(1, _s.wheelMinSlots));
+        public float SlotStepDegrees => 360f / SlotCount;
+        public int FrontIndex { get; private set; }
+        public float WheelDrag { get; private set; }
+        public bool Sweeping { get; private set; }
+        public int FrontChip => FrontIndex < _chipCount ? FrontIndex : -1;
 
         public event Action<float> Opened;
         public event Action<float> Closed;
         public event Action<DipEvent> Dipped;
+        public event Action<int, float> Rotated;
 
         float _upSince = -1f, _downSince = -1f, _lostSince = -1f, _closedAt = float.NegativeInfinity, _lastT = float.NaN;
         bool _gateHot;
@@ -46,6 +57,9 @@ namespace MoodPicker.Portal
         bool _wasAbove, _inside;
         float _enteredAt;
         int _entryChip;
+        int _chipCount;
+        bool _hasSweep;
+        float _sweepLast, _sweepAccum;
 
         public PalettePortal(PortalSettings settings) { _s = settings; }
 
@@ -128,6 +142,7 @@ namespace MoodPicker.Portal
             _smoothNormal = n;
             _wasAbove = false;
             _inside = false;
+            EndSweep(t, false);
             Opened?.Invoke(t);
         }
 
@@ -136,6 +151,7 @@ namespace MoodPicker.Portal
             IsOpen = false;
             _downSince = -1f;
             _inside = false;
+            EndSweep(t, false);
             _closedAt = t;
             Closed?.Invoke(t);
         }
@@ -143,9 +159,10 @@ namespace MoodPicker.Portal
         void UpdateDip(HandFrame f)
         {
             HandPose r = f.right;
-            if (!r.tracked) { _inside = false; _wasAbove = false; return; }
+            if (!r.tracked) { _inside = false; _wasAbove = false; EndSweep(f.t, true); return; }
             Vector3 p = Pose.ToLocal(r.indexTip);
             bool overDisk = new Vector2(p.x, p.y).magnitude <= _s.radius;
+            UpdateSweep(p, f.t);
 
             if (!_inside)
             {
@@ -155,7 +172,7 @@ namespace MoodPicker.Portal
                 {
                     _inside = true;
                     _enteredAt = f.t;
-                    _entryChip = ChipAt(new Vector2(p.x, p.y));
+                    _entryChip = DipTarget(new Vector2(p.x, p.y));
                 }
                 return;
             }
@@ -169,25 +186,60 @@ namespace MoodPicker.Portal
             }
         }
 
-        public Vector2 ChipSlot(int i)
+        void UpdateSweep(Vector3 p, float t)
         {
-            int cols = Mathf.Max(1, _s.chipCols);
-            int rows = Mathf.Max(1, (ChipCount + cols - 1) / cols);
-            float x = (i % cols - (cols - 1) * 0.5f) * _s.chipPitch;
-            float y = ((rows - 1) * 0.5f - i / cols) * _s.chipPitch;
-            return new Vector2(x, y);
+            float r = new Vector2(p.x, p.y).magnitude;
+            bool inBand = !_inside && r >= _s.rimInner && r <= _s.rimOuter && p.z >= -_s.rimBelow && p.z <= _s.rimAbove;
+            if (!inBand) { EndSweep(t, true); return; }
+            float a = Mathf.Atan2(p.y, p.x) * Mathf.Rad2Deg;
+            if (!_hasSweep) { _hasSweep = true; _sweepLast = a; _sweepAccum = 0f; return; }
+            _sweepAccum += Mathf.DeltaAngle(_sweepLast, a);
+            _sweepLast = a;
+            if (!Sweeping && Mathf.Abs(_sweepAccum) >= _s.sweepEngageDegrees && _chipCount > 0) Sweeping = true;
+            if (Sweeping) WheelDrag = _sweepAccum;
         }
 
-        public int ChipAt(Vector2 xy)
+        void EndSweep(float t, bool snap)
         {
-            int best = -1;
-            float bd = float.MaxValue;
-            for (int i = 0; i < ChipCount; i++)
+            if (snap && Sweeping)
             {
-                float d = (ChipSlot(i) - xy).sqrMagnitude;
-                if (d < bd) { bd = d; best = i; }
+                int k = Mathf.RoundToInt(WheelDrag / SlotStepDegrees);
+                if (k != 0)
+                {
+                    int n = SlotCount;
+                    FrontIndex = ((FrontIndex - k) % n + n) % n;
+                    Rotated?.Invoke(FrontIndex, t);
+                }
             }
-            return best;
+            Sweeping = false;
+            WheelDrag = 0f;
+            _hasSweep = false;
+            _sweepAccum = 0f;
+        }
+
+        public float SlotAngle(int i) => _s.frontAngleDegrees + (i - FrontIndex) * SlotStepDegrees + WheelDrag;
+
+        public Vector2 ChipSlot(int i)
+        {
+            float a = SlotAngle(i) * Mathf.Deg2Rad;
+            return new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * _s.wheelRadius;
+        }
+
+        public Vector2 FrontSlot
+        {
+            get { float a = _s.frontAngleDegrees * Mathf.Deg2Rad; return new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * _s.wheelRadius; }
+        }
+
+        public float ChipSize(float max)
+        {
+            float arc = 2f * Mathf.PI * _s.wheelRadius / SlotCount;
+            return Mathf.Min(max, arc * 0.8f);
+        }
+
+        public int DipTarget(Vector2 xy)
+        {
+            if (FrontChip >= 0 && (xy - FrontSlot).magnitude <= _s.slotHitRadius) return FrontChip;
+            return -1;
         }
     }
 }

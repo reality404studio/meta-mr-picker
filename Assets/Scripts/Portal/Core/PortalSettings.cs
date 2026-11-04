@@ -23,8 +23,17 @@ namespace MoodPicker.Portal
         public float dipDepth = 0.01f;
         public float exitHeight = 0.005f;
         public float dipMaxSeconds = 1.5f;
-        public int chipCols = 3;
-        public float chipPitch = 0.032f;
+
+        [Header("Wheel (baseline)")]
+        public float wheelRadius = 0.04f;
+        public int wheelMinSlots = 8;
+        public float frontAngleDegrees = -90f;
+        public float slotHitRadius = 0.013f;
+        public float rimInner = 0.03f;
+        public float rimOuter = 0.075f;
+        public float rimBelow = 0.005f;
+        public float rimAbove = 0.03f;
+        public float sweepEngageDegrees = 6f;
 
         [Header("Pinch gate")]
         public float pinchCooldownSeconds = 0.5f;

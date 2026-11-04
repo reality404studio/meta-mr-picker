@@ -152,7 +152,7 @@ namespace MoodPicker.Tests
 
     public class PortalDipTests
     {
-        static void Dip(PortalRun run, Vector2 xy, out float exitT)
+        public static void Dip(PortalRun run, Vector2 xy, out float exitT)
         {
             run.PalmUp(0.2f, _ => PortalRun.RightTip(run.Surface(xy, 0.04f)));
             run.PalmUp(0.15f, _ => PortalRun.RightTip(run.Surface(xy, -0.02f)));
@@ -165,10 +165,10 @@ namespace MoodPicker.Tests
         {
             var run = new PortalRun(6).PalmUp(0.4f);
             Assume.That(run.portal.IsOpen);
-            Vector2 slot = run.portal.ChipSlot(4);
+            Vector2 slot = run.portal.FrontSlot;
             Dip(run, slot, out float exit);
             Assert.That(run.dips.Count, Is.EqualTo(1));
-            Assert.That(run.dips[0].chip, Is.EqualTo(4));
+            Assert.That(run.dips[0].chip, Is.EqualTo(run.portal.FrontChip));
             Assert.That(run.dips[0].t - exit, Is.LessThanOrEqualTo(0.3f));
         }
 
@@ -228,6 +228,112 @@ namespace MoodPicker.Tests
                 return (l, PortalRun.RightTip(InFront(Head, 0.08f, 0.08f, 0.4f), pinch: true));
             });
             Assert.That(run.catchRun.holdStarts.Count, Is.EqualTo(1), "닫힌 뒤엔 찰칵 유지가 다시 시작됨");
+        }
+    }
+
+    public class PortalWheelTests
+    {
+        static readonly PortalSettings S = PortalSettings.Defaults();
+
+        static void Sweep(PortalRun run, float fromDeg, float byDeg, float seconds = 0.5f)
+        {
+            float r = S.wheelRadius;
+            Vector2 At(float d) => new Vector2(Mathf.Cos(d * Mathf.Deg2Rad), Mathf.Sin(d * Mathf.Deg2Rad)) * r;
+            run.PalmUp(0.2f, _ => PortalRun.RightTip(run.Surface(At(fromDeg), 0.06f)));
+            run.PalmUp(0.1f, _ => PortalRun.RightTip(run.Surface(At(fromDeg), 0.01f)));
+            float t0 = run.t;
+            run.PalmUp(seconds, x => PortalRun.RightTip(run.Surface(At(fromDeg + byDeg * Mathf.Clamp01((x - t0) / (seconds - Dt))), 0.01f)));
+            run.PalmUp(0.3f, _ => PortalRun.RightTip(run.Surface(At(fromDeg + byDeg), 0.06f)));
+        }
+
+        static PortalRun Open(int chips, List<int> rotated)
+        {
+            var run = new PortalRun(chips).PalmUp(0.4f);
+            Assume.That(run.portal.IsOpen);
+            run.portal.Rotated += (i, _) => rotated.Add(i);
+            return run;
+        }
+
+        [TestCase(1f)]
+        [TestCase(-1f)]
+        public void Sweep_RimBySlotRotatesOneSlotAndSnaps(float dir)
+        {
+            var rot = new List<int>();
+            var run = Open(6, rot);
+            float step = run.portal.SlotStepDegrees;
+            Sweep(run, S.frontAngleDegrees + 60f, dir * step * 0.85f);
+            int n = run.portal.SlotCount;
+            Assert.That(rot.Count, Is.EqualTo(1));
+            Assert.That(run.portal.FrontIndex, Is.EqualTo(((int)(-dir) % n + n) % n));
+            Assert.That(run.portal.WheelDrag, Is.EqualTo(0f), "스냅 뒤 끌림 0");
+            Assert.That(run.portal.Sweeping, Is.False);
+            Vector2 front = run.portal.ChipSlot(run.portal.FrontIndex);
+            Assert.That((front - run.portal.FrontSlot).magnitude, Is.LessThan(1e-4f), "맨 앞 칸이 정확히 앞에");
+            Assert.That(run.dips, Is.Empty, "쓸기는 찍기가 아님");
+        }
+
+        [Test]
+        public void Sweep_FollowsFingerWhileOnRimAndSmallSweepSnapsBack()
+        {
+            var rot = new List<int>();
+            var run = Open(6, rot);
+            float step = run.portal.SlotStepDegrees;
+            float r = S.wheelRadius;
+            float a0 = S.frontAngleDegrees + 60f;
+            Vector2 At(float d) => new Vector2(Mathf.Cos(d * Mathf.Deg2Rad), Mathf.Sin(d * Mathf.Deg2Rad)) * r;
+            run.PalmUp(0.1f, _ => PortalRun.RightTip(run.Surface(At(a0), 0.06f)));
+            run.PalmUp(0.1f, _ => PortalRun.RightTip(run.Surface(At(a0), 0.01f)));
+            float t0 = run.t;
+            run.PalmUp(0.3f, x => PortalRun.RightTip(run.Surface(At(a0 + step * 0.3f * Mathf.Clamp01((x - t0) / 0.28f)), 0.01f)));
+            Assert.That(run.portal.Sweeping);
+            Assert.That(run.portal.WheelDrag, Is.EqualTo(step * 0.3f).Within(1f), "쓰는 동안 손끝을 따라 돎");
+            run.PalmUp(0.3f, _ => PortalRun.RightTip(run.Surface(At(a0 + step * 0.3f), 0.06f)));
+            Assert.That(rot, Is.Empty);
+            Assert.That(run.portal.FrontIndex, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Dip_OnlyFrontSlotPaints()
+        {
+            var run = new PortalRun(6).PalmUp(0.4f);
+            for (int i = 1; i < 6; i++) PortalDipTests.Dip(run, run.portal.ChipSlot(i), out _);
+            Assert.That(run.dips, Is.Empty, "맨 앞 칸 외 dip 무시");
+            PortalDipTests.Dip(run, run.portal.FrontSlot, out _);
+            Assert.That(run.dips.Count, Is.EqualTo(1));
+            Assert.That(run.dips[0].chip, Is.EqualTo(0));
+
+            var rot = new List<int>();
+            run.portal.Rotated += (i, _) => rot.Add(i);
+            Sweep(run, S.frontAngleDegrees + 60f, -run.portal.SlotStepDegrees);
+            Assume.That(run.portal.FrontIndex, Is.EqualTo(1));
+            PortalDipTests.Dip(run, run.portal.FrontSlot, out _);
+            Assert.That(run.dips.Count, Is.EqualTo(2));
+            Assert.That(run.dips[1].chip, Is.EqualTo(1), "돌린 뒤 앞에 온 칩");
+        }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(12)]
+        public void Layout_ZeroOneTwelvePaintsFitOnRim(int chips)
+        {
+            var rot = new List<int>();
+            var run = Open(chips, rot);
+            PalettePortal p = run.portal;
+            Assert.That(p.SlotCount, Is.EqualTo(Mathf.Max(chips, S.wheelMinSlots)));
+            float size = p.ChipSize(0.026f);
+            Assert.That(size, Is.GreaterThan(0.012f), "칩이 읽히는 크기");
+            for (int i = 0; i < chips; i++)
+            {
+                Vector2 a = p.ChipSlot(i);
+                Assert.That(a.magnitude + size * 0.7072f, Is.LessThanOrEqualTo(S.radius + 1e-4f), $"칩 {i} 포탈 안");
+                Assert.That(a.magnitude - size * 0.7072f, Is.GreaterThan(0.01f), $"칩 {i} 가운데와 안 겹침");
+                for (int j = i + 1; j < chips; j++) Assert.That((p.ChipSlot(j) - a).magnitude, Is.GreaterThanOrEqualTo(size), $"칩 {i},{j} 안 겹침");
+            }
+            if (chips > 0) Assert.That((p.ChipSlot(0) - p.FrontSlot).magnitude, Is.LessThan(1e-4f), "최신 칩이 앞");
+            Sweep(run, S.frontAngleDegrees + 60f, p.SlotStepDegrees);
+            Assert.That(rot.Count, Is.EqualTo(chips > 0 ? 1 : 0));
+            PortalDipTests.Dip(run, p.FrontSlot, out _);
+            Assert.That(run.dips.Count, Is.EqualTo(chips > 0 && p.FrontChip >= 0 ? 1 : 0));
         }
     }
 }
