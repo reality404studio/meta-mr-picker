@@ -35,6 +35,9 @@ namespace MoodPicker.Portal
         public float rimAbove = 0.03f;
         public float sweepEngageDegrees = 6f;
 
+        [Header("Well (baseline)")]
+        public float wellRadius = 0.018f;
+
         [Header("Pinch gate")]
         public float pinchCooldownSeconds = 0.5f;
 

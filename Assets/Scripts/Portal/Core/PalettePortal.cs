@@ -49,6 +49,8 @@ namespace MoodPicker.Portal
         public event Action<float> Closed;
         public event Action<DipEvent> Dipped;
         public event Action<int, float> Rotated;
+        public event Action<float> Washed;
+        public const int WellTarget = -2;
 
         float _upSince = -1f, _downSince = -1f, _lostSince = -1f, _closedAt = float.NegativeInfinity, _lastT = float.NaN;
         bool _gateHot;
@@ -182,7 +184,8 @@ namespace MoodPicker.Portal
             {
                 _inside = false;
                 _wasAbove = true;
-                if (_entryChip >= 0) Dipped?.Invoke(new DipEvent { chip = _entryChip, t = f.t, tip = r.indexTip });
+                if (_entryChip == WellTarget) Washed?.Invoke(f.t);
+                else if (_entryChip >= 0) Dipped?.Invoke(new DipEvent { chip = _entryChip, t = f.t, tip = r.indexTip });
             }
         }
 
@@ -238,6 +241,7 @@ namespace MoodPicker.Portal
 
         public int DipTarget(Vector2 xy)
         {
+            if (xy.magnitude <= _s.wellRadius) return WellTarget;
             if (FrontChip >= 0 && (xy - FrontSlot).magnitude <= _s.slotHitRadius) return FrontChip;
             return -1;
         }

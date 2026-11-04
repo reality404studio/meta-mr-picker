@@ -326,7 +326,7 @@ namespace MoodPicker.Tests
             {
                 Vector2 a = p.ChipSlot(i);
                 Assert.That(a.magnitude + size * 0.7072f, Is.LessThanOrEqualTo(S.radius + 1e-4f), $"칩 {i} 포탈 안");
-                Assert.That(a.magnitude - size * 0.7072f, Is.GreaterThan(0.01f), $"칩 {i} 가운데와 안 겹침");
+                Assert.That(a.magnitude - size * 0.7072f, Is.GreaterThan(S.wellRadius), $"칩 {i} 가운데 우물과 안 겹침");
                 for (int j = i + 1; j < chips; j++) Assert.That((p.ChipSlot(j) - a).magnitude, Is.GreaterThanOrEqualTo(size), $"칩 {i},{j} 안 겹침");
             }
             if (chips > 0) Assert.That((p.ChipSlot(0) - p.FrontSlot).magnitude, Is.LessThan(1e-4f), "최신 칩이 앞");
@@ -334,6 +334,91 @@ namespace MoodPicker.Tests
             Assert.That(rot.Count, Is.EqualTo(chips > 0 ? 1 : 0));
             PortalDipTests.Dip(run, p.FrontSlot, out _);
             Assert.That(run.dips.Count, Is.EqualTo(chips > 0 && p.FrontChip >= 0 ? 1 : 0));
+        }
+    }
+
+    public class PortalWellTests
+    {
+        static readonly PortalSettings S = PortalSettings.Defaults();
+
+        class WellRun
+        {
+            public readonly PortalRun run;
+            public readonly TipPaint<string, string> tip;
+            public readonly List<float> washed = new List<float>();
+            public readonly List<string> picked = new List<string>();
+
+            public WellRun(int chips = 6)
+            {
+                run = new PortalRun(chips).PalmUp(0.4f);
+                Assume.That(run.portal.IsOpen);
+                tip = new TipPaint<string, string>(run.portal, i => i >= 0 && i < chips ? ("paint" + i, "tile" + i) : (null, null));
+                tip.Washed += t => washed.Add(t);
+                tip.Picked += (p, _, _) => picked.Add(p);
+            }
+
+            public void Dip(Vector2 xy) => PortalDipTests.Dip(run, xy, out _);
+        }
+
+        [Test]
+        public void Well_CenterDipWashesOnceAndClearsPaint()
+        {
+            var w = new WellRun();
+            w.Dip(w.run.portal.FrontSlot);
+            Assume.That(w.tip.Paint, Is.EqualTo("paint0"));
+            w.Dip(Vector2.zero);
+            Assert.That(w.washed.Count, Is.EqualTo(1), "Washed 1회");
+            Assert.That(w.tip.Paint, Is.Null, "CurrentPaint null");
+            Assert.That(w.tip.Tile, Is.Null);
+            Assert.That(w.run.dips.Count, Is.EqualTo(1), "씻기는 물감 dip 이 아님");
+        }
+
+        [Test]
+        public void Well_EdgeDipPicksPaint()
+        {
+            var w = new WellRun();
+            w.Dip(Vector2.zero);
+            w.Dip(w.run.portal.FrontSlot);
+            Assert.That(w.picked, Is.EqualTo(new[] { "paint0" }));
+            Assert.That(w.tip.Paint, Is.EqualTo("paint0"));
+            Assert.That(w.washed.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Well_NoFalseEventsAcrossTwoCentimetreBoundary()
+        {
+            var w = new WellRun();
+            Vector2 front = w.run.portal.FrontSlot.normalized;
+            Vector2 side = new Vector2(-front.y, front.x);
+            int wantWash = 0, wantPick = 0;
+            foreach (Vector2 dir in new[] { front, side, -front })
+            {
+                for (float r = 0.001f; r <= S.wellRadius + 0.02f; r += 0.002f)
+                {
+                    int washed = w.washed.Count, picked = w.picked.Count;
+                    Vector2 xy = dir * r;
+                    w.Dip(xy);
+                    bool inWell = r <= S.wellRadius;
+                    bool inFront = (xy - w.run.portal.FrontSlot).magnitude <= S.slotHitRadius;
+                    if (inWell) wantWash++;
+                    if (inFront) wantPick++;
+                    Assert.That(w.washed.Count - washed, Is.EqualTo(inWell ? 1 : 0), $"r={r * 100f:0.0}cm dir={dir} 씻기");
+                    Assert.That(w.picked.Count - picked, Is.EqualTo(inFront ? 1 : 0), $"r={r * 100f:0.0}cm dir={dir} 묻히기");
+                }
+            }
+            Assert.That(wantWash, Is.GreaterThan(0));
+            Assert.That(wantPick, Is.GreaterThan(0));
+            Assert.That(S.rimInner - S.wellRadius, Is.GreaterThanOrEqualTo(0.01f), "우물과 쓸기 띠 사이 1cm 이상");
+            Assert.That(S.wheelRadius - S.slotHitRadius - S.wellRadius, Is.GreaterThanOrEqualTo(0.008f), "우물과 앞 칸 사이 빈 띠");
+        }
+
+        [Test]
+        public void Well_WashesWithZeroPaints()
+        {
+            var w = new WellRun(0);
+            w.Dip(Vector2.zero);
+            Assert.That(w.washed.Count, Is.EqualTo(1));
+            Assert.That(w.run.dips, Is.Empty);
         }
     }
 }

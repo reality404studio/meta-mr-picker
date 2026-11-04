@@ -26,14 +26,16 @@ namespace MoodPicker.Portal
 
         static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
 
-        public PaintRecord CurrentPaint { get; private set; }
-        public Texture2D CurrentTile { get; private set; }
+        public PaintRecord CurrentPaint => _paint?.Paint;
+        public Texture2D CurrentTile => _paint?.Tile;
         public event Action<PaintRecord, Texture2D> PaintPicked;
+        public event Action Washed;
 
         IHandInput _input;
         PalettePortal _portal;
         PaintStore _store;
-        LineRenderer _ring, _front;
+        LineRenderer _ring, _front, _well;
+        TipPaint<PaintRecord, Texture2D> _paint;
         readonly List<Renderer> _chips = new List<Renderer>();
         readonly List<PaintRecord> _shown = new List<PaintRecord>();
         readonly Dictionary<string, Texture2D> _tiles = new Dictionary<string, Texture2D>();
@@ -52,11 +54,14 @@ namespace MoodPicker.Portal
             _store = new PaintStore(PaintStore.DefaultRoot);
             _portal.Opened += OnOpened;
             _portal.Closed += t => { SetVisible(false); Debug.Log($"{Tag} portal closed t={t:0.000} open={t - _openedAt:0.00}s"); };
-            _portal.Dipped += OnDipped;
+            _paint = new TipPaint<PaintRecord, Texture2D>(_portal, i => i >= 0 && i < _shown.Count ? (_shown[i], Tile(_shown[i])) : (null, null));
+            _paint.Picked += OnPicked;
+            _paint.Washed += OnWashed;
             _portal.Rotated += (i, t) => Debug.Log($"{Tag} portal wheel front={i} chip={_portal.FrontChip} t={t:0.000}");
 
             _ring = Line("PortalRing");
             _front = Line("PortalFrontSlot");
+            _well = Line("PortalWell");
             for (int i = 0; i < MaxChips; i++) _chips.Add(Quad("PortalChip" + i));
             _tip = Quad("FingertipPaint");
             _tip.gameObject.SetActive(false);
@@ -93,6 +98,7 @@ namespace MoodPicker.Portal
         {
             _ring.enabled = on;
             _front.enabled = on;
+            _well.enabled = on;
             for (int i = 0; i < _chips.Count; i++) _chips[i].gameObject.SetActive(on && i < _shown.Count);
         }
 
@@ -118,15 +124,19 @@ namespace MoodPicker.Portal
             return tex;
         }
 
-        void OnDipped(DipEvent e)
+        void OnPicked(PaintRecord paint, Texture2D tile, float t)
         {
-            if (e.chip < 0 || e.chip >= _shown.Count) return;
-            CurrentPaint = _shown[e.chip];
-            CurrentTile = Tile(CurrentPaint);
-            _tip.material.SetTexture(BaseMap, CurrentTile);
+            _tip.material.SetTexture(BaseMap, tile);
             _tip.gameObject.SetActive(true);
-            PaintPicked?.Invoke(CurrentPaint, CurrentTile);
-            Debug.Log($"{Tag} portal dip No.{CurrentPaint.number:000} id={CurrentPaint.id} t={e.t:0.000}");
+            PaintPicked?.Invoke(paint, tile);
+            Debug.Log($"{Tag} portal dip No.{paint.number:000} id={paint.id} t={t:0.000}");
+        }
+
+        void OnWashed(float t)
+        {
+            _tip.gameObject.SetActive(false);
+            Washed?.Invoke();
+            Debug.Log($"{Tag} portal washed t={t:0.000}");
         }
 
         void Update()
@@ -149,6 +159,7 @@ namespace MoodPicker.Portal
             Vector3 c = trackingSpace.TransformPoint(p.center);
             Vector3 n = trackingSpace.TransformDirection(p.normal), r = trackingSpace.TransformDirection(p.right), fw = trackingSpace.TransformDirection(p.forward);
             Circle(_ring, c, r, fw, settings.radius, 40);
+            Circle(_well, c + n * 0.001f, r, fw, settings.wellRadius, 24);
             float size = _portal.ChipSize(chipSize);
             Vector2 fs = _portal.FrontSlot;
             Vector3 fc = trackingSpace.TransformPoint(p.ToWorld(fs)) + n * 0.001f;
