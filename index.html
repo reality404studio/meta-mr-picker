@@ -430,7 +430,7 @@ function setCanvasSize(w, h) {
 // Ported from PR #1 reference/texture-lab/web/shader-lab: seven looks over the same
 // caught pigment. The lab called them exploration; which one ships is still a human call
 // (docs/DECIDED.md 2026-11-03 — the object look is two-tone cel until someone says otherwise).
-const BUILD = 'c930255-1104-1610';   // replaced at deploy; stays __BUILD__ when served from a checkout
+const BUILD = 'e5c8714-1104-1644';   // replaced at deploy; stays __BUILD__ when served from a checkout
 
 const ORB_MODES = ['RAW', '', 'CHROME', 'CAUSTIC', 'HOLOGRAM', 'CONTOUR', 'HALFTONE'];
 // Glint is out (2026-11-04, 사람 결정). Its shader index is simply never cycled to, so the
@@ -455,12 +455,12 @@ vec3 vid(vec3 p, vec3 n){ return lin(triS(p, n)); }
 // instead of chasing single texels (shader-lab's vidBlur).
 vec3 vidBlur(vec3 p, vec3 n, float r){
   vec3 acc = vid(p, n);
-  for (int i = 0; i < 8; i++){
-    float a = float(i) * 0.785398;
+  for (int i = 0; i < 4; i++){
+    float a = float(i) * 1.570796;
     vec2 o = vec2(cos(a), sin(a)) * r;
     acc += vid(p + vec3(o.x, o.y, o.x - o.y) / max(uScale, 0.01), n);
   }
-  return acc / 9.0;
+  return acc / 5.0;
 }
 `;
 
@@ -566,26 +566,46 @@ void main(){
 // tracing — a distance falloff and the same wave the finger started.
 const CATCH_FRAG = /* glsl */`
 ${ORB_COMMON}
-uniform vec3  uOrbPos, uTint;
+uniform vec3  uOrbPos, uShade;
 uniform float uTime, uNear, uFar, uGain, uTouch, uWave, uContrast;
 varying vec3 vWPos, vWNrm;
+varying vec2 vUvq;
+
+// One fetch, not three. The catcher is a flat quad whose normal we know, so the triplanar
+// blend had nothing to blend — pick the two in-plane axes and read once.
+vec2 planarUV(vec3 p, vec3 n){
+  vec3 a = abs(n);
+  if (a.y > 0.5) return p.xz;
+  if (a.x > 0.5) return p.zy;
+  return p.xy;
+}
+
 void main(){
   float d    = distance(vWPos, uOrbPos);
   float fall = 1.0 - smoothstep(uNear, uFar, d);
-  if (fall <= 0.001) discard;
+  if (fall <= 0.002) discard;
+
+  // never let the quad read as a rectangle pasted on the room
+  vec2  e    = abs(vUvq - 0.5) * 2.0;
+  float edge = 1.0 - smoothstep(0.55, 1.0, max(e.x, e.y));
+  if (edge <= 0.002) discard;
+
   vec3  n    = normalize(vWNrm);
-  // drift sideways across the surface, never along the axis it is projected on
   vec3  t    = abs(n.y) > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), n));
-  vec3  tex  = lin(triS(vWPos + t * uTime * 0.010, n));
-  float c    = pow(lum(tex), uContrast) * 4.0;
-  float rip  = 1.0 + sin(d * 16.0 - uTime * uWave) * 0.45 * uTouch * exp(-d * 1.6);
-  gl_FragColor = vec4(uTint * c * fall * rip * uGain * (1.0 + uTouch * 0.5), 1.0);
-  #include <colorspace_fragment>
+  float h    = lum(lin(texture2D(uTex, mir(planarUV(vWPos + t * uTime * 0.010, n) * uScale * 0.8 + 0.21)).rgb));
+
+  float rip  = 1.0 + sin(d * 16.0 - uTime * uWave) * 0.30 * uTouch * exp(-d * 1.6);
+  // a shadow, not a lamp: the troughs darken and the crests leave the real surface alone,
+  // so what you see is the room with water moving over it
+  float shade = clamp((1.0 - pow(h, uContrast)) * uGain * fall * edge * rip * (1.0 + uTouch * 0.5), 0.0, 1.0);
+  gl_FragColor = vec4(uShade, shade);
 }`;
 
 const CATCH_VERT = /* glsl */`
 varying vec3 vWPos, vWNrm;
+varying vec2 vUvq;
 void main(){
+  vUvq = uv;
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vWPos = wp.xyz;
   vWNrm = normalize(mat3(modelMatrix) * normal);
@@ -618,19 +638,21 @@ const orbMat = new THREE.ShaderMaterial({
   }, orbShared)
 });
 
-const orb = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.062, 56, 128), orbMat);
+const orb = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.062, 36, 84), orbMat);
 orbRoot.add(orb);
 
 function catcherMat() {
   return new THREE.ShaderMaterial({
     vertexShader: CATCH_VERT, fragmentShader: CATCH_FRAG,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    blending: THREE.NormalBlending,
     uniforms: Object.assign({
       uScale   : { value: 1.1 },
       uNear    : { value: 0.16 },
-      uFar     : { value: 1.15 },
-      uGain    : { value: 0.40 },
-      uContrast: { value: 3.4 }
+      uFar     : { value: 1.30 },
+      uGain    : { value: 0.42 },
+      uContrast: { value: 1.4 },
+      uShade   : { value: new THREE.Color(0.045, 0.085, 0.135) }  // cool dark, water shadow
     }, orbShared)
   });
 }
@@ -639,6 +661,9 @@ const deskCatcher = new THREE.Mesh(
   new THREE.PlaneGeometry(1.6, 0.9).rotateX(-Math.PI / 2), catcherMat());
 
 const wallCatcher = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.0), catcherMat());
+
+deskCatcher.position.set(0, DESK.h + 0.004, 0);
+wallCatcher.position.set(0, 1.45, -1.10);
 
 const catchers = new THREE.Group();
 catchers.add(deskCatcher, wallCatcher);
@@ -663,15 +688,41 @@ function setOrbMode(i) {
 }
 function cycleOrbMode() { setOrbMode(orbIndex + 1); }
 
-// The catchers borrow the poses the desk and wall calibration already produced.
-function layoutCatchers() {
-  deskCatcher.position.copy(deskRoot.position); deskCatcher.position.y += 0.004;
-  deskCatcher.quaternion.copy(deskRoot.quaternion);
-  wallCatcher.quaternion.copy(artRoot.quaternion);
-  wallCatcher.position.copy(artRoot.position)
-    .addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(artRoot.quaternion), 0.006);
-  wallCatcher.position.y = artRoot.position.y;
-  orbShared.uOrbPos.value.copy(orbRoot.position);
+function layoutCatchers() { orbShared.uOrbPos.value.copy(orbRoot.position); }
+
+// Which quad the next two-hand rectangle defines.
+let quadTarget = 'desk';
+function toggleQuadTarget() { quadTarget = quadTarget === 'desk' ? 'wall' : 'desk'; refreshPlates(); }
+
+function sizeQuad(mesh, w, h, horizontal) {
+  mesh.geometry.dispose();
+  const g = new THREE.PlaneGeometry(Math.max(w, 0.15), Math.max(h, 0.12));
+  if (horizontal) g.rotateX(-Math.PI / 2);
+  mesh.geometry = g;
+}
+
+// Lay the desk quad flat from two opposite corners; stand the wall quad up from two
+// opposite corners. Squared to the way the person faces, so tilted hands stay level.
+function setQuadFromHands(p1, p2) {
+  const yaw = headYaw(), right = headRight(yaw);
+  const dv = p2.clone().sub(p1);
+  const mid = p1.clone().add(p2).multiplyScalar(0.5);
+  if (quadTarget === 'desk') {
+    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const w = Math.abs(dv.dot(right)), d = Math.abs(dv.dot(fwd));
+    if (w < 0.12 && d < 0.12) return false;
+    sizeQuad(deskCatcher, w, d, true);
+    deskCatcher.position.set(mid.x, (p1.y + p2.y) / 2 + 0.004, mid.z);
+    deskCatcher.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+  } else {
+    const w = Math.abs(dv.dot(right)), h = Math.abs(dv.y);
+    if (w < 0.12 || h < 0.10) return false;
+    sizeQuad(wallCatcher, w, h, false);
+    wallCatcher.position.copy(mid);
+    wallCatcher.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+  }
+  calibHold = 2.2;                 // leave the outline up so the placement is visible
+  return true;
 }
 
 // How close the nearest fingertip is to the ring, 0 far .. 1 touching. The same number
@@ -802,7 +853,7 @@ function plateTexture(text, pressed) {
   return t;
 }
 
-const PLATE_KEYS = ['orb', 'canvas', 'mat', 'cloth', 'things', 'light', 'pour', 'sound'];
+const PLATE_KEYS = ['orb', 'canvas', 'mat', 'cloth', 'things', 'light', 'pour', 'sound', 'quad'];
 const plateMeshes = PLATE_KEYS.map((key, i) => {
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(0.088, 0.033),
@@ -834,8 +885,10 @@ function layoutUI() {
 function refreshPlates() {
   for (const m of plateMeshes) {
     const key = m.userData.key;
-    const pressed = key === 'sound' ? soundOn : key === surface;
-    const label = key === 'sound' ? (soundOn ? 'SOUND' : 'MUTED') : key.toUpperCase();
+    const pressed = key === 'sound' ? soundOn : key === 'quad' ? false : key === surface;
+    const label = key === 'sound' ? (soundOn ? 'SOUND' : 'MUTED')
+                : key === 'quad'  ? (quadTarget === 'desk' ? 'FIT DESK' : 'FIT WALL')
+                : key.toUpperCase();
     m.material.map.dispose();
     m.material.map = plateTexture(label, pressed);
     m.material.needsUpdate = true;
@@ -855,6 +908,7 @@ let planeScanned = false;
 let wallScanned  = false;
 let needArtHang  = false;
 let calibrating  = false;
+let calibHold    = 0;
 let calibA = null, calibB = null;
 let placedBy = '';
 
@@ -869,7 +923,7 @@ function headRight(yaw) { return new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(y
 
 function drawCalibBox(p1, p2) {
   let c;
-  if (surface === 'canvas') {
+  if (surface === 'canvas' || (surface === 'orb' && quadTarget === 'wall')) {
     // stood up on Y: the two pinches are opposite corners of an upright rectangle
     const yaw = headYaw(), right = headRight(yaw), up = new THREE.Vector3(0, 1, 0);
     const mid = p1.clone().add(p2).multiplyScalar(0.5);
@@ -987,6 +1041,7 @@ function tap(frame, refSpace, g, src) {
   if (g.plate) {
     if (g.plate === 'pour') pour();
     else if (g.plate === 'sound') toggleSound();
+    else if (g.plate === 'quad') toggleQuadTarget();
     else setSurface(g.plate);
     return;
   }
@@ -1032,10 +1087,10 @@ function trackHands(frame, refSpace) {
   }
   if (calibrating) {
     calibrating = false;
-    calibBox.visible = false;
     if (calibA && calibB) {
-      if (surface === 'canvas') commitArt(calibA, calibB);
-      else                      commitRect(calibA, calibB);
+      if (surface === 'orb')         setQuadFromHands(calibA, calibB);
+      else if (surface === 'canvas') commitArt(calibA, calibB);
+      else                           commitRect(calibA, calibB);
     }
     calibA = calibB = null;
     return;                      // the release that ends a layout never starts a grip
@@ -1157,7 +1212,7 @@ function scanPlanes(frame, refSpace) {
 // rather than roomy: docs/DECIDED.md 2026-11-03, 소리는 동화 쪽 (포근함, 빈티지 잔향).
 let actx = null, soundOn = true;
 let wash = null, washGain = null, washFilter = null, washLfo = null, wet = null, dry = null;
-let lastDrop = 0, prevTouch = 0, dropCount = 0;
+let shim = null, shimGain = null, shimFilter = null, shimLfo = null;
 
 function buildReverb(ctx, seconds, decay) {
   const n = Math.floor(ctx.sampleRate * seconds);
@@ -1211,40 +1266,31 @@ function initAudio() {
 
   wash.connect(washFilter); washFilter.connect(washGain);
   washGain.connect(dry); washGain.connect(verb);
-  wash.start(); washLfo.start();
-}
 
-// one droplet: a sine dropping in pitch under a short envelope
-function droplet(level) {
-  if (!actx || !soundOn) return;
-  dropCount++;
-  const t = actx.currentTime;
-  const o = actx.createOscillator();
-  const g = actx.createGain();
-  const f0 = 760 + Math.random() * 900;
-  o.type = 'sine';
-  o.frequency.setValueAtTime(f0, t);
-  o.frequency.exponentialRampToValueAtTime(f0 * 0.38, t + 0.09);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.16 * level, t + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
-  o.connect(g); g.connect(dry); g.connect(wet);
-  o.start(t); o.stop(t + 0.22);
+  shim = actx.createBufferSource();
+  shim.buffer = nb; shim.loop = true; shim.playbackRate.value = 1.37;
+  shimFilter = actx.createBiquadFilter();
+  shimFilter.type = 'bandpass'; shimFilter.frequency.value = 2600; shimFilter.Q.value = 0.8;
+  shimGain = actx.createGain(); shimGain.gain.value = 0;
+  const shimLfoGain = actx.createGain(); shimLfoGain.gain.value = 900;
+  shimLfo = actx.createOscillator();
+  shimLfo.type = 'sine'; shimLfo.frequency.value = 0.26;
+  shimLfo.connect(shimLfoGain); shimLfoGain.connect(shimFilter.frequency);
+  shim.connect(shimFilter); shimFilter.connect(shimGain);
+  shimGain.connect(dry); shimGain.connect(verb);
+
+  wash.start(); washLfo.start(); shim.start(); shimLfo.start();
 }
 
 function audioFrame(touch, dt) {
   if (!actx) return;
   const t = actx.currentTime;
-  const target = soundOn ? Math.pow(Math.max(touch, 0), 1.6) * 0.17 : 0;
-  washGain.gain.setTargetAtTime(target, t, 0.08);
-  washLfo.frequency.setTargetAtTime(0.8 + touch * 2.6, t, 0.2);
-
-  if (!soundOn || touch < 0.06) { prevTouch = touch; return; }
-  // a drop on the way in, then a trickle whose rate follows how hard it is being touched
-  const onset = touch - prevTouch > 0.10;
-  const due = t - lastDrop > (0.55 - touch * 0.28) * (0.7 + Math.random() * 0.8);
-  if (onset || due) { droplet(0.45 + touch * 0.55); lastDrop = t; }
-  prevTouch = touch;
+  // a quiet bed so the water is always there, opening up as a hand comes in
+  const lvl = soundOn ? 0.018 + Math.pow(Math.max(touch, 0), 1.5) * 0.15 : 0;
+  washGain.gain.setTargetAtTime(lvl, t, 0.10);
+  shimGain.gain.setTargetAtTime(lvl * 0.42, t, 0.14);
+  washLfo.frequency.setTargetAtTime(0.7 + touch * 2.2, t, 0.25);
+  shimLfo.frequency.setTargetAtTime(0.26 + touch * 0.8, t, 0.35);
 }
 
 function toggleSound() {
@@ -1286,9 +1332,9 @@ function setSurface(key) {
   // In AR the real desk is the desk; on desktop the simulated one must show through
   // for 'light' and 'bare' to read at all.
   if (!inXR && roomHemi) {
-    // the fake reflections only read against a dim room — same reason the shooting note
-    // says to turn the lights down before filming passthrough
-    const dim = key === 'orb' ? 0.13 : 1.0;
+    // a touch dimmer for the orb, but not dark: a water shadow needs a lit surface to
+    // fall across, and blacking the room out hides exactly what we are previewing
+    const dim = key === 'orb' ? 0.72 : 1.0;
     roomHemi.intensity = 1.15 * dim;
     roomDir.intensity  = 1.25 * dim;
   }
@@ -1380,6 +1426,7 @@ if (navigator.xr) {
 xrBtn.addEventListener('click', async () => {
   if (!xrMode) return;
   try {
+    renderer.xr.setFramebufferScaleFactor(0.82);   // fewer pixels per eye — the main heat lever
     const session = await navigator.xr.requestSession(xrMode, {
       requiredFeatures: ['local-floor'],
       optionalFeatures: ['hit-test', 'hand-tracking', 'anchors', 'plane-detection']
@@ -1411,6 +1458,14 @@ renderer.xr.addEventListener('sessionstart', async () => {
   scene.fog        = ar ? null : roomFog;
   plates.visible = true;
   controls.enabled = false;
+  // 90 Hz on a fragment-heavy scene is what cooks the headset; ask for 60 and hold it
+  try {
+    const rates = session.supportedFrameRates;
+    if (rates && session.updateTargetFrameRate) {
+      const want = rates.includes(60) ? 60 : rates.slice().sort((a, b) => a - b)[0];
+      session.updateTargetFrameRate(want).catch(() => {});
+    }
+  } catch (e) { /* not every runtime exposes it */ }
   initAudio();
   needArtHang = true;          // re-hang the wall piece in front of wherever they are
   wallScanned = false;
@@ -1480,6 +1535,7 @@ function onSelect(event) {
     const key = onPlate.object.userData.key;
     if (key === 'pour') pour();
     else if (key === 'sound') toggleSound();
+    else if (key === 'quad') toggleQuadTarget();
     else setSurface(key);
     return;
   }
@@ -1558,6 +1614,8 @@ renderer.setAnimationLoop((time, frame) => {
 
   orbShared.uTime.value += dt;
   audioFrame(surface === 'orb' ? orbShared.uTouch.value : 0, dt);
+  if (calibHold > 0) { calibHold -= dt; if (calibHold <= 0) calibBox.visible = false; }
+  else if (!calibrating) calibBox.visible = false;
   if (surface === 'orb') {
     layoutCatchers();
     if (!inXR) orbShared.uTouch.value *= Math.pow(0.08, dt);   // desktop pulse decays
@@ -1582,6 +1640,13 @@ renderer.setAnimationLoop((time, frame) => {
         artRoot.visible = surface === 'canvas';
         // within arm's reach, a little below eye line, so a hand can get to it seated
         orbRoot.position.set(eye.x - Math.sin(yaw) * 0.52, eye.y - 0.16, eye.z - Math.cos(yaw) * 0.52);
+        // first guess for the two catchers; FIT DESK / FIT WALL replaces either one
+        sizeQuad(deskCatcher, 1.3, 0.7, true);
+        deskCatcher.position.set(eye.x - Math.sin(yaw) * 0.45, eye.y - 0.42, eye.z - Math.cos(yaw) * 0.45);
+        deskCatcher.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+        sizeQuad(wallCatcher, 2.2, 1.6, false);
+        wallCatcher.position.set(eye.x - Math.sin(yaw) * 1.5, eye.y, eye.z - Math.cos(yaw) * 1.5);
+        wallCatcher.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
         placedArt = true; placedBy = 'in front';
         needArtHang = false;
       }
@@ -1638,10 +1703,13 @@ drawTally();
 // Handle for headless checks and for rendering clips off this page.
 window.__demo = {
   audio: () => ({ ctx: actx && actx.state, wash: washGain ? +washGain.gain.value.toFixed(4) : null,
-                  soundOn, drops: dropCount, lfo: washLfo ? +washLfo.frequency.value.toFixed(2) : null }),
+                  shim: shimGain ? +shimGain.gain.value.toFixed(4) : null, soundOn,
+                  lfo: washLfo ? +washLfo.frequency.value.toFixed(2) : null }),
   toggleSound, initAudio,
   setSurface, setPigment, setDeskSize, setCanvasSize, pour, deskSize, ART,
                   setOrbMode, cycleOrbMode, orbRoot, orbMat, orbShared, catchers, ORB_MODES,
+  deskCatcher, wallCatcher, setQuadFromHands, toggleQuadTarget, sizeQuad,
+  quadTarget: () => quadTarget,
                   artRoot, commitArt, applyYaw, applyDepth, headYaw, headRight,
                   THREE, scene, camera, controls, renderer, video };
 </script>
