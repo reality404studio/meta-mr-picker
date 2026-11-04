@@ -11,6 +11,9 @@ Shader "MoodPicker/CelPaint"
         _Softness ("Ramp Softness", Range(0.001, 0.5)) = 0.02
         _TriScale ("Triplanar Scale (tiles per unit)", Float) = 2
         _TriSharpness ("Triplanar Sharpness", Range(1, 16)) = 6
+        _PaintMask ("Paint Mask (R, mesh UV)", 2D) = "white" {}
+        _BareColor ("Bare Light", Color) = (0.9411765, 0.93333334, 0.9019608, 1)
+        _BareShadow ("Bare Shadow", Color) = (0.6, 0.62, 0.68, 1)
     }
     SubShader
     {
@@ -29,6 +32,9 @@ Shader "MoodPicker/CelPaint"
             half _Softness;
             float _TriScale;
             half _TriSharpness;
+            float4 _PaintMask_ST;
+            half4 _BareColor;
+            half4 _BareShadow;
         CBUFFER_END
         ENDHLSL
 
@@ -47,17 +53,21 @@ Shader "MoodPicker/CelPaint"
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_PaintMask);
+            SAMPLER(sampler_PaintMask);
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
+                float2 uv : TEXCOORD3;
                 float3 positionOS : TEXCOORD0;
                 float3 normalOS : TEXCOORD1;
                 float3 normalWS : TEXCOORD2;
@@ -71,6 +81,7 @@ Shader "MoodPicker/CelPaint"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
                 o.positionOS = v.positionOS.xyz;
+                o.uv = v.uv;
                 o.normalOS = v.normalOS;
                 o.normalWS = TransformObjectToWorldNormal(v.normalOS);
                 return o;
@@ -94,7 +105,10 @@ Shader "MoodPicker/CelPaint"
                 half ndl = dot(normalize(i.normalWS), l);
                 half band = smoothstep(_Threshold - _Softness, _Threshold + _Softness, ndl);
                 half3 tone = lerp(_ShadowTone.rgb, _LightTone.rgb, band);
-                return half4(lerp(baseCol, tone, _ToneMix), 1.0h);
+                half3 painted = lerp(baseCol, tone, _ToneMix);
+                half3 bare = lerp(_BareShadow.rgb, _BareColor.rgb, band);
+                half mask = SAMPLE_TEXTURE2D(_PaintMask, sampler_PaintMask, i.uv * _PaintMask_ST.xy + _PaintMask_ST.zw).r;
+                return half4(lerp(bare, painted, mask), 1.0h);
             }
             ENDHLSL
         }

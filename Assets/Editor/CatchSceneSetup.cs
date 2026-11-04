@@ -2,6 +2,7 @@
 using System;
 using Meta.XR;
 using MoodPicker.Catch;
+using MoodPicker.Dab;
 using MoodPicker.Hands.Ovr;
 using MoodPicker.Portal;
 using UnityEditor;
@@ -66,6 +67,23 @@ public static class CatchSceneSetup
         cso.FindProperty("dotMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Dot", Dot);
         cso.FindProperty("chipMaterial").objectReferenceValue = MoodPickerSceneSetup.UnlitMaterial("Catch_Chip", Color.white);
         cso.ApplyModifiedPropertiesWithoutUndo();
+
+        var dabRoot = new GameObject("Dab");
+        SceneManager.MoveGameObjectToScene(dabRoot, scene);
+        var bottle = DabBottleAssets.CreateBottle(null);
+        SceneManager.MoveGameObjectToScene(bottle, scene);
+        var cols = bottle.GetComponents<MeshCollider>();
+        var dab = dabRoot.AddComponent<DabController>();
+        var dso = new SerializedObject(dab);
+        dso.FindProperty("trackingSpace").objectReferenceValue = rig.transform.Find("TrackingSpace");
+        dso.FindProperty("head").objectReferenceValue = rig.transform.Find("TrackingSpace/CenterEyeAnchor");
+        dso.FindProperty("handInputSource").objectReferenceValue = input;
+        dso.FindProperty("portal").objectReferenceValue = portal;
+        dso.FindProperty("settings").objectReferenceValue = DabBottleAssets.EnsureSettings();
+        dso.FindProperty("target").objectReferenceValue = bottle.GetComponent<MeshRenderer>();
+        dso.FindProperty("contactCollider").objectReferenceValue = cols[0];
+        dso.FindProperty("uvCollider").objectReferenceValue = cols[1];
+        dso.ApplyModifiedPropertiesWithoutUndo();
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         AssetDatabase.SaveAssets();

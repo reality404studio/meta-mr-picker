@@ -14,6 +14,8 @@ namespace MoodPicker.Dab
     public static class CelShaderRender
     {
         public const string ShaderPath = "Assets/Shaders/Cel/CelPaint.shader";
+        public const string OutlineShaderPath = "Assets/Shaders/Cel/CelOutline.shader";
+        public static readonly Color Ink = new Color(0x15 / 255f, 0x31 / 255f, 0x7C / 255f, 1f);
         const int W = 1024, H = 768;
         const int Patch = 10;
 
@@ -70,7 +72,10 @@ namespace MoodPicker.Dab
             sphere.transform.position = Vector3.zero;
             var bottle = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            foreach (var go in new[] { sphere, bottle, box }) go.GetComponent<Renderer>().sharedMaterial = mat;
+            var outlineShader = AssetDatabase.LoadAssetAtPath<Shader>(OutlineShaderPath);
+            if (outlineShader == null) throw new IOException("shader missing " + OutlineShaderPath);
+            var outline = new Material(outlineShader);
+            foreach (var go in new[] { sphere, bottle, box }) go.GetComponent<Renderer>().sharedMaterials = new[] { mat, outline };
 
             Vector3 side = Vector3.Cross(l, Vector3.up);
             if (side.sqrMagnitude < 1e-4f) side = Vector3.Cross(l, Vector3.forward);
@@ -117,9 +122,10 @@ namespace MoodPicker.Dab
             File.WriteAllBytes(outPng, img.EncodeToPNG());
 
             Color[] px = img.GetPixels();
-            int covered = 0, magenta = 0, partial = 0;
+            int covered = 0, magenta = 0, partial = 0, ink = 0;
             foreach (Color c in px)
             {
+                if (c.a >= 0.99f && Dist(c, Ink) < 0.02f) ink++;
                 if (c.a >= 0.99f) covered++;
                 else if (c.a > 0.01f) partial++;
                 if (c.r > 0.9f && c.g < 0.1f && c.b > 0.9f) magenta++;
@@ -136,7 +142,7 @@ namespace MoodPicker.Dab
             float shToShadow = Dist(shadow.mean, shadowTone), shToLight = Dist(shadow.mean, lightTone);
 
             Debug.Log($"[MP] cel-render pipeline={(rp == null ? "null" : rp.name)} device={SystemInfo.graphicsDeviceType} lights={lights} lightDir={l} lightTone={CelExtract.Hex(lightTone)} shadowTone={CelExtract.Hex(shadowTone)}");
-            Debug.Log($"[MP] cel-render coverage={coverage:F3} partialAlpha={partial} magenta={magenta} cornerAlpha={corner.a:F2}");
+            Debug.Log($"[MP] cel-render coverage={coverage:F3} partialAlpha={partial} magenta={magenta} cornerAlpha={corner.a:F2} outlinePx={ink}");
             Debug.Log($"[MP] cel-render lit={CelExtract.Hex(lit.mean)} lum={Lum(lit.mean):F3} std={lit.lumStd:F4} d(light)={litToLight:F3} d(shadow)={litToShadow:F3}");
             Debug.Log($"[MP] cel-render shadow={CelExtract.Hex(shadow.mean)} lum={Lum(shadow.mean):F3} std={shadow.lumStd:F4} d(shadow)={shToShadow:F3} d(light)={shToLight:F3}");
             Debug.Log("[MP] cel-render out=" + Path.GetFullPath(outPng));
@@ -145,6 +151,7 @@ namespace MoodPicker.Dab
             if (partial > 0) fails.Add("pixels with partial alpha: " + partial);
             if (corner.a > 0.01f) fails.Add("background alpha not 0");
             if (magenta > 0) fails.Add("magenta pixels: " + magenta);
+            if (ink < 200) fails.Add("outline #15317C pixels too few: " + ink);
             if (!lit.covered || !shadow.covered) fails.Add("lit/shadow patch not on object");
             if (!(litToLight < litToShadow)) fails.Add("lit side not closer to lightTone");
             if (!(shToShadow < shToLight)) fails.Add("shadow side not closer to shadowTone");

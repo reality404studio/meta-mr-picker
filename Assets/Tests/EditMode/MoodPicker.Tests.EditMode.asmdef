@@ -9,7 +9,9 @@
         "MoodPicker.Hands",
         "MoodPicker.DeskKeyboard",
         "MoodPicker.Catch",
-        "MoodPicker.Portal"
+        "MoodPicker.Portal",
+        "MoodPicker.Dab",
+        "MoodPicker.Dab.Editor"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,7 +1,7 @@
 {
     "name": "MoodPicker.Dab",
     "rootNamespace": "MoodPicker.Dab",
-    "references": ["MoodPicker.Catch"],
+    "references": ["MoodPicker.Catch", "MoodPicker.Hands"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -1,0 +1,10 @@
+{
+    "name": "MoodPicker.Dab.Runtime",
+    "rootNamespace": "MoodPicker.Dab",
+    "references": ["MoodPicker.Dab", "MoodPicker.Catch", "MoodPicker.Portal", "MoodPicker.Portal.Runtime", "MoodPicker.Hands"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}
