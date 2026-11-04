@@ -24,6 +24,7 @@ namespace MoodPicker.Catch
 
         [Header("Crop / tile")]
         [Range(0.02f, 0.3f)] public float overlapFrac = 0.125f;
+        public float sceneDistance = 3f;
         public int minCropPixels = 32;
         public bool flipCameraY;
 

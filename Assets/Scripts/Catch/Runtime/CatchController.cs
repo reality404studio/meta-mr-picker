@@ -184,9 +184,11 @@ namespace MoodPicker.Catch
             Transform space = rig.trackingSpace;
             var vp = new Vector2[4];
             Vector3[] corners = shot.square.Corners();
+            for (int i = 0; i < 4; i++) corners[i] = space.TransformPoint(corners[i]);
+            Vector3[] scene = CatchProjection.ThroughSquare(space.TransformPoint(shot.head.position), corners, settings.sceneDistance);
             for (int i = 0; i < 4; i++)
             {
-                Vector3 w = space.TransformPoint(corners[i]);
+                Vector3 w = scene[i];
                 if ((Quaternion.Inverse(cam.rotation) * (w - cam.position)).z <= 0f) { Debug.Log($"{Tag} catch failed: corner behind camera"); return; }
                 Vector2 v = cameraAccess.WorldToViewportPoint(w, cam);
                 vp[i] = settings.flipCameraY ? new Vector2(v.x, 1f - v.y) : v;
@@ -203,7 +205,8 @@ namespace MoodPicker.Catch
             _pendingCrop = crop;
             _pendingCamPose = cam;
             AsyncGPUReadback.Request(tex, 0, crop.big.x, crop.big.width, crop.big.y, crop.big.height, 0, 1, TextureFormat.RGBA32, OnReadback);
-            Debug.Log($"{Tag} catch readback rect={crop.big} side={crop.side} overlap={crop.overlap} res={res} latency={(shot.t - _shownAt):0.00}s");
+            Debug.Log($"{Tag} catch readback rect={crop.big} side={crop.side} requested={crop.requestedSide}{(crop.Shrunk ? " SHRUNK" : "")} overlap={crop.overlap} res={res} " +
+                      $"square={shot.square.size * 100f:0.0}cm dist={CatchRay.DistanceAlong(shot.head, shot.square.center):0.000}m scene={settings.sceneDistance:0.0}m f={cameraAccess.Intrinsics.FocalLength} lens={cameraAccess.Intrinsics.LensOffset.position}");
         }
 
         void OnReadback(AsyncGPUReadbackRequest req)

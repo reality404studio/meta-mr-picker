@@ -118,6 +118,58 @@ namespace MoodPicker.Tests
         }
     }
 
+    public class CatchProjectionTests
+    {
+        static readonly Vector2Int Res = new Vector2Int(1280, 960);
+        const float F = 870f;
+        static readonly Pose Eye = new Pose(new Vector3(0f, 1.2f, 0f), Quaternion.identity);
+        static readonly Vector3 LensOffset = new Vector3(0.032f, -0.02f, 0.07f);
+
+        static Vector2 Camera(Vector3 w)
+        {
+            Vector3 p = w - (Eye.position + LensOffset);
+            return new Vector2((p.x / p.z * F + Res.x * 0.5f) / Res.x, (p.y / p.z * F + Res.y * 0.5f) / Res.y);
+        }
+
+        static int ExpectedSide(float size, float eyeDistance) => Mathf.RoundToInt(size / eyeDistance * F);
+
+        static CropRect Crop(Vector3[] pts)
+        {
+            Assert.That(CropMath.TrySquare(pts.Select(Camera).ToArray(), Res, 0.125f, 32, out CropRect c));
+            return c;
+        }
+
+        [TestCase(0.116f, 0.21f)]
+        [TestCase(0.161f, 0.25f)]
+        [TestCase(0.170f, 0.30f)]
+        [TestCase(0.10f, 0.40f)]
+        public void Projection_CropMatchesWhatTheEyeSeesThroughTheSquare(float size, float distance)
+        {
+            var sq = CatchRay.Square(Eye, distance, size);
+            var c = Crop(CatchProjection.ThroughSquare(Eye.position, sq.Corners(), 3f));
+            int expected = ExpectedSide(size, distance);
+            Assert.That(c.side, Is.EqualTo(expected).Within(Mathf.CeilToInt(expected * 0.04f)), $"side {c.side} vs eye {expected}");
+            Assert.That(c.Still.center.x, Is.EqualTo(Res.x * 0.5f).Within(Res.x * 0.02f));
+            Assert.That(c.Still.center.y, Is.EqualTo(Res.y * 0.5f).Within(Res.y * 0.02f));
+        }
+
+        [Test]
+        public void Projection_NearSquareProjectedDirectlyIsTheDeviceBug()
+        {
+            var sq = CatchRay.Square(Eye, 0.21f, 0.116f);
+            int near = Crop(sq.Corners()).side;
+            int far = Crop(CatchProjection.ThroughSquare(Eye.position, sq.Corners(), 3f)).side;
+            Assert.That(near, Is.GreaterThan(far * 1.25f), "픽스처가 실기 증상(넓게 찍힘)을 재현해야 함");
+        }
+
+        [Test]
+        public void Projection_RuntimeProjectsThroughTheSquare()
+        {
+            string src = File.ReadAllText(Path.Combine(Application.dataPath, "Scripts", "Catch", "Runtime", "CatchController.cs"));
+            Assert.That(src, Does.Contain("CatchProjection.ThroughSquare("));
+        }
+    }
+
     public class CelExtractTests
     {
         static CelResult Run(Color32[] px, int w, int h, int k = 3) => CelExtract.Run(px, w, h, 64, k, 20, 2f);

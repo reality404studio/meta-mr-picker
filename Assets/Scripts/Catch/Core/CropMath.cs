@@ -9,6 +9,9 @@ namespace MoodPicker.Catch
         public RectInt big;
         public int side;
         public int overlap;
+        public int requestedSide;
+
+        public bool Shrunk => side < requestedSide;
 
         public RectInt Still => new RectInt(big.x, big.y + overlap, side, side);
         public int BigSize => side + overlap;
@@ -34,6 +37,7 @@ namespace MoodPicker.Catch
             if (cx < 0 || cy < 0 || cx > res.x || cy > res.y) return false;
 
             int side = Mathf.RoundToInt(Mathf.Max(x1 - x0, y1 - y0));
+            int requested = side;
             int limit = Mathf.Min(res.x, res.y);
             while (side > 0 && side + Overlap(side, overlapFrac) > limit) side--;
             if (side < minPixels) return false;
@@ -43,7 +47,7 @@ namespace MoodPicker.Catch
             int sy = Mathf.RoundToInt(cy - side * 0.5f);
             int bx = Mathf.Clamp(sx, 0, res.x - (side + b));
             int by = Mathf.Clamp(sy - b, 0, res.y - (side + b));
-            crop = new CropRect { big = new RectInt(bx, by, side + b, side + b), side = side, overlap = b };
+            crop = new CropRect { big = new RectInt(bx, by, side + b, side + b), side = side, overlap = b, requestedSide = requested };
             return true;
         }
 
