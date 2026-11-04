@@ -90,6 +90,7 @@ button:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
       <button type="button" data-pigment="loop">Loop</button>
       <span class="sep"></span>
       <button type="button" id="btn-fill">Pour</button>
+      <button type="button" id="btn-sound" aria-pressed="true">Sound</button>
     </div>
     <div class="rail">
       <div class="vote">
@@ -801,10 +802,10 @@ function plateTexture(text, pressed) {
   return t;
 }
 
-const PLATE_KEYS = ['orb', 'canvas', 'mat', 'cloth', 'things', 'light', 'pour'];
+const PLATE_KEYS = ['orb', 'canvas', 'mat', 'cloth', 'things', 'light', 'pour', 'sound'];
 const plateMeshes = PLATE_KEYS.map((key, i) => {
   const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.1, 0.0375),
+    new THREE.PlaneGeometry(0.088, 0.033),
     new THREE.MeshBasicMaterial({ map: plateTexture(key.toUpperCase(), false), transparent: true, side: THREE.DoubleSide })
   );
   m.position.set((i - (PLATE_KEYS.length - 1) / 2) * 0.112, 0, 0);
@@ -815,7 +816,7 @@ const plateMeshes = PLATE_KEYS.map((key, i) => {
 
 function layoutPlates() {
   plateMeshes.forEach((m, i) => {
-    m.position.set((i - (PLATE_KEYS.length - 1) / 2) * 0.112, 0, 0);
+    m.position.set((i - (PLATE_KEYS.length - 1) / 2) * 0.098, 0, 0);
   });
 }
 
@@ -832,9 +833,11 @@ function layoutUI() {
 
 function refreshPlates() {
   for (const m of plateMeshes) {
-    const pressed = m.userData.key === surface;
+    const key = m.userData.key;
+    const pressed = key === 'sound' ? soundOn : key === surface;
+    const label = key === 'sound' ? (soundOn ? 'SOUND' : 'MUTED') : key.toUpperCase();
     m.material.map.dispose();
-    m.material.map = plateTexture(m.userData.key.toUpperCase(), pressed);
+    m.material.map = plateTexture(label, pressed);
     m.material.needsUpdate = true;
   }
 }
@@ -982,7 +985,9 @@ function aimPlate(frame, refSpace, src) {
 
 function tap(frame, refSpace, g, src) {
   if (g.plate) {
-    if (g.plate === 'pour') pour(); else setSurface(g.plate);
+    if (g.plate === 'pour') pour();
+    else if (g.plate === 'sound') toggleSound();
+    else setSurface(g.plate);
     return;
   }
   if (surface !== 'canvas' && !placed) {       // desk, still unplaced: the reticle route
@@ -1144,6 +1149,112 @@ function scanPlanes(frame, refSpace) {
   pour();
 }
 
+
+// ─────────────────────────────────────────────────────────── water, synthesised
+// No sample files: nothing to download here, and a sample would not follow the finger.
+// Two voices instead — a filtered noise wash for the lapping, and little falling-pitch
+// droplets on top — both driven by the same uTouch the shaders use. Tail is long and soft
+// rather than roomy: docs/DECIDED.md 2026-11-03, 소리는 동화 쪽 (포근함, 빈티지 잔향).
+let actx = null, soundOn = true;
+let wash = null, washGain = null, washFilter = null, washLfo = null, wet = null, dry = null;
+let lastDrop = 0, prevTouch = 0, dropCount = 0;
+
+function buildReverb(ctx, seconds, decay) {
+  const n = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, n, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
+    }
+  }
+  const cv = ctx.createConvolver();
+  cv.buffer = buf;
+  return cv;
+}
+
+function initAudio() {
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  actx = new AC();
+
+  const verb = buildReverb(actx, 1.9, 2.6);
+  wet = actx.createGain(); wet.gain.value = 0.34;
+  dry = actx.createGain(); dry.gain.value = 0.8;
+  verb.connect(wet); wet.connect(actx.destination); dry.connect(actx.destination);
+
+  // looped noise, band-passed and wobbling — the lapping itself
+  const len = actx.sampleRate * 2;
+  const nb = actx.createBuffer(1, len, actx.sampleRate);
+  const nd = nb.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) {           // leaky integrator = softer than white
+    last = (last + (Math.random() * 2 - 1) * 0.35) * 0.96;
+    nd[i] = last;
+  }
+  wash = actx.createBufferSource();
+  wash.buffer = nb; wash.loop = true;
+
+  washFilter = actx.createBiquadFilter();
+  washFilter.type = 'bandpass';
+  washFilter.frequency.value = 820;
+  washFilter.Q.value = 1.1;
+
+  washGain = actx.createGain();
+  washGain.gain.value = 0;
+
+  const lfoGain = actx.createGain(); lfoGain.gain.value = 420;
+  washLfo = actx.createOscillator();
+  washLfo.type = 'sine'; washLfo.frequency.value = 1.1;
+  washLfo.connect(lfoGain); lfoGain.connect(washFilter.frequency);
+
+  wash.connect(washFilter); washFilter.connect(washGain);
+  washGain.connect(dry); washGain.connect(verb);
+  wash.start(); washLfo.start();
+}
+
+// one droplet: a sine dropping in pitch under a short envelope
+function droplet(level) {
+  if (!actx || !soundOn) return;
+  dropCount++;
+  const t = actx.currentTime;
+  const o = actx.createOscillator();
+  const g = actx.createGain();
+  const f0 = 760 + Math.random() * 900;
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f0 * 0.38, t + 0.09);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16 * level, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
+  o.connect(g); g.connect(dry); g.connect(wet);
+  o.start(t); o.stop(t + 0.22);
+}
+
+function audioFrame(touch, dt) {
+  if (!actx) return;
+  const t = actx.currentTime;
+  const target = soundOn ? Math.pow(Math.max(touch, 0), 1.6) * 0.17 : 0;
+  washGain.gain.setTargetAtTime(target, t, 0.08);
+  washLfo.frequency.setTargetAtTime(0.8 + touch * 2.6, t, 0.2);
+
+  if (!soundOn || touch < 0.06) { prevTouch = touch; return; }
+  // a drop on the way in, then a trickle whose rate follows how hard it is being touched
+  const onset = touch - prevTouch > 0.10;
+  const due = t - lastDrop > (0.55 - touch * 0.28) * (0.7 + Math.random() * 0.8);
+  if (onset || due) { droplet(0.45 + touch * 0.55); lastDrop = t; }
+  prevTouch = touch;
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  if (soundOn) initAudio();
+  refreshPlates();
+  const b = document.getElementById('btn-sound');
+  if (b) { b.setAttribute('aria-pressed', String(soundOn)); b.textContent = soundOn ? 'Sound' : 'Muted'; }
+}
+
 // ─────────────────────────────────────────────────────────── state
 let surface = 'orb';
 let pigment = 'still';
@@ -1300,6 +1411,7 @@ renderer.xr.addEventListener('sessionstart', async () => {
   scene.fog        = ar ? null : roomFog;
   plates.visible = true;
   controls.enabled = false;
+  initAudio();
   needArtHang = true;          // re-hang the wall piece in front of wherever they are
   wallScanned = false;
   if (ar) {
@@ -1367,6 +1479,7 @@ function onSelect(event) {
   if (onPlate) {
     const key = onPlate.object.userData.key;
     if (key === 'pour') pour();
+    else if (key === 'sound') toggleSound();
     else setSurface(key);
     return;
   }
@@ -1423,7 +1536,9 @@ document.getElementById('btn-copy').addEventListener('click', async e => {
 document.getElementById('btn-start').addEventListener('click', () => {
   document.getElementById('gate').classList.add('hide');
   video.play().catch(() => {});
+  initAudio();
 });
+document.getElementById('btn-sound').addEventListener('click', toggleSound);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -1442,6 +1557,7 @@ renderer.setAnimationLoop((time, frame) => {
   last = now;
 
   orbShared.uTime.value += dt;
+  audioFrame(surface === 'orb' ? orbShared.uTouch.value : 0, dt);
   if (surface === 'orb') {
     layoutCatchers();
     if (!inXR) orbShared.uTouch.value *= Math.pow(0.08, dt);   // desktop pulse decays
@@ -1520,7 +1636,11 @@ setPigment('still');
 drawTally();
 
 // Handle for headless checks and for rendering clips off this page.
-window.__demo = { setSurface, setPigment, setDeskSize, setCanvasSize, pour, deskSize, ART,
+window.__demo = {
+  audio: () => ({ ctx: actx && actx.state, wash: washGain ? +washGain.gain.value.toFixed(4) : null,
+                  soundOn, drops: dropCount, lfo: washLfo ? +washLfo.frequency.value.toFixed(2) : null }),
+  toggleSound, initAudio,
+  setSurface, setPigment, setDeskSize, setCanvasSize, pour, deskSize, ART,
                   setOrbMode, cycleOrbMode, orbRoot, orbMat, orbShared, catchers, ORB_MODES,
                   artRoot, commitArt, applyYaw, applyDepth, headYaw, headRight,
                   THREE, scene, camera, controls, renderer, video };
