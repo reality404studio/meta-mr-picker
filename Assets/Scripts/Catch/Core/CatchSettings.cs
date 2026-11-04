@@ -7,16 +7,15 @@ namespace MoodPicker.Catch
     [CreateAssetMenu(menuName = "Mood Picker/Catch Settings", fileName = "CatchSettings")]
     public class CatchSettings : ScriptableObject
     {
-        [Header("Record (baseline)")]
-        public float stillRecordSeconds = 3f;
+        [Header("Punch (baseline)")]
+        public float punchDistance = 0.45f;
+        public float punchSize = 0.12f;
+        public float holdSeconds = 3f;
         public float loopRecordSeconds = 4f;
-        public float trackingLossGraceSeconds = 0.2f;
 
-        [Header("Square (baseline)")]
-        public float minSquare = 0.06f;
-        public float maxSquare = 0.6f;
-        public float minHeadDistance = 0.15f;
-        public float maxHeadDistance = 1.0f;
+        [Header("Left drag (baseline)")]
+        public float dragGain = 1f;
+        public float maxOffset = 0.2f;
 
         [Header("Toggle (baseline)")]
         public float toggleTapMaxSeconds = 0.5f;
@@ -33,8 +32,6 @@ namespace MoodPicker.Catch
         [Range(2, 3)] public int tones = 3;
         public int kmeansIterations = 20;
         public float lightGain = 2f;
-
-        public float RecordSeconds(CatchMode m) => m == CatchMode.Still ? stillRecordSeconds : loopRecordSeconds;
 
         public static CatchSettings Defaults() => CreateInstance<CatchSettings>();
     }

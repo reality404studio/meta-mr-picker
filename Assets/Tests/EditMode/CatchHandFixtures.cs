@@ -32,22 +32,20 @@ namespace MoodPicker.Tests
 
         public class Run
         {
-            public readonly CatchSquare square;
-            public readonly List<float> shown = new List<float>();
-            public readonly List<float> recordStarted = new List<float>();
+            public readonly CatchPunch punch;
             public readonly List<CatchShot> caught = new List<CatchShot>();
-            public readonly List<string> cancelled = new List<string>();
             public readonly List<(CatchMode mode, float t)> toggles = new List<(CatchMode, float)>();
+            public readonly List<float> holdStarts = new List<float>();
+            public IPinchGate gate;
+            public Action<HandFrame> before;
             public float t;
 
             public Run(CatchSettings s = null)
             {
-                square = new CatchSquare(s ?? CatchSettings.Defaults());
-                square.SquareShown += x => shown.Add(x);
-                square.RecordStarted += x => recordStarted.Add(x);
-                square.Caught += x => caught.Add(x);
-                square.Cancelled += x => cancelled.Add(x);
-                square.ModeChanged += (m, x) => toggles.Add((m, x));
+                punch = new CatchPunch(s ?? CatchSettings.Defaults());
+                punch.Caught += x => caught.Add(x);
+                punch.ModeChanged += (m, x) => toggles.Add((m, x));
+                punch.HoldStarted += x => holdStarts.Add(x);
             }
 
             public Run For(float seconds, Func<float, (HandPose l, HandPose r)> hands, Pose? head = null)
@@ -56,28 +54,35 @@ namespace MoodPicker.Tests
                 while (t < end - 1e-6f)
                 {
                     var (l, r) = hands(t);
-                    square.Update(new HandFrame { t = t, left = l, right = r }, head ?? Head);
+                    var f = new HandFrame { t = t, left = l, right = r };
+                    before?.Invoke(f);
+                    punch.Update(PinchGate.Apply(f, gate), head ?? Head);
                     t += Dt;
                 }
                 return this;
             }
 
+            public static Vector3 LeftRest(Pose h) => InFront(h, -0.15f, -0.3f, 0.3f);
+            public static Vector3 RightRest(Pose h) => InFront(h, 0.15f, -0.3f, 0.3f);
+
             public Run Idle(float seconds, Pose? head = null)
             {
                 Pose h = head ?? Head;
-                return For(seconds, _ => (Hand(InFront(h, -0.15f, -0.25f, 0.3f), false), Hand(InFront(h, 0.15f, -0.25f, 0.3f), false)), head);
+                return For(seconds, _ => (Hand(LeftRest(h), false), Hand(RightRest(h), false)), head);
             }
 
-            public Run BothPinch(float seconds, Pose? head = null, float half = 0.08f, float z = 0.4f)
+            public Run RightPinch(float seconds, Vector3? palmNormal = null, bool tracked = true, float gap = -1f)
+            {
+                return For(seconds, _ => (Hand(LeftRest(Head), false), Hand(RightRest(Head), true, tracked, gap, palmNormal)));
+            }
+
+            public Run LeftDrag(Vector3 delta, float seconds, Pose? head = null, Vector3? palmNormal = null)
             {
                 Pose h = head ?? Head;
-                return For(seconds, _ => (Hand(InFront(h, -half, -half, z), true), Hand(InFront(h, half, half, z), true)), head);
-            }
-
-            public Run TapLeft(float hold, Vector3? palmNormal = null)
-            {
-                Vector3 p = InFront(Head, -0.15f, -0.25f, 0.3f);
-                return For(hold, _ => (Hand(p, true, palmNormal: palmNormal), Hand(InFront(Head, 0.15f, -0.25f, 0.3f), false)));
+                Vector3 start = LeftRest(h);
+                For(0.1f, _ => (Hand(start, true, palmNormal: palmNormal), Hand(RightRest(h), false)), head);
+                float t1 = t;
+                return For(seconds, x => (Hand(start + delta * Mathf.Clamp01((x - t1) / (seconds - Dt)), true, palmNormal: palmNormal), Hand(RightRest(h), false)), head);
             }
         }
     }

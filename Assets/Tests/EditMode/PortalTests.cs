@@ -56,7 +56,7 @@ namespace MoodPicker.Tests
                 var (l, r) = hands(t);
                 var f = new HandFrame { t = t, left = l, right = r };
                 portal.Update(f);
-                catchRun.square.Update(PinchGate.Apply(f, portal), Head);
+                catchRun.punch.Update(PinchGate.Apply(f, portal), Head);
                 t += Dt;
             }
             catchRun.t = t;
@@ -190,9 +190,10 @@ namespace MoodPicker.Tests
                 return (l, PortalRun.RightTip(InFront(Head, 0.08f, 0.08f, 0.4f), pinch: true));
             });
             run.PalmUp(4f);
-            Assert.That(run.catchRun.shown, Is.Empty, "포탈 열린 동안 양손 핀치 → 채집 사각형 안 뜸");
+            Assert.That(run.catchRun.holdStarts, Is.Empty, "포탈 열린 동안 오른손 핀치 → 찰칵 유지가 시작 안 됨");
             Assert.That(run.catchRun.toggles, Is.Empty, "포탈 열린 동안 한 손 핀치 → 토글 안 됨");
             Assert.That(run.catchRun.caught, Is.Empty);
+            Assert.That(run.catchRun.punch.Offset, Is.EqualTo(Vector2.zero), "포탈 열린 동안 왼손 핀치 → 펀치 안 움직임");
         }
 
         [Test]
@@ -207,7 +208,7 @@ namespace MoodPicker.Tests
                 l.thumbTip = l.indexTip = InFront(Head, -0.08f, -0.08f, 0.4f);
                 return (l, PortalRun.RightTip(InFront(Head, 0.08f, 0.08f, 0.4f), pinch: true));
             });
-            Assert.That(run.catchRun.shown.Count, Is.EqualTo(1), "닫힌 뒤엔 채집이 다시 됨");
+            Assert.That(run.catchRun.holdStarts.Count, Is.EqualTo(1), "닫힌 뒤엔 찰칵 유지가 다시 시작됨");
         }
     }
 }
