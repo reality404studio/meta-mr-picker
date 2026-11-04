@@ -429,6 +429,8 @@ function setCanvasSize(w, h) {
 // Ported from PR #1 reference/texture-lab/web/shader-lab: seven looks over the same
 // caught pigment. The lab called them exploration; which one ships is still a human call
 // (docs/DECIDED.md 2026-11-03 — the object look is two-tone cel until someone says otherwise).
+const BUILD = '6262537-1104-1559';   // replaced at deploy; stays __BUILD__ when served from a checkout
+
 const ORB_MODES = ['RAW', '', 'CHROME', 'CAUSTIC', 'HOLOGRAM', 'CONTOUR', 'HALFTONE'];
 // Glint is out (2026-11-04, 사람 결정). Its shader index is simply never cycled to, so the
 // rest keep their numbers.
@@ -1506,7 +1508,7 @@ renderer.setAnimationLoop((time, frame) => {
     frames = 0; fpsClock = now;
     readout.innerHTML =
       `<b>${SURFACES[surface].label}</b>${surface === 'orb' ? ' · ' + ORB_MODES[orbMode] : ''} · ${pigment}<br>` +
-      `${fps} fps · ${inXR ? (calibrating ? (surface === 'canvas' ? 'sizing the piece…' : 'measuring desk…')
+      `${BUILD === '__BUILD__' ? 'dev' : BUILD} · ${fps} fps · ${inXR ? (calibrating ? (surface === 'canvas' ? 'sizing the piece…' : 'measuring desk…')
         : surface === 'canvas' ? `${ART.w.toFixed(2)}×${ART.h.toFixed(2)} m · ${placedBy || 'in front'}`
         : placed ? `desk ${deskSize.w.toFixed(2)}×${deskSize.d.toFixed(2)} m · ${placedBy}`
         : 'pinch both hands at two desk corners') : 'desktop'}`;
