@@ -80,8 +80,8 @@ button:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
       <button type="button" class="xr" id="btn-xr" disabled>Checking XR…</button>
       <span class="sep"></span>
       <button type="button" data-surface="bare">Bare</button>
-      <button type="button" data-surface="mat" aria-pressed="true">Mat</button>
-      <button type="button" data-surface="cloth">Cloth</button>
+      <button type="button" data-surface="mat">Mat</button>
+      <button type="button" data-surface="cloth" aria-pressed="true">Cloth</button>
       <button type="button" data-surface="things">Things</button>
       <button type="button" data-surface="light">Light</button>
       <span class="sep"></span>
@@ -452,7 +452,7 @@ function refreshPlates() {
 }
 
 // ─────────────────────────────────────────────────────────── state
-let surface = 'mat';
+let surface = 'cloth';
 let pigment = 'still';
 let fillT   = 1;      // animation clock for the bucket flood
 let placed  = false;  // AR: has the desk been dropped yet
@@ -751,7 +751,7 @@ renderer.setAnimationLoop((time, frame) => {
   }
 });
 
-setSurface('mat');
+setSurface('cloth');
 setPigment('still');
 drawTally();
 </script>
