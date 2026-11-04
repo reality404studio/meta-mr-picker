@@ -377,6 +377,8 @@ deskRoot.add(matMesh, clothMesh, things, lightMesh);
 
 // ─────────────────────────────────────────────────────────── simulated room (non-XR only)
 const room = new THREE.Group();
+let roomTop = null;
+const roomLegs = [];
 scene.add(room);
 {
   const bareMat = new THREE.MeshStandardMaterial({ color: 0xBFC3C7, roughness: 0.85, metalness: 0.0 });
@@ -385,13 +387,15 @@ scene.add(room);
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), bareMat);
   floor.rotation.x = -Math.PI / 2;
 
-  const top = new THREE.Mesh(new RoundedBoxGeometry(DESK.w, 0.026, DESK.d, 2, 0.004), woodMat);
-  top.position.y = DESK.h - 0.013;
+  roomTop = new THREE.Mesh(new RoundedBoxGeometry(DESK.w, 0.026, DESK.d, 2, 0.004), woodMat);
+  roomTop.position.y = DESK.h - 0.013;
 
-  room.add(floor, top);
+  room.add(floor, roomTop);
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, DESK.h - 0.026, 0.035), woodMat);
+    leg.userData.sign = [sx, sz];
     leg.position.set(sx * (DESK.w / 2 - 0.05), (DESK.h - 0.026) / 2, sz * (DESK.d / 2 - 0.05));
+    roomLegs.push(leg);
     room.add(leg);
   }
   room.add(new THREE.HemisphereLight(0xDDE6EE, 0x4A4E54, 1.15));
@@ -403,6 +407,42 @@ scene.add(room);
   scene.fog = roomFog;
 }
 deskRoot.position.y = DESK.h;
+
+// ─────────────────────────────────────────────────────────── desk size
+const deskSize = { w: DESK.w, d: DESK.d };
+
+function setDeskSize(w, d) {
+  deskSize.w = THREE.MathUtils.clamp(w, 0.40, 2.20);
+  deskSize.d = THREE.MathUtils.clamp(d, 0.28, 1.40);
+  const W = deskSize.w, D = deskSize.d;
+
+  matMesh.geometry.dispose();
+  matMesh.geometry = new THREE.PlaneGeometry(W * 0.52, D * 0.68);
+  clothMesh.geometry.dispose();
+  clothMesh.geometry = new RoundedBoxGeometry(W + 0.08, 0.20, D + 0.08, 4, 0.028);
+  lightMesh.geometry.dispose();
+  lightMesh.geometry = new THREE.PlaneGeometry(W, D);
+
+  const r = Math.hypot(W, D) * 0.5;
+  matMesh.material.uniforms.uFillRadius.value   = r * 0.62;
+  clothMesh.material.uniforms.uFillRadius.value = r + 0.12;
+  lightMesh.material.uniforms.uFillRadius.value = r;
+
+  keyboard.position.set(0, 0.011, D * 0.12);
+  mug.position.set(-W * 0.23, 0.0475, -D * 0.07);
+  bottle.position.set(W * 0.22, 0, -D * 0.08);
+
+  if (typeof plateMeshes !== 'undefined') layoutPlates();
+
+  if (roomTop) {
+    roomTop.geometry.dispose();
+    roomTop.geometry = new RoundedBoxGeometry(W, 0.026, D, 2, 0.004);
+    for (const leg of roomLegs) {
+      const [sx, sz] = leg.userData.sign;
+      leg.position.set(sx * (W / 2 - 0.05), (DESK.h - 0.026) / 2, sz * (D / 2 - 0.05));
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────────── in-XR control plates
 // Billboarded band plates, same idea as Runtime/PunchCueView.cs, so the surface can be
@@ -442,6 +482,12 @@ const plateMeshes = PLATE_KEYS.map((key, i) => {
   return m;
 });
 
+function layoutPlates() {
+  plateMeshes.forEach((m, i) => {
+    m.position.set((i - (PLATE_KEYS.length - 1) / 2) * 0.112, 0.2, -deskSize.d / 2 - 0.06);
+  });
+}
+
 function refreshPlates() {
   for (const m of plateMeshes) {
     const pressed = m.userData.key === surface;
@@ -449,6 +495,136 @@ function refreshPlates() {
     m.material.map = plateTexture(m.userData.key.toUpperCase(), pressed);
     m.material.needsUpdate = true;
   }
+}
+
+// ─────────────────────────────────────────────────────────── placing it on a real desk
+// Order of preference:
+//   1. plane-detection — if the desk is already in Quest's Space Setup, take its real
+//      height and extent and skip calibration entirely.
+//   2. two-hand pinch rectangle — docs/DECIDED.md 2026-11-04 [공통]: desk height is set by
+//      making a rectangle with both hands, NOT by tapping points.
+//   3. hit-test reticle — last resort when neither is available.
+const PINCH_ON  = 0.025;
+const PINCH_OFF = 0.040;   // hysteresis, or the pinch flickers at the threshold
+let planeScanned = false;
+let calibrating  = false;
+let calibA = null, calibB = null;
+let placedBy = '';
+
+const calibBox = new THREE.LineSegments(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({ color: 0xF0EEE6 })
+);
+calibBox.visible = false;
+scene.add(calibBox);
+
+function drawCalibBox(p1, p2) {
+  const y = (p1.y + p2.y) / 2;
+  const c = [
+    new THREE.Vector3(p1.x, y, p1.z), new THREE.Vector3(p2.x, y, p1.z),
+    new THREE.Vector3(p2.x, y, p2.z), new THREE.Vector3(p1.x, y, p2.z)
+  ];
+  const pts = [];
+  for (let i = 0; i < 4; i++) { pts.push(c[i], c[(i + 1) % 4]); }
+  calibBox.geometry.dispose();
+  calibBox.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+  calibBox.visible = true;
+}
+
+function pinchPoint(frame, refSpace, src) {
+  if (!src.hand || !frame.getJointPose) return null;
+  const tip = src.hand.get('index-finger-tip'), thumb = src.hand.get('thumb-tip');
+  if (!tip || !thumb) return null;
+  const a = frame.getJointPose(tip, refSpace), b = frame.getJointPose(thumb, refSpace);
+  if (!a || !b) return null;
+  const pa = a.transform.position, pb = b.transform.position;
+  const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z);
+  const limit = calibrating ? PINCH_OFF : PINCH_ON;
+  if (gap > limit) return null;
+  return new THREE.Vector3((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, (pa.z + pb.z) / 2);
+}
+
+function headYaw() {
+  const q = new THREE.Quaternion();
+  (inXR ? renderer.xr.getCamera() : camera).getWorldQuaternion(q);
+  return new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+}
+
+// The two pinch points are opposite corners of the desk. Height comes from their average
+// Y; the rectangle is squared up to the way the person is sitting, so a tilted pair of
+// hands does not tilt the cloth (the tilt is what sank the old catch square, REJECTED.md).
+function commitRect(p1, p2) {
+  const yaw = headYaw();
+  const inv = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -yaw, 0));
+  const a = p1.clone().applyQuaternion(inv), b = p2.clone().applyQuaternion(inv);
+  const w = Math.abs(a.x - b.x), d = Math.abs(a.z - b.z);
+  if (w < 0.12 && d < 0.12) return false;     // a stray double pinch, not a desk
+  const mid = new THREE.Vector3((a.x + b.x) / 2, 0, (a.z + b.z) / 2)
+    .applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)));
+  deskRoot.position.set(mid.x, (p1.y + p2.y) / 2, mid.z);
+  deskRoot.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+  setDeskSize(w, d);
+  deskRoot.visible = true;
+  placed = true; planeScanned = true; placedBy = 'hands';
+  reticle.visible = false;
+  pour();
+  return true;
+}
+
+function trackHands(frame, refSpace) {
+  const session = renderer.xr.getSession();
+  if (!session) return;
+  const pts = [];
+  for (const src of session.inputSources) {
+    const p = pinchPoint(frame, refSpace, src);
+    if (p) pts.push(p);
+  }
+  if (pts.length >= 2) {
+    calibrating = true;
+    calibA = pts[0]; calibB = pts[1];
+    drawCalibBox(calibA, calibB);
+  } else if (calibrating) {
+    calibrating = false;
+    calibBox.visible = false;
+    if (calibA && calibB) commitRect(calibA, calibB);
+    calibA = calibB = null;
+  }
+}
+
+// Quest reports planes as horizontal or vertical rectangles. Take the biggest horizontal
+// one sitting at desk height, and prefer one the room setup actually labelled a desk.
+function scanPlanes(frame, refSpace) {
+  if (planeScanned || !frame.detectedPlanes) return;
+  let best = null;
+  for (const plane of frame.detectedPlanes) {
+    if (plane.orientation !== 'horizontal') continue;
+    const pose = frame.getPose(plane.planeSpace, refSpace);
+    if (!pose) continue;
+    const y = pose.transform.position.y;
+    if (y < 0.45 || y > 1.25) continue;
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+    for (const pt of plane.polygon) {
+      minx = Math.min(minx, pt.x); maxx = Math.max(maxx, pt.x);
+      minz = Math.min(minz, pt.z); maxz = Math.max(maxz, pt.z);
+    }
+    const w = maxx - minx, d = maxz - minz;
+    if (!(w > 0.3 && d > 0.2)) continue;
+    const labelled = /desk|table/i.test(plane.semanticLabel || '');
+    const score = w * d + (labelled ? 10 : 0);
+    if (!best || score > best.score) best = { score, pose, w, d, cx: (minx + maxx) / 2, cz: (minz + maxz) / 2 };
+  }
+  if (!best) return;
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+  new THREE.Matrix4().fromArray(best.pose.transform.matrix).decompose(pos, quat, scl);
+  const yaw = new THREE.Euler().setFromQuaternion(quat, 'YXZ').y;
+  const off = new THREE.Vector3(best.cx, 0, best.cz).applyQuaternion(quat);
+  deskRoot.position.copy(pos).add(off);
+  deskRoot.quaternion.setFromEuler(new THREE.Euler(0, yaw, 0));
+  setDeskSize(best.w, best.d);
+  deskRoot.visible = true;
+  placed = true; planeScanned = true; placedBy = 'room setup';
+  reticle.visible = false;
+  pour();
 }
 
 // ─────────────────────────────────────────────────────────── state
@@ -556,7 +732,7 @@ xrBtn.addEventListener('click', async () => {
   try {
     const session = await navigator.xr.requestSession(xrMode, {
       requiredFeatures: ['local-floor'],
-      optionalFeatures: ['hit-test', 'hand-tracking', 'anchors']
+      optionalFeatures: ['hit-test', 'hand-tracking', 'anchors', 'plane-detection']
     });
     await renderer.xr.setSession(session);
   } catch (e) {
@@ -609,6 +785,9 @@ renderer.xr.addEventListener('sessionend', () => {
   inXR = false;
   if (hitSource) { hitSource.cancel?.(); hitSource = null; }
   reticle.visible = false;
+  planeScanned = false; calibrating = false; calibA = calibB = null;
+  calibBox.visible = false; placedBy = '';
+  setDeskSize(DESK.w, DESK.d);
   room.visible = true;
   scene.background = new THREE.Color(0x0b0e12);
   scene.fog = roomFog;
@@ -630,6 +809,7 @@ function onSelect(event) {
       deskRoot.quaternion.setFromRotationMatrix(reticle.matrix);
       deskRoot.visible = true;
       placed = true;
+      placedBy = 'tap';
       reticle.visible = false;
       pour();
     }
@@ -716,6 +896,14 @@ renderer.setAnimationLoop((time, frame) => {
     for (const m of mats) m.uniforms.uFill.value = e * 1.08;
   }
 
+  if (inXR && frame) {
+    const ref = renderer.xr.getReferenceSpace();
+    if (ref) {
+      scanPlanes(frame, ref);
+      trackHands(frame, ref);
+    }
+  }
+
   // AR placement reticle.
   if (inXR && !placed && hitSource && frame) {
     const hits = frame.getHitTestResults(hitSource);
@@ -747,13 +935,18 @@ renderer.setAnimationLoop((time, frame) => {
     frames = 0; fpsClock = now;
     readout.innerHTML =
       `<b>${SURFACES[surface].label}</b> · ${pigment}<br>` +
-      `${fps} fps · ${inXR ? (placed ? 'xr placed' : 'xr · point at the desk') : 'desktop'}`;
+      `${fps} fps · ${inXR ? (calibrating ? 'measuring desk…'
+        : placed ? `desk ${deskSize.w.toFixed(2)}×${deskSize.d.toFixed(2)} m · ${placedBy}`
+        : 'pinch both hands at two desk corners') : 'desktop'}`;
   }
 });
 
 setSurface('cloth');
 setPigment('still');
 drawTally();
+
+// Handle for headless checks and for rendering clips off this page.
+window.__demo = { setSurface, setPigment, setDeskSize, pour, deskSize, THREE, scene, camera, controls, renderer, video };
 </script>
 </body>
 </html>
