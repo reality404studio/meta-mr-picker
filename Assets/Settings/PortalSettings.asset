@@ -9,7 +9,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 159c79eabbdf4a4886afc8b896d1c9e9, type: 3}
   m_Name: PortalSettings
   m_EditorClassIdentifier: MoodPicker.Portal:MoodPicker.Portal:PortalSettings
   openUpDot: 0.8
@@ -19,7 +19,7 @@ MonoBehaviour:
   lostCloseSeconds: 0.5
   maxPalmSpeed: 0.6
   invertPalmNormal: 0
-  heightAbovePalm: 0.07
+  heightAbovePalm: 0.14
   radius: 0.06
   normalSmoothing: 12
   dipDepth: 0.01
