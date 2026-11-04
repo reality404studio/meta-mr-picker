@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d03117db4534c8e86f80f2faa122f6, type: 3}
+  m_Name: CatchSettings
+  m_EditorClassIdentifier: MoodPicker.Catch::MoodPicker.Catch.CatchSettings
+  stillRecordSeconds: 3
+  loopRecordSeconds: 4
+  trackingLossGraceSeconds: 0.2
+  minSquare: 0.06
+  maxSquare: 0.6
+  minHeadDistance: 0.15
+  maxHeadDistance: 1
+  toggleTapMaxSeconds: 0.5
+  palmFacingHeadDot: 0.5
+  overlapFrac: 0.125
+  minCropPixels: 32
+  flipCameraY: 0
+  sampleGrid: 64
+  tones: 3
+  kmeansIterations: 20
+  lightGain: 2

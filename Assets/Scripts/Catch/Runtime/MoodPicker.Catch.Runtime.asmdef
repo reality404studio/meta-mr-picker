@@ -1,0 +1,10 @@
+{
+    "name": "MoodPicker.Catch.Runtime",
+    "rootNamespace": "MoodPicker.Catch",
+    "references": ["MoodPicker.Hands", "MoodPicker.Catch", "Oculus.VR", "meta.xr.mrutilitykit", "Reality404.BuildGate"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

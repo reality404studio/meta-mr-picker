@@ -72,6 +72,8 @@ namespace MoodPicker.Tests
         [TestCase("Editor/MoodPickerBuild.cs", "BuildDeskKeyboardApkBatch", "BuildDeskKeyboardApk")]
         [TestCase("Editor/MoodPickerSceneSetup.cs", "RunBatch", "Run")]
         [TestCase("Editor/DeskKeyboardSceneSetup.cs", "RunBatch", "Run")]
+        [TestCase("Editor/CatchSceneSetup.cs", "RunBatch", "Run")]
+        [TestCase("Editor/MoodPickerBuild.cs", "BuildCatchApkBatch", "BuildCatchApk")]
         public void BatchEntry_WaitsForMetaEditorReady(string file, string entry, string work)
         {
             string src = File.ReadAllText(Path.Combine(Assets, file));

@@ -10,6 +10,7 @@ public static class MoodPickerBuild
 {
     public const string ApkPath = "Builds/mood-picker-dev.apk";
     public const string DeskKeyboardApkPath = "Builds/desk-keyboard-dev.apk";
+    public const string CatchApkPath = "Builds/catch-dev.apk";
 
     [MenuItem("Mood Picker/Build Dev APK")]
     public static bool BuildDevApk() => BuildDevApk(ApkPath);
@@ -20,6 +21,15 @@ public static class MoodPickerBuild
         var saved = EditorBuildSettings.scenes;
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(DeskKeyboardSceneSetup.ScenePath, true) };
         try { return BuildDevApk(DeskKeyboardApkPath); }
+        finally { EditorBuildSettings.scenes = saved; }
+    }
+
+    [MenuItem("Mood Picker/Build Catch APK")]
+    public static bool BuildCatchApk()
+    {
+        var saved = EditorBuildSettings.scenes;
+        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(CatchSceneSetup.ScenePath, true) };
+        try { return BuildDevApk(CatchApkPath); }
         finally { EditorBuildSettings.scenes = saved; }
     }
 
@@ -56,6 +66,13 @@ public static class MoodPickerBuild
     {
         _deadline = EditorApplication.timeSinceStartup + 120;
         _job = BuildDeskKeyboardApk;
+        EditorApplication.update += Wait;
+    }
+
+    public static void BuildCatchApkBatch()
+    {
+        _deadline = EditorApplication.timeSinceStartup + 120;
+        _job = BuildCatchApk;
         EditorApplication.update += Wait;
     }
 
