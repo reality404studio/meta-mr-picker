@@ -684,15 +684,30 @@ function setOrbMode(i) {
   orbMat.uniforms.uMode.value  = orbMode;
   orbMat.uniforms.uParam.value = ORB_PARAM[orbMode];
   orbMat.uniforms.uInt.value   = ORB_INT[orbMode];
-  orbMat.uniforms.uScale.value = ORB_SCALE[orbMode];
+  orbMat.uniforms.uScale.value = ORB_SCALE[orbMode] * orbScale;
 }
 function cycleOrbMode() { setOrbMode(orbIndex + 1); }
 
 function layoutCatchers() { orbShared.uOrbPos.value.copy(orbRoot.position); }
 
-// Which quad the next two-hand rectangle defines.
-let quadTarget = 'desk';
-function toggleQuadTarget() { quadTarget = quadTarget === 'desk' ? 'wall' : 'desk'; refreshPlates(); }
+// What the next two-hand gesture sets: the ring's size, or one of the two catcher quads.
+const FIT_TARGETS = ['orb', 'desk', 'wall'];
+let quadTarget = 'orb';
+function toggleQuadTarget() {
+  quadTarget = FIT_TARGETS[(FIT_TARGETS.indexOf(quadTarget) + 1) % FIT_TARGETS.length];
+  refreshPlates();
+}
+
+// Hands apart = how wide the ring is, measured across its outer edge. Scaling the root
+// keeps one geometry; the pigment density is corrected so the water stays the same size
+// in the room and a bigger ring simply shows more of it.
+const ORB_OUTER = 2 * (0.155 + 0.062);
+let orbScale = 1;
+function setOrbScale(v) {
+  orbScale = THREE.MathUtils.clamp(v, 0.30, 2.50);
+  orbRoot.scale.setScalar(orbScale);
+  orbMat.uniforms.uScale.value = ORB_SCALE[orbMode] * orbScale;
+}
 
 function sizeQuad(mesh, w, h, horizontal) {
   mesh.geometry.dispose();
@@ -741,7 +756,7 @@ function updateTouch(frame, refSpace) {
     const w = new THREE.Vector3(jp.transform.position.x, jp.transform.position.y, jp.transform.position.z);
     const l = orbRoot.worldToLocal(w.clone());
     const q = Math.hypot(Math.hypot(l.x, l.y) - TORUS_R, l.z);
-    const d = Math.max(0, q - TORUS_r);
+    const d = Math.max(0, q - TORUS_r) * orbScale;      // back to metres
     if (d < best) { best = d; bestLocal = l; }
   }
   const target = best === Infinity ? 0 : 1 - THREE.MathUtils.clamp(best / 0.16, 0, 1);
@@ -887,7 +902,8 @@ function refreshPlates() {
     const key = m.userData.key;
     const pressed = key === 'sound' ? soundOn : key === 'quad' ? false : key === surface;
     const label = key === 'sound' ? (soundOn ? 'SOUND' : 'MUTED')
-                : key === 'quad'  ? (quadTarget === 'desk' ? 'FIT DESK' : 'FIT WALL')
+                : key === 'quad'  ? (quadTarget === 'orb' ? 'SIZE ORB'
+                                   : quadTarget === 'desk' ? 'FIT DESK' : 'FIT WALL')
                 : key.toUpperCase();
     m.material.map.dispose();
     m.material.map = plateTexture(label, pressed);
@@ -1079,16 +1095,21 @@ function trackHands(frame, refSpace) {
 
   // Both hands at once always means "lay the piece out", never an adjustment.
   if (L && R) {
+    grip.left = grip.right = null;
+    if (surface === 'orb' && quadTarget === 'orb') {
+      calibrating = false; calibBox.visible = false;
+      setOrbScale(L.pt.distanceTo(R.pt) / ORB_OUTER);   // live, so it can be felt
+      return;
+    }
     calibrating = true;
     calibA = L.pt; calibB = R.pt;
     drawCalibBox(calibA, calibB);
-    grip.left = grip.right = null;
     return;
   }
   if (calibrating) {
     calibrating = false;
     if (calibA && calibB) {
-      if (surface === 'orb')         setQuadFromHands(calibA, calibB);
+      if (surface === 'orb')         { if (quadTarget !== 'orb') setQuadFromHands(calibA, calibB); }
       else if (surface === 'canvas') commitArt(calibA, calibB);
       else                           commitRect(calibA, calibB);
     }
@@ -1690,6 +1711,7 @@ renderer.setAnimationLoop((time, frame) => {
     readout.innerHTML =
       `<b>${SURFACES[surface].label}</b>${surface === 'orb' ? ' · ' + ORB_MODES[orbMode] : ''} · ${pigment}<br>` +
       `${BUILD === '__BUILD__' ? 'dev' : BUILD} · ${fps} fps · ${inXR ? (calibrating ? (surface === 'canvas' ? 'sizing the piece…' : 'measuring desk…')
+        : surface === 'orb' ? `ring ${(ORB_OUTER * orbScale).toFixed(2)} m · hands → ${quadTarget}`
         : surface === 'canvas' ? `${ART.w.toFixed(2)}×${ART.h.toFixed(2)} m · ${placedBy || 'in front'}`
         : placed ? `desk ${deskSize.w.toFixed(2)}×${deskSize.d.toFixed(2)} m · ${placedBy}`
         : 'pinch both hands at two desk corners') : 'desktop'}`;
@@ -1709,7 +1731,7 @@ window.__demo = {
   setSurface, setPigment, setDeskSize, setCanvasSize, pour, deskSize, ART,
                   setOrbMode, cycleOrbMode, orbRoot, orbMat, orbShared, catchers, ORB_MODES,
   deskCatcher, wallCatcher, setQuadFromHands, toggleQuadTarget, sizeQuad,
-  quadTarget: () => quadTarget,
+  quadTarget: () => quadTarget, setOrbScale, orbScale: () => orbScale, ORB_OUTER,
                   artRoot, commitArt, applyYaw, applyDepth, headYaw, headRight,
                   THREE, scene, camera, controls, renderer, video };
 </script>
