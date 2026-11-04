@@ -140,6 +140,10 @@ const PAINT = {
 };
 
 const SURFACES = {
+  orb: {
+    label: 'ORB',
+    note: 'A ring of caught water light, floating. <em>Reach in and the surface answers — and so do the real desk and the real wall, which pick up its caustic and ripple with it. Left pinch changes the look, right pinch moves it.</em>'
+  },
   canvas: {
     label: 'CANVAS',
     note: 'The caught light stretched on canvas and hung on the wall. <em>Pinch with both hands at two opposite corners to size and hang it. Then left pinch swings it on Y, right pinch slides it in and out to sit flush.</em>'
@@ -420,9 +424,280 @@ function setCanvasSize(w, h) {
   canvasMesh.material.uniforms.uFillRadius.value = Math.hypot(ART.w, ART.h) * 0.5 + 0.04;
 }
 
+
+// ─────────────────────────────────────────────────────────── the orb and its light
+// Ported from PR #1 reference/texture-lab/web/shader-lab: seven looks over the same
+// caught pigment. The lab called them exploration; which one ships is still a human call
+// (docs/DECIDED.md 2026-11-03 — the object look is two-tone cel until someone says otherwise).
+const ORB_MODES = ['RAW', '', 'CHROME', 'CAUSTIC', 'HOLOGRAM', 'CONTOUR', 'HALFTONE'];
+// Glint is out (2026-11-04, 사람 결정). Its shader index is simply never cycled to, so the
+// rest keep their numbers.
+const ORB_CYCLE = [2, 3, 4, 5, 6, 0];
+
+const ORB_COMMON = /* glsl */`
+uniform sampler2D uTex;
+uniform float uScale;
+vec2 mir(vec2 t){ t = mod(t, 2.0); return 1.0 - abs(1.0 - t); }
+float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+vec3 lin(vec3 c){ return pow(c, vec3(2.2)); }
+vec3 triS(vec3 p, vec3 n){
+  vec3 w = pow(abs(n), vec3(4.0)); w /= (w.x + w.y + w.z);
+  float s = uScale * 0.8;
+  return texture2D(uTex, mir(p.zy * s + 0.13)).rgb * w.x
+       + texture2D(uTex, mir(p.xz * s + 0.37)).rgb * w.y
+       + texture2D(uTex, mir(p.xy * s + 0.71)).rgb * w.z;
+}
+vec3 vid(vec3 p, vec3 n){ return lin(triS(p, n)); }
+// 8-tap ring blur: a softer height field, so normals and contours read as a surface
+// instead of chasing single texels (shader-lab's vidBlur).
+vec3 vidBlur(vec3 p, vec3 n, float r){
+  vec3 acc = vid(p, n);
+  for (int i = 0; i < 8; i++){
+    float a = float(i) * 0.785398;
+    vec2 o = vec2(cos(a), sin(a)) * r;
+    acc += vid(p + vec3(o.x, o.y, o.x - o.y) / max(uScale, 0.01), n);
+  }
+  return acc / 9.0;
+}
+`;
+
+// A touch does not just dent the surface it lands on — it sets a wave running, and the
+// same wave is handed to the desk and the wall so the room answers the finger.
+const ORB_VERT = /* glsl */`
+${ORB_COMMON}
+uniform float uDisp, uTime, uTouch, uWave;
+uniform vec3  uTouchPt;
+varying vec3 vWPos, vWNrm, vOPos, vONrm;
+void main(){
+  vONrm = normal; vOPos = position;
+  float h  = lum(vid(position, normal));
+  float td = distance(position, uTouchPt);
+  float rip = sin(td * 26.0 - uTime * uWave) * exp(-td * 5.5) * uTouch * 0.055;
+  vec3  pp = position + normal * ((h - 0.35) * uDisp + rip);
+  vec4  wp = modelMatrix * vec4(pp, 1.0);
+  vWPos = wp.xyz;
+  vWNrm = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const ORB_FRAG = /* glsl */`
+${ORB_COMMON}
+uniform int   uMode;
+uniform float uTime, uInt, uParam;
+uniform vec3  uTint, uBase;
+varying vec3 vWPos, vWNrm, vOPos, vONrm;
+
+vec3 bumpN(vec3 pos, vec3 n, float h, float k){
+  vec3 dpx = dFdx(pos), dpy = dFdy(pos);
+  float dhx = dFdx(h) * k, dhy = dFdy(h) * k;
+  vec3 r1 = cross(dpy, n), r2 = cross(n, dpx);
+  float det = dot(dpx, r1);
+  vec3 g = sign(det) * (dhx * r1 + dhy * r2);
+  return normalize(abs(det) * n - g);
+}
+vec3 env(vec3 r){
+  float y = r.y;
+  vec3 sky = mix(vec3(0.10,0.12,0.15), vec3(0.62,0.70,0.78), smoothstep(-0.05, 0.7, y));
+  vec3 gnd = mix(vec3(0.015), vec3(0.09,0.10,0.10), smoothstep(-1.0, 0.0, y));
+  vec3 c = mix(gnd, sky, smoothstep(-0.05, 0.05, y));
+  c += vec3(0.9) * exp(-abs(y - 0.02) * 18.0) * 0.4;
+  float a = atan(r.z, r.x);
+  c += vec3(1.0) * smoothstep(0.70, 0.95, sin(a * 3.0)) * smoothstep(0.15, 0.35, y) * smoothstep(0.85, 0.6, y) * 0.8;
+  c += vec3(1.0,0.96,0.88) * pow(max(dot(r, normalize(vec3(0.35,0.75,0.55))), 0.0), 36.0) * 2.4;
+  return c;
+}
+vec3 pal(float t){ return 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + t)); }
+
+void main(){
+  vec3 N = normalize(vWNrm);
+  if (!gl_FrontFacing) N = -N;
+  vec3 V = normalize(cameraPosition - vWPos);
+  vec3 L = normalize(vec3(0.5, 0.85, 0.45));
+
+  vec3  tex  = (uMode == 3) ? lin(triS(vWPos, N)) : vid(vOPos, normalize(vONrm));
+  float h    = lum(tex);
+  float hs   = (uMode == 2 || uMode == 5) ? lum(vidBlur(vOPos, normalize(vONrm), 0.055)) : h;
+  float fres = pow(1.0 - clamp(abs(dot(N, V)), 0.0, 1.0), 3.0);
+  float hc   = sqrt(hs) * mix(4.0, 22.0, uParam);
+  float aa   = fwidth(hc);
+  vec3  Nb   = bumpN(vWPos, N, hs, mix(0.3, 6.0, uParam));
+
+  vec3 col;
+  if (uMode == 0){
+    float d = max(dot(N, L), 0.0);
+    col = tex * (0.3 + 0.8 * d) * uInt;
+    col += pow(max(dot(reflect(-L, N), V), 0.0), 40.0) * 0.25;
+  } else if (uMode == 2){
+    vec3 R = reflect(-V, Nb);
+    float F = 0.55 + 0.45 * pow(1.0 - max(dot(Nb, V), 0.0), 5.0);
+    col = env(R) * F * mix(vec3(1.0), uTint, 0.6) * uInt;
+    col += uTint * pow(hs, 4.0) * 0.9 * uInt;
+  } else if (uMode == 3){
+    float d = max(dot(N, L), 0.0);
+    col = uBase * (0.12 + 0.75 * d);
+    col += uTint * pow(h, mix(1.5, 5.0, uParam)) * 4.0 * (0.35 + 0.65 * d) * uInt;
+  } else if (uMode == 4){
+    float scan = 0.7 + 0.3 * sin(vWPos.y * 160.0 - uTime * 5.0);
+    col = pal(sqrt(h) * mix(0.6, 2.0, uParam) + fres * 0.7 + uTime * 0.06)
+        * (pow(h, 1.5) * 2.2 + fres * 0.8) * scan * uInt;
+    col *= mix(vec3(1.0), uTint, 0.35);
+  } else if (uMode == 5){
+    float f = abs(fract(hc) - 0.5);
+    float d = max(dot(N, L), 0.0);
+    col = uBase * (0.08 + 0.35 * d);
+    col += uTint * (1.0 - smoothstep(0.0, aa * 1.5, 0.5 - f)) * (0.6 + 0.6 * h) * uInt;
+  } else {
+    vec2 g = gl_FragCoord.xy / mix(5.0, 16.0, uParam);
+    vec2 f = fract(g) - 0.5;
+    float d = max(dot(N, L), 0.0);
+    float r = sqrt(clamp(sqrt(h) * (0.4 + 0.8 * d), 0.0, 1.0)) * 0.62;
+    col = uBase * 0.06 + uTint * (1.0 - smoothstep(r - 0.06, r + 0.02, length(f))) * uInt;
+  }
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+// The catcher planes are the trick that stops the orb floating free of the room: an
+// invisible plane on the real desk and the real wall, carrying only the pigment's
+// brightness, added to the passthrough and faded out by distance from the orb. No ray
+// tracing — a distance falloff and the same wave the finger started.
+const CATCH_FRAG = /* glsl */`
+${ORB_COMMON}
+uniform vec3  uOrbPos, uTint;
+uniform float uTime, uNear, uFar, uGain, uTouch, uWave, uContrast;
+varying vec3 vWPos, vWNrm;
+void main(){
+  float d    = distance(vWPos, uOrbPos);
+  float fall = 1.0 - smoothstep(uNear, uFar, d);
+  if (fall <= 0.001) discard;
+  vec3  n    = normalize(vWNrm);
+  // drift sideways across the surface, never along the axis it is projected on
+  vec3  t    = abs(n.y) > 0.5 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), n));
+  vec3  tex  = lin(triS(vWPos + t * uTime * 0.010, n));
+  float c    = pow(lum(tex), uContrast) * 4.0;
+  float rip  = 1.0 + sin(d * 16.0 - uTime * uWave) * 0.45 * uTouch * exp(-d * 1.6);
+  gl_FragColor = vec4(uTint * c * fall * rip * uGain * (1.0 + uTouch * 0.5), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+const CATCH_VERT = /* glsl */`
+varying vec3 vWPos, vWNrm;
+void main(){
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWPos = wp.xyz;
+  vWNrm = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const orbShared = {
+  uTex     : { value: stillTex },
+  uTime    : { value: 0 },
+  uTouch   : { value: 0 },
+  uWave    : { value: 9.0 },
+  uTint    : { value: new THREE.Color(PAINT.lightTone) },
+  uBase    : { value: new THREE.Color(PAINT.shadowTone) },
+  uOrbPos  : { value: new THREE.Vector3() }
+};
+
+const orbRoot = new THREE.Group();
+orbRoot.visible = false;
+scene.add(orbRoot);
+
+const orbMat = new THREE.ShaderMaterial({
+  vertexShader: ORB_VERT, fragmentShader: ORB_FRAG, side: THREE.DoubleSide,
+  uniforms: Object.assign({
+    uScale  : { value: 2.2 },
+    uMode   : { value: 2 },
+    uInt    : { value: 1.25 },
+    uParam  : { value: 0.5 },
+    uDisp   : { value: 0.012 },
+    uTouchPt: { value: new THREE.Vector3(0, 0, 0) }
+  }, orbShared)
+});
+
+const orb = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.062, 56, 128), orbMat);
+orbRoot.add(orb);
+
+function catcherMat() {
+  return new THREE.ShaderMaterial({
+    vertexShader: CATCH_VERT, fragmentShader: CATCH_FRAG,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    uniforms: Object.assign({
+      uScale   : { value: 1.1 },
+      uNear    : { value: 0.16 },
+      uFar     : { value: 1.15 },
+      uGain    : { value: 0.40 },
+      uContrast: { value: 3.4 }
+    }, orbShared)
+  });
+}
+
+const deskCatcher = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.6, 0.9).rotateX(-Math.PI / 2), catcherMat());
+
+const wallCatcher = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.0), catcherMat());
+
+const catchers = new THREE.Group();
+catchers.add(deskCatcher, wallCatcher);
+catchers.visible = false;
+scene.add(catchers);
+
+orbRoot.position.set(0, 1.02, -0.42);
+
+const ORB_SCALE = [6.00, 0.00, 2.20, 6.00, 6.00, 3.20, 6.00];
+const ORB_PARAM = [0.50, 0.00, 0.16, 0.34, 0.46, 0.34, 0.50];
+const ORB_INT   = [1.25, 0.00, 1.15, 1.70, 1.35, 1.30, 1.30];
+
+let orbIndex = 0;
+let orbMode  = ORB_CYCLE[0];
+function setOrbMode(i) {
+  orbIndex = ((i % ORB_CYCLE.length) + ORB_CYCLE.length) % ORB_CYCLE.length;
+  orbMode  = ORB_CYCLE[orbIndex];
+  orbMat.uniforms.uMode.value  = orbMode;
+  orbMat.uniforms.uParam.value = ORB_PARAM[orbMode];
+  orbMat.uniforms.uInt.value   = ORB_INT[orbMode];
+  orbMat.uniforms.uScale.value = ORB_SCALE[orbMode];
+}
+function cycleOrbMode() { setOrbMode(orbIndex + 1); }
+
+// The catchers borrow the poses the desk and wall calibration already produced.
+function layoutCatchers() {
+  deskCatcher.position.copy(deskRoot.position); deskCatcher.position.y += 0.004;
+  deskCatcher.quaternion.copy(deskRoot.quaternion);
+  wallCatcher.quaternion.copy(artRoot.quaternion);
+  wallCatcher.position.copy(artRoot.position)
+    .addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(artRoot.quaternion), 0.006);
+  wallCatcher.position.y = artRoot.position.y;
+  orbShared.uOrbPos.value.copy(orbRoot.position);
+}
+
+// How close the nearest fingertip is to the ring, 0 far .. 1 touching. The same number
+// drives the orb's wave and both catchers, so the room jumps when the finger does.
+const TORUS_R = 0.155, TORUS_r = 0.062;
+function updateTouch(frame, refSpace) {
+  const session = renderer.xr.getSession();
+  if (!session || !frame.getJointPose) return;
+  let best = Infinity, bestLocal = null;
+  for (const src of session.inputSources) {
+    if (!src.hand) continue;
+    const j = src.hand.get('index-finger-tip');
+    if (!j) continue;
+    const jp = frame.getJointPose(j, refSpace);
+    if (!jp) continue;
+    const w = new THREE.Vector3(jp.transform.position.x, jp.transform.position.y, jp.transform.position.z);
+    const l = orbRoot.worldToLocal(w.clone());
+    const q = Math.hypot(Math.hypot(l.x, l.y) - TORUS_R, l.z);
+    const d = Math.max(0, q - TORUS_r);
+    if (d < best) { best = d; bestLocal = l; }
+  }
+  const target = best === Infinity ? 0 : 1 - THREE.MathUtils.clamp(best / 0.16, 0, 1);
+  orbShared.uTouch.value += (target - orbShared.uTouch.value) * 0.3;
+  if (bestLocal) orbMat.uniforms.uTouchPt.value.copy(bestLocal);
+}
+
 // ─────────────────────────────────────────────────────────── simulated room (non-XR only)
 const room = new THREE.Group();
-let roomTop = null;
+let roomTop = null, roomHemi = null, roomDir = null;
 const roomLegs = [];
 scene.add(room);
 {
@@ -449,10 +724,11 @@ scene.add(room);
     roomLegs.push(leg);
     room.add(leg);
   }
-  room.add(new THREE.HemisphereLight(0xDDE6EE, 0x4A4E54, 1.15));
-  const dir = new THREE.DirectionalLight(0xFFF6E8, 1.25);
-  dir.position.set(1.4, 2.6, 1.0);
-  room.add(dir);
+  roomHemi = new THREE.HemisphereLight(0xDDE6EE, 0x4A4E54, 1.15);
+  room.add(roomHemi);
+  roomDir = new THREE.DirectionalLight(0xFFF6E8, 1.25);
+  roomDir.position.set(1.4, 2.6, 1.0);
+  room.add(roomDir);
   scene.background = new THREE.Color(0x0b0e12);
   roomFog = new THREE.Fog(0x0b0e12, 3.2, 7.5);
   scene.fog = roomFog;
@@ -523,7 +799,7 @@ function plateTexture(text, pressed) {
   return t;
 }
 
-const PLATE_KEYS = ['canvas', 'bare', 'mat', 'cloth', 'things', 'light', 'pour'];
+const PLATE_KEYS = ['orb', 'canvas', 'mat', 'cloth', 'things', 'light', 'pour'];
 const plateMeshes = PLATE_KEYS.map((key, i) => {
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(0.1, 0.0375),
@@ -543,7 +819,9 @@ function layoutPlates() {
 
 // The plate row hangs under whichever piece is live.
 function layoutUI() {
-  if (surface === 'canvas') {
+  if (surface === 'orb') {
+    uiRoot.position.set(orbRoot.position.x, orbRoot.position.y - 0.30, orbRoot.position.z);
+  } else if (surface === 'canvas') {
     uiRoot.position.set(artRoot.position.x, artRoot.position.y - ART.h / 2 - 0.12, artRoot.position.z);
   } else {
     uiRoot.position.copy(deskRoot.localToWorld(new THREE.Vector3(0, 0.2, -deskSize.d / 2 - 0.06)));
@@ -767,18 +1045,26 @@ function trackHands(frame, refSpace) {
         moved  : 0,
         yaw0   : artRoot.rotation.y,
         pos0   : artRoot.position.clone(),
+        orbPos0: orbRoot.position.clone(),
         quat0  : artRoot.quaternion.clone(),
         yawHead: headYaw(),
         plate  : aimPlate(frame, refSpace, cur.src)
       };
+      if (surface === 'orb' && !grip[side].plate && side === 'left') {
+        cycleOrbMode();
+        grip[side].consumed = true;
+      }
     } else if (cur && g) {
       g.moved = Math.max(g.moved, cur.pt.distanceTo(g.start));
-      if (surface === 'canvas' && placedArt && !g.plate && g.moved > 0.02) {
+      if (surface === 'orb' && side === 'right' && !g.plate && g.moved > 0.02) {
+        orbRoot.position.copy(g.orbPos0).add(cur.pt.clone().sub(g.start));
+        g.consumed = true;
+      } else if (surface === 'canvas' && placedArt && !g.plate && g.moved > 0.02) {
         if (side === 'left') applyYaw(g, cur.pt);
         else                 applyDepth(g, cur.pt);
       }
     } else if (!cur && g) {
-      if (g.moved < 0.04 && performance.now() - g.t0 < 600) tap(frame, refSpace, g, g.src);
+      if (!g.consumed && g.moved < 0.04 && performance.now() - g.t0 < 600) tap(frame, refSpace, g, g.src);
       grip[side] = null;
     }
   }
@@ -857,7 +1143,7 @@ function scanPlanes(frame, refSpace) {
 }
 
 // ─────────────────────────────────────────────────────────── state
-let surface = 'canvas';
+let surface = 'orb';
 let pigment = 'still';
 let fillT   = 1;      // animation clock for the bucket flood
 let placed    = false;  // AR: has the desk been dropped yet
@@ -865,6 +1151,7 @@ let placedArt = true;   // the wall piece always has a pose; XR re-hangs it on e
 let inXR    = false;
 
 const activeMeshes = () => ({
+  orb   : [orb],
   canvas: [canvasMesh],
   bare  : [],
   mat   : [matMesh],
@@ -876,15 +1163,26 @@ const activeMeshes = () => ({
 function setSurface(key) {
   surface = key;
   artRoot.visible   = key === 'canvas';
-  deskRoot.visible  = key !== 'canvas' && (placed || !inXR);
+  orbRoot.visible   = key === 'orb';
+  catchers.visible  = key === 'orb';
+  deskRoot.visible  = key !== 'canvas' && key !== 'orb' && (placed || !inXR);
   matMesh.visible   = key === 'mat';
   clothMesh.visible = key === 'cloth';
   things.visible    = key === 'things';
   lightMesh.visible = key === 'light';
   // In AR the real desk is the desk; on desktop the simulated one must show through
   // for 'light' and 'bare' to read at all.
+  if (!inXR && roomHemi) {
+    // the fake reflections only read against a dim room — same reason the shooting note
+    // says to turn the lights down before filming passthrough
+    const dim = key === 'orb' ? 0.13 : 1.0;
+    roomHemi.intensity = 1.15 * dim;
+    roomDir.intensity  = 1.25 * dim;
+  }
   if (!inXR) {
-    const t = key === 'canvas' ? artRoot.position : new THREE.Vector3(0, DESK.h, 0);
+    const t = key === 'orb'    ? orbRoot.position
+            : key === 'canvas' ? artRoot.position
+            : new THREE.Vector3(0, DESK.h, 0);
     controls.target.copy(t);
     controls.update();
   }
@@ -901,6 +1199,7 @@ function setPigment(key) {
   // The still is the periodized tile (catch-analyze-6b12, seam 11.2 -> 0.48), so it can be
   // repeated tightly. The loop is still a raw crop — PeriodicTile has not been run over the
   // frames yet — so it is mirrored and spread much wider, or the repeat reads as corduroy.
+  orbShared.uTex.value = tex;
   for (const m of mats) {
     m.uniforms.uPigment.value = tex;
     m.uniforms.uTriScale.value = m.userData.baseTriScale * (key === 'loop' ? 0.34 : 1.0);
@@ -1091,6 +1390,13 @@ renderer.domElement.addEventListener('pointerdown', e => {
     -((e.clientY - r.top) / r.height) * 2 + 1
   ), camera);
   const hit = raycaster.intersectObjects(activeMeshes(), true)[0];
+  if (surface === 'orb') {
+    if (hit) {
+      orbShared.uTouch.value = 1;
+      orbMat.uniforms.uTouchPt.value.copy(hit.object.worldToLocal(hit.point.clone()));
+    } else cycleOrbMode();
+    return;
+  }
   if (hit) pour(hit.object.worldToLocal(hit.point.clone()), hit.object);
 });
 
@@ -1133,6 +1439,12 @@ renderer.setAnimationLoop((time, frame) => {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
 
+  orbShared.uTime.value += dt;
+  if (surface === 'orb') {
+    layoutCatchers();
+    if (!inXR) orbShared.uTouch.value *= Math.pow(0.08, dt);   // desktop pulse decays
+  }
+
   // Bucket flood: ~0.33 s to cover the surface, then hold.
   if (fillT < 1) {
     fillT = Math.min(1, fillT + dt / 0.33);
@@ -1150,11 +1462,14 @@ renderer.setAnimationLoop((time, frame) => {
         artRoot.position.set(eye.x - Math.sin(yaw) * 1.3, eye.y, eye.z - Math.cos(yaw) * 1.3);
         artRoot.rotation.set(0, yaw, 0);
         artRoot.visible = surface === 'canvas';
+        // within arm's reach, a little below eye line, so a hand can get to it seated
+        orbRoot.position.set(eye.x - Math.sin(yaw) * 0.52, eye.y - 0.16, eye.z - Math.cos(yaw) * 0.52);
         placedArt = true; placedBy = 'in front';
         needArtHang = false;
       }
       if (surface === 'canvas') scanWalls(frame, ref);
-      else                      scanPlanes(frame, ref);
+      else if (surface !== 'orb') scanPlanes(frame, ref);
+      if (surface === 'orb') updateTouch(frame, ref);
       trackHands(frame, ref);
     }
   }
@@ -1190,7 +1505,7 @@ renderer.setAnimationLoop((time, frame) => {
     fps = Math.round((frames * 1000) / (now - fpsClock));
     frames = 0; fpsClock = now;
     readout.innerHTML =
-      `<b>${SURFACES[surface].label}</b> · ${pigment}<br>` +
+      `<b>${SURFACES[surface].label}</b>${surface === 'orb' ? ' · ' + ORB_MODES[orbMode] : ''} · ${pigment}<br>` +
       `${fps} fps · ${inXR ? (calibrating ? (surface === 'canvas' ? 'sizing the piece…' : 'measuring desk…')
         : surface === 'canvas' ? `${ART.w.toFixed(2)}×${ART.h.toFixed(2)} m · ${placedBy || 'in front'}`
         : placed ? `desk ${deskSize.w.toFixed(2)}×${deskSize.d.toFixed(2)} m · ${placedBy}`
@@ -1198,12 +1513,13 @@ renderer.setAnimationLoop((time, frame) => {
   }
 });
 
-setSurface('canvas');
+setSurface('orb');
 setPigment('still');
 drawTally();
 
 // Handle for headless checks and for rendering clips off this page.
 window.__demo = { setSurface, setPigment, setDeskSize, setCanvasSize, pour, deskSize, ART,
+                  setOrbMode, cycleOrbMode, orbRoot, orbMat, orbShared, catchers, ORB_MODES,
                   artRoot, commitArt, applyYaw, applyDepth, headYaw, headRight,
                   THREE, scene, camera, controls, renderer, video };
 </script>
