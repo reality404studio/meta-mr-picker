@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Yunseul Surface Test</title>
+<meta name="description" content="WebXR reaction test: a caught water-light pigment, reborn on four different surfaces of a real desk.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght,SOFT@9..144,400;9..144,600&display=swap">
+<style>
+/* Drafting-line interface, per docs/DECIDED.md 2026-11-03 "인터페이스 색은 B안 (흰 제도선)". */
+:root{
+  --ink:#0b0e12;
+  --line:#F0EEE6;
+  --klein:#15317C;
+  --cobalt:#2559B4;
+  --sky:#7FA6D9;
+  --red:#D23A2C;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --disp:"Fraunces", Georgia, serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--line);font-family:var(--mono);font-size:13px;overflow:hidden;-webkit-text-size-adjust:100%}
+canvas{display:block;position:absolute;inset:0;width:100%;height:100%;z-index:0}
+
+.hud{position:absolute;inset:0;z-index:2;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+.hud > *{pointer-events:auto}
+
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
+h1{font-family:var(--disp);font-variation-settings:"SOFT" 0;font-weight:600;font-size:19px;line-height:1.15;margin:0;letter-spacing:-.01em}
+h1 small{display:block;font-family:var(--mono);font-weight:400;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--sky);margin-top:5px}
+.readout{font-size:10.5px;letter-spacing:.06em;text-align:right;color:var(--sky);white-space:nowrap;line-height:1.7;background:rgba(11,14,18,.62);backdrop-filter:blur(3px);padding:5px 8px;border-radius:2px}
+.readout b{color:var(--line);font-weight:500}
+
+.bottom{padding:0 max(16px,env(safe-area-inset-left)) max(14px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-right));
+  display:flex;flex-direction:column;gap:10px}
+.note{max-width:46ch;font-size:11.5px;line-height:1.55;color:var(--line);
+  border-left:2px solid var(--klein);padding:7px 0 7px 10px;background:rgba(11,14,18,.62);backdrop-filter:blur(3px)}
+.note em{color:var(--sky);font-style:normal}
+
+.rail{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button{font:500 11.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--line);
+  background:rgba(11,14,18,.66);border:1px solid rgba(240,238,230,.34);border-radius:2px;
+  padding:9px 11px;cursor:pointer;backdrop-filter:blur(3px);transition:background .12s,border-color .12s}
+button:hover{border-color:var(--line)}
+button[aria-pressed="true"]{background:var(--line);color:var(--ink);border-color:var(--line)}
+button.xr{border-color:var(--sky);color:var(--sky)}
+button.xr[disabled]{opacity:.4;cursor:default;border-style:dashed}
+button:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.sep{width:1px;align-self:stretch;background:rgba(240,238,230,.22);margin:0 3px}
+
+.vote{display:flex;gap:6px;align-items:center;font-size:10.5px;letter-spacing:.06em;color:var(--line);background:rgba(11,14,18,.62);backdrop-filter:blur(3px);padding:3px 8px 3px 9px;border-radius:2px}
+.vote span{text-transform:uppercase}
+.tally{font-size:10.5px;color:var(--line);letter-spacing:.04em;background:rgba(11,14,18,.62);backdrop-filter:blur(3px);padding:6px 9px;border-radius:2px}
+.tally b{color:var(--line);font-weight:500}
+
+.gate{position:absolute;inset:0;display:grid;place-items:center;background:rgba(11,14,18,.86);z-index:9}
+.gate div{text-align:center;max-width:34ch;padding:0 20px}
+.gate p{font-size:12px;line-height:1.6;color:var(--sky);margin:0 0 16px}
+.gate button{font-size:13px;padding:12px 22px}
+.hide{display:none !important}
+@media (max-width:620px){ h1{font-size:16px} .note{max-width:100%} .readout{font-size:9.5px} }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="top">
+    <h1>Yunseul<small>Surface test · reaction build</small></h1>
+    <div class="readout" id="readout"></div>
+  </div>
+
+  <div class="bottom">
+    <p class="note" id="note"></p>
+    <div class="rail" id="rail">
+      <button type="button" class="xr" id="btn-xr" disabled>Checking XR…</button>
+      <span class="sep"></span>
+      <button type="button" data-surface="bare">Bare</button>
+      <button type="button" data-surface="mat" aria-pressed="true">Mat</button>
+      <button type="button" data-surface="cloth">Cloth</button>
+      <button type="button" data-surface="things">Things</button>
+      <button type="button" data-surface="light">Light</button>
+      <span class="sep"></span>
+      <button type="button" data-pigment="still" aria-pressed="true">Still</button>
+      <button type="button" data-pigment="loop">Loop</button>
+      <span class="sep"></span>
+      <button type="button" id="btn-fill">Pour</button>
+    </div>
+    <div class="rail">
+      <div class="vote">
+        <span>Reaction</span>
+        <button type="button" data-vote="1">Flat</button>
+        <button type="button" data-vote="2">Ok</button>
+        <button type="button" data-vote="3">Wow</button>
+      </div>
+      <span class="sep"></span>
+      <div class="tally" id="tally"></div>
+      <button type="button" id="btn-copy">Copy tally</button>
+    </div>
+  </div>
+</div>
+
+<div class="gate" id="gate">
+  <div>
+    <p>This plays a short loop of caught water light. Tap to start.</p>
+    <button type="button" id="btn-start">Start</button>
+  </div>
+</div>
+
+<video id="loopvid" loop muted playsinline crossorigin="anonymous" class="hide">
+  <source src="assets/yunseul_loop.webm" type="video/webm">
+  <source src="assets/yunseul_loop.mp4" type="video/mp4">
+</video>
+
+<script type="importmap">
+{"imports":{
+  "three":"./vendor/three/three.module.js",
+  "three/addons/":"./vendor/three/addons/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }     from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ─────────────────────────────────────────────────────────── measured pigment
+// Values from scripts/catch-lab (catch-analyze-6b12) via assets/yunseul_paint.json:
+// k=3 k-means over a 64x64 grid of the yunseul crop, lightDir = bright-cluster offset x2.
+const PAINT = {
+  lightTone : 0xCDBFAE,
+  midTone   : 0xA2A6A9,
+  shadowTone: 0x737A81,
+  lightDir  : new THREE.Vector3(0.0735, 0.7538, -0.653).normalize()
+};
+
+const SURFACES = {
+  bare: {
+    label: 'BARE',
+    note: 'The desk as it is. Reference shot — everything below is measured against this.'
+  },
+  mat: {
+    label: 'MAT',
+    note: 'A desk mat: one flat plane, 60 × 40 cm. <em>Note what the cel ramp does here — a flat surface has one single normal, so the two-tone band is one constant value across the whole mat. The ramp is off; what is left is a tinted photograph.</em>'
+  },
+  cloth: {
+    label: 'CLOTH',
+    note: 'The same pigment as a cloth laid over the desk, falling 20 cm past the edges. <em>The fold gives the surface a second and third normal, so the two-tone ramp separates top from skirt.</em>'
+  },
+  things: {
+    label: 'THINGS',
+    note: 'Nothing is laid on the desk — the things already on it are the surface. <em>This is what the triplanar sampler is for: curved, UV-less objects, and a normal that sweeps the whole ramp.</em>'
+  },
+  light: {
+    label: 'LIGHT',
+    note: 'The desk keeps its own surface; only the water light falls on it, projected in world space and added. <em>Nothing is painted — the pigment acts as a caustic.</em>'
+  }
+};
+
+// ─────────────────────────────────────────────────────────── shader (CelPaint → GLSL)
+// Port of Assets/Shaders/Cel/CelPaint.shader + reference/texture-lab PigmentCommon.hlsl.
+// Triplanar read in object space (pigment sticks to the object) or world space (light mode).
+const VERT = /* glsl */`
+varying vec3 vLocalPos;
+varying vec3 vLocalNrm;
+varying vec3 vWorldPos;
+varying vec3 vWorldNrm;
+void main() {
+  vLocalPos = position;
+  vLocalNrm = normal;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorldPos = wp.xyz;
+  vWorldNrm = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+
+const FRAG = /* glsl */`
+precision highp float;
+uniform sampler2D uPigment;
+uniform vec3  uLightTone, uShadowTone, uMidTone, uBareLight, uBareShadow;
+uniform vec3  uLightDir, uFillOrigin;
+uniform float uToneMix, uThreshold, uSoftness, uTriScale, uTriSharp;
+uniform float uBands, uGlint, uFill, uFillRadius, uWorldSpace, uCaustic, uCausticContrast;
+varying vec3 vLocalPos, vLocalNrm, vWorldPos, vWorldNrm;
+
+float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+// Texture wrap mode does the repeating (RepeatWrapping for the periodized tile,
+// MirroredRepeat for the raw loop), so no fract() here — that would break derivatives.
+vec3 triplanar(vec3 p, vec3 n){
+  vec3 w = pow(abs(n), vec3(uTriSharp));
+  w /= max(w.x + w.y + w.z, 1e-4);
+  vec3 q = p * uTriScale;
+  return texture2D(uPigment, q.zy + 0.13).rgb * w.x
+       + texture2D(uPigment, q.xz + 0.37).rgb * w.y
+       + texture2D(uPigment, q.xy + 0.71).rgb * w.z;
+}
+
+float ramp(float ndl, float shift){
+  return smoothstep(uThreshold - uSoftness + shift, uThreshold + uSoftness + shift, ndl);
+}
+
+void main(){
+  vec3  l    = normalize(uLightDir);
+  vec3  nW   = normalize(vWorldNrm);
+  float ndl  = dot(nW, l);
+
+  bool  world = uWorldSpace > 0.5;
+  vec3  p     = world ? vWorldPos : vLocalPos;
+  vec3  n     = world ? nW : normalize(vLocalNrm);
+  vec3  base  = triplanar(p, n);
+  float h     = luma(base);
+
+  // Bucket fill: a flood from the contact point outward (docs/DECIDED.md 2026-11-04,
+  // "dab 은 버킷 채우기" — the whole surface fills at once, it does not smear).
+  float d    = length(vLocalPos - uFillOrigin) / max(uFillRadius, 1e-4);
+  float mask = 1.0 - smoothstep(uFill - 0.07, uFill + 0.07, d);
+
+  if (uCaustic > 0.5) {
+    float c = pow(h, uCausticContrast) * 2.1;
+    gl_FragColor = vec4(uLightTone * c * mask, 1.0);
+  } else {
+    vec3 tone;
+    if (uBands > 2.5) {
+      tone = mix(mix(uShadowTone, uMidTone, ramp(ndl, -0.22)), uLightTone, ramp(ndl, 0.22));
+    } else {
+      tone = mix(uShadowTone, uLightTone, ramp(ndl, 0.0));
+    }
+    vec3 painted = mix(base, tone, uToneMix);
+
+    // Glint: only the top few percent of luminance glows (PigmentCommon GlintMask).
+    float g = smoothstep(0.62, 0.70, h) * 1.6 + smoothstep(0.70, 1.0, h) * 2.5;
+    painted += uGlint * g * uLightTone * 0.22;
+
+    vec3 bare = mix(uBareShadow, uBareLight, ramp(ndl, 0.0));
+    gl_FragColor = vec4(mix(bare, painted, mask), 1.0);
+  }
+}`;
+
+// ─────────────────────────────────────────────────────────── renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+let roomFog = null;   // kept so passthrough can drop it and the desktop view can get it back
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.02, 40);
+camera.position.set(0, 1.42, 0.92);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.74, 0);
+controls.enableDamping = true;
+controls.minDistance = 0.3;
+controls.maxDistance = 4;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+// ─────────────────────────────────────────────────────────── pigment textures
+const texLoader = new THREE.TextureLoader();
+const stillTex = texLoader.load('assets/yunseul_tile.png');   // periodized — seamless repeat
+stillTex.wrapS = stillTex.wrapT = THREE.RepeatWrapping;
+stillTex.colorSpace = THREE.SRGBColorSpace;
+stillTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+const video = document.getElementById('loopvid');
+const loopTex = new THREE.VideoTexture(video);
+// The loop is a raw crop, not periodized, so mirror the repeat to hide the tile seam
+// (PigmentCommon.hlsl MirrorRepeat, same trick).
+loopTex.wrapS = loopTex.wrapT = THREE.MirroredRepeatWrapping;
+loopTex.colorSpace = THREE.SRGBColorSpace;
+
+// ─────────────────────────────────────────────────────────── materials
+function pigmentMaterial(opts = {}) {
+  return new THREE.ShaderMaterial({
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    transparent: !!opts.caustic,
+    blending: opts.caustic ? THREE.AdditiveBlending : THREE.NormalBlending,
+    depthWrite: !opts.caustic,
+    uniforms: {
+      uPigment        : { value: stillTex },
+      uLightTone      : { value: new THREE.Color(PAINT.lightTone) },
+      uMidTone        : { value: new THREE.Color(PAINT.midTone) },
+      uShadowTone     : { value: new THREE.Color(PAINT.shadowTone) },
+      uBareLight      : { value: new THREE.Color(0xF0EEE6) },
+      uBareShadow     : { value: new THREE.Color(0x9AA0A8) },
+      uLightDir       : { value: PAINT.lightDir.clone() },
+      uToneMix        : { value: 0.65 },
+      uThreshold      : { value: 0.0 },
+      uSoftness       : { value: 0.06 },
+      uTriScale       : { value: opts.triScale ?? 2.4 },
+      uTriSharp       : { value: 6.0 },
+      uBands          : { value: 3.0 },
+      uGlint          : { value: 1.0 },
+      uFill           : { value: 1.0 },
+      uFillOrigin     : { value: new THREE.Vector3() },
+      uFillRadius     : { value: opts.fillRadius ?? 0.5 },
+      uWorldSpace     : { value: opts.caustic ? 1.0 : 0.0 },
+      uCaustic        : { value: opts.caustic ? 1.0 : 0.0 },
+      uCausticContrast: { value: 3.2 }
+    }
+  });
+}
+
+const mats = [];
+function reg(m) { m.userData.baseTriScale = m.uniforms.uTriScale.value; mats.push(m); return m; }
+
+// ─────────────────────────────────────────────────────────── desk anchor
+// deskRoot origin = the desk's top surface, centre. In AR it is dropped on a hit-test
+// point; on desktop it sits on a simulated desk.
+const deskRoot = new THREE.Group();
+scene.add(deskRoot);
+
+const DESK = { w: 1.2, d: 0.6, h: 0.74 };
+
+// -- surface: MAT (the flat baseline)
+const matMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.6, 0.4),
+  reg(pigmentMaterial({ triScale: 2.4, fillRadius: 0.38 }))
+);
+matMesh.rotation.x = -Math.PI / 2;
+matMesh.position.y = 0.0015;
+
+// -- surface: CLOTH (same pigment, but folded over the desk edge)
+const clothMesh = new THREE.Mesh(
+  new RoundedBoxGeometry(DESK.w + 0.08, 0.20, DESK.d + 0.08, 4, 0.028),
+  reg(pigmentMaterial({ triScale: 2.0, fillRadius: 0.72 }))
+);
+clothMesh.position.y = -0.0985;
+
+// -- surface: THINGS (the objects already on the desk)
+const things = new THREE.Group();
+const keyboard = new THREE.Mesh(
+  new RoundedBoxGeometry(0.36, 0.022, 0.13, 3, 0.006),
+  reg(pigmentMaterial({ triScale: 5.5, fillRadius: 0.21 }))
+);
+keyboard.position.set(0.0, 0.011, 0.07);
+
+const mug = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.041, 0.036, 0.095, 40, 1),
+  reg(pigmentMaterial({ triScale: 7.0, fillRadius: 0.085 }))
+);
+mug.position.set(-0.28, 0.0475, -0.04);
+
+const bottleProfile = [];
+for (let i = 0; i <= 26; i++) {
+  const t = i / 26, y = t * 0.235;
+  let r;
+  if (t < 0.70)      r = 0.034;
+  else if (t < 0.82) r = 0.034 - (t - 0.70) / 0.12 * 0.019;
+  else               r = 0.015;
+  bottleProfile.push(new THREE.Vector2(Math.max(r, 0.001), y));
+}
+const bottle = new THREE.Mesh(
+  new THREE.LatheGeometry(bottleProfile, 44),
+  reg(pigmentMaterial({ triScale: 6.0, fillRadius: 0.2 }))
+);
+bottle.position.set(0.26, 0, -0.05);
+
+things.add(keyboard, mug, bottle);
+
+// -- surface: LIGHT (world-space caustic added onto whatever the desk already is)
+const lightMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(DESK.w, DESK.d),
+  reg(pigmentMaterial({ caustic: true, triScale: 1.6, fillRadius: 0.68 }))
+);
+lightMesh.rotation.x = -Math.PI / 2;
+lightMesh.position.y = 0.003;
+
+deskRoot.add(matMesh, clothMesh, things, lightMesh);
+
+// ─────────────────────────────────────────────────────────── simulated room (non-XR only)
+const room = new THREE.Group();
+scene.add(room);
+{
+  const bareMat = new THREE.MeshStandardMaterial({ color: 0xBFC3C7, roughness: 0.85, metalness: 0.0 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x8E8B85, roughness: 0.72, metalness: 0.0 });
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), bareMat);
+  floor.rotation.x = -Math.PI / 2;
+
+  const top = new THREE.Mesh(new RoundedBoxGeometry(DESK.w, 0.026, DESK.d, 2, 0.004), woodMat);
+  top.position.y = DESK.h - 0.013;
+
+  room.add(floor, top);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, DESK.h - 0.026, 0.035), woodMat);
+    leg.position.set(sx * (DESK.w / 2 - 0.05), (DESK.h - 0.026) / 2, sz * (DESK.d / 2 - 0.05));
+    room.add(leg);
+  }
+  room.add(new THREE.HemisphereLight(0xDDE6EE, 0x4A4E54, 1.15));
+  const dir = new THREE.DirectionalLight(0xFFF6E8, 1.25);
+  dir.position.set(1.4, 2.6, 1.0);
+  room.add(dir);
+  scene.background = new THREE.Color(0x0b0e12);
+  roomFog = new THREE.Fog(0x0b0e12, 3.2, 7.5);
+  scene.fog = roomFog;
+}
+deskRoot.position.y = DESK.h;
+
+// ─────────────────────────────────────────────────────────── in-XR control plates
+// Billboarded band plates, same idea as Runtime/PunchCueView.cs, so the surface can be
+// switched without a desktop keyboard. Raycast targets.
+const plates = new THREE.Group();
+plates.visible = false;
+deskRoot.add(plates);
+
+function plateTexture(text, pressed) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 96;
+  const g = c.getContext('2d');
+  g.fillStyle = pressed ? '#F0EEE6' : 'rgba(11,14,18,0.82)';
+  g.fillRect(0, 0, 256, 96);
+  g.strokeStyle = pressed ? '#15317C' : '#F0EEE6';
+  g.lineWidth = 4;
+  g.strokeRect(2, 2, 252, 92);
+  g.fillStyle = pressed ? '#15317C' : '#F0EEE6';
+  g.font = '500 40px "IBM Plex Mono", monospace';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 128, 50);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const PLATE_KEYS = ['bare', 'mat', 'cloth', 'things', 'light', 'pour'];
+const plateMeshes = PLATE_KEYS.map((key, i) => {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.1, 0.0375),
+    new THREE.MeshBasicMaterial({ map: plateTexture(key.toUpperCase(), false), transparent: true, side: THREE.DoubleSide })
+  );
+  m.position.set((i - (PLATE_KEYS.length - 1) / 2) * 0.112, 0.2, -DESK.d / 2 - 0.06);
+  m.userData.key = key;
+  plates.add(m);
+  return m;
+});
+
+function refreshPlates() {
+  for (const m of plateMeshes) {
+    const pressed = m.userData.key === surface;
+    m.material.map.dispose();
+    m.material.map = plateTexture(m.userData.key.toUpperCase(), pressed);
+    m.material.needsUpdate = true;
+  }
+}
+
+// ─────────────────────────────────────────────────────────── state
+let surface = 'mat';
+let pigment = 'still';
+let fillT   = 1;      // animation clock for the bucket flood
+let placed  = false;  // AR: has the desk been dropped yet
+let inXR    = false;
+
+const activeMeshes = () => ({
+  bare  : [],
+  mat   : [matMesh],
+  cloth : [clothMesh],
+  things: [things],
+  light : [lightMesh]
+}[surface] || []);
+
+function setSurface(key) {
+  surface = key;
+  matMesh.visible   = key === 'mat';
+  clothMesh.visible = key === 'cloth';
+  things.visible    = key === 'things';
+  lightMesh.visible = key === 'light';
+  // In AR the real desk is the desk; on desktop the simulated one must show through
+  // for 'light' and 'bare' to read at all.
+  document.getElementById('note').innerHTML = SURFACES[key].note;
+  for (const b of document.querySelectorAll('[data-surface]'))
+    b.setAttribute('aria-pressed', String(b.dataset.surface === key));
+  refreshPlates();
+  pour();
+}
+
+function setPigment(key) {
+  pigment = key;
+  const tex = key === 'loop' ? loopTex : stillTex;
+  // The still is the periodized tile (catch-analyze-6b12, seam 11.2 -> 0.48), so it can be
+  // repeated tightly. The loop is still a raw crop — PeriodicTile has not been run over the
+  // frames yet — so it is mirrored and spread much wider, or the repeat reads as corduroy.
+  for (const m of mats) {
+    m.uniforms.uPigment.value = tex;
+    m.uniforms.uTriScale.value = m.userData.baseTriScale * (key === 'loop' ? 0.34 : 1.0);
+  }
+  if (key === 'loop') video.play().catch(() => {});
+  for (const b of document.querySelectorAll('[data-pigment]'))
+    b.setAttribute('aria-pressed', String(b.dataset.pigment === key));
+}
+
+function pour(origin, mesh) {
+  fillT = 0;
+  for (const m of mats) {
+    m.uniforms.uFill.value = 0;
+    if (origin && mesh && mesh.material === m) m.uniforms.uFillOrigin.value.copy(origin);
+    else                                       m.uniforms.uFillOrigin.value.set(0, 0, 0);
+  }
+}
+
+// ─────────────────────────────────────────────────────────── reaction tally
+const TALLY_KEY = 'yunseul-surface-tally-v1';
+const loadTally = () => { try { return JSON.parse(localStorage.getItem(TALLY_KEY)) || {}; } catch { return {}; } };
+let tally = loadTally();
+
+function vote(score) {
+  const row = tally[surface] || (tally[surface] = { 1: 0, 2: 0, 3: 0 });
+  row[score]++;
+  try { localStorage.setItem(TALLY_KEY, JSON.stringify(tally)); } catch {}
+  drawTally();
+}
+
+function tallyText() {
+  const names = { 1: 'flat', 2: 'ok', 3: 'wow' };
+  const rows = Object.keys(SURFACES)
+    .filter(k => tally[k])
+    .map(k => `${k}: ` + [3, 2, 1].map(s => `${names[s]} ${tally[k][s] || 0}`).join(' / '));
+  return rows.length ? rows.join('\n') : 'no votes yet';
+}
+
+function drawTally() {
+  const row = tally[surface];
+  document.getElementById('tally').innerHTML = row
+    ? `wow <b>${row[3] || 0}</b> · ok <b>${row[2] || 0}</b> · flat <b>${row[1] || 0}</b>`
+    : 'no votes on this surface';
+}
+
+// ─────────────────────────────────────────────────────────── XR
+const xrBtn = document.getElementById('btn-xr');
+let xrMode = null;
+
+if (navigator.xr) {
+  (async () => {
+    if (await navigator.xr.isSessionSupported('immersive-ar').catch(() => false))      xrMode = 'immersive-ar';
+    else if (await navigator.xr.isSessionSupported('immersive-vr').catch(() => false)) xrMode = 'immersive-vr';
+    if (xrMode) {
+      xrBtn.disabled = false;
+      xrBtn.textContent = xrMode === 'immersive-ar' ? 'Enter passthrough' : 'Enter VR';
+    } else {
+      xrBtn.textContent = 'No headset here';
+    }
+  })();
+} else {
+  xrBtn.textContent = 'No WebXR here';
+}
+
+xrBtn.addEventListener('click', async () => {
+  if (!xrMode) return;
+  try {
+    const session = await navigator.xr.requestSession(xrMode, {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['hit-test', 'hand-tracking', 'anchors']
+    });
+    await renderer.xr.setSession(session);
+  } catch (e) {
+    xrBtn.textContent = 'XR refused';
+    console.warn(e);
+  }
+});
+
+// Reticle for AR placement.
+const reticle = new THREE.Mesh(
+  new THREE.RingGeometry(0.055, 0.065, 48).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xF0EEE6, transparent: true, opacity: 0.9 })
+);
+reticle.visible = false;
+reticle.matrixAutoUpdate = false;
+scene.add(reticle);
+
+let hitSource = null, viewerSpace = null;
+
+renderer.xr.addEventListener('sessionstart', async () => {
+  inXR = true;
+  const session = renderer.xr.getSession();
+  const ar = session.environmentBlendMode !== 'opaque';
+  room.visible   = !ar;
+  scene.background = ar ? null : new THREE.Color(0x0b0e12);
+  scene.fog        = ar ? null : roomFog;
+  plates.visible = true;
+  controls.enabled = false;
+  if (ar) {
+    placed = false;
+    deskRoot.visible = false;
+    try {
+      viewerSpace = await session.requestReferenceSpace('viewer');
+      hitSource = await session.requestHitTestSource({ space: viewerSpace });
+    } catch (e) { console.warn('hit-test unavailable', e); }
+    if (!hitSource) {           // no hit-test: drop it at a plausible desk height ahead
+      deskRoot.position.set(0, DESK.h, -0.55);
+      deskRoot.visible = true;
+      placed = true;
+    }
+  } else {
+    deskRoot.position.set(0, DESK.h, -0.55);
+    deskRoot.visible = true;
+    placed = true;
+  }
+  refreshPlates();
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+  inXR = false;
+  if (hitSource) { hitSource.cancel?.(); hitSource = null; }
+  reticle.visible = false;
+  room.visible = true;
+  scene.background = new THREE.Color(0x0b0e12);
+  scene.fog = roomFog;
+  plates.visible = false;
+  controls.enabled = true;
+  deskRoot.visible = true;
+  deskRoot.position.set(0, DESK.h, 0);
+  deskRoot.quaternion.identity();
+});
+
+// Pinch (hand tracking) and trigger both raise 'select'.
+const raycaster = new THREE.Raycaster();
+const tmpMat = new THREE.Matrix4();
+
+function onSelect(event) {
+  if (!placed) {
+    if (reticle.visible) {
+      deskRoot.position.setFromMatrixPosition(reticle.matrix);
+      deskRoot.quaternion.setFromRotationMatrix(reticle.matrix);
+      deskRoot.visible = true;
+      placed = true;
+      reticle.visible = false;
+      pour();
+    }
+    return;
+  }
+  const ctrl = event.target;
+  tmpMat.identity().extractRotation(ctrl.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(ctrl.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMat);
+
+  const onPlate = raycaster.intersectObjects(plateMeshes, false)[0];
+  if (onPlate) {
+    const key = onPlate.object.userData.key;
+    if (key === 'pour') pour();
+    else setSurface(key);
+    return;
+  }
+  const onSurf = raycaster.intersectObjects(activeMeshes(), true)[0];
+  if (onSurf) pour(onSurf.object.worldToLocal(onSurf.point.clone()), onSurf.object);
+  else        pour();
+}
+
+for (const i of [0, 1]) {
+  const c = renderer.xr.getController(i);
+  c.addEventListener('select', onSelect);
+  scene.add(c);
+}
+
+// ─────────────────────────────────────────────────────────── desktop input
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (inXR) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  raycaster.setFromCamera(new THREE.Vector2(
+    ((e.clientX - r.left) / r.width) * 2 - 1,
+    -((e.clientY - r.top) / r.height) * 2 + 1
+  ), camera);
+  const hit = raycaster.intersectObjects(activeMeshes(), true)[0];
+  if (hit) pour(hit.object.worldToLocal(hit.point.clone()), hit.object);
+});
+
+// ─────────────────────────────────────────────────────────── ui wiring
+document.getElementById('rail').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.surface) setSurface(b.dataset.surface);
+  else if (b.dataset.pigment) setPigment(b.dataset.pigment);
+});
+document.getElementById('btn-fill').addEventListener('click', () => pour());
+document.querySelector('.vote').addEventListener('click', e => {
+  const b = e.target.closest('button[data-vote]');
+  if (b) vote(Number(b.dataset.vote));
+});
+document.getElementById('btn-copy').addEventListener('click', async e => {
+  try { await navigator.clipboard.writeText(tallyText()); e.target.textContent = 'Copied'; }
+  catch { e.target.textContent = tallyText().split('\n')[0] || '—'; }
+  setTimeout(() => { e.target.textContent = 'Copy tally'; }, 1400);
+});
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  document.getElementById('gate').classList.add('hide');
+  video.play().catch(() => {});
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─────────────────────────────────────────────────────────── loop
+const readout = document.getElementById('readout');
+let frames = 0, fpsClock = performance.now(), fps = 0, last = performance.now();
+const camPos = new THREE.Vector3();
+
+renderer.setAnimationLoop((time, frame) => {
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+
+  // Bucket flood: ~0.33 s to cover the surface, then hold.
+  if (fillT < 1) {
+    fillT = Math.min(1, fillT + dt / 0.33);
+    const e = 1 - Math.pow(1 - fillT, 3);
+    for (const m of mats) m.uniforms.uFill.value = e * 1.08;
+  }
+
+  // AR placement reticle.
+  if (inXR && !placed && hitSource && frame) {
+    const hits = frame.getHitTestResults(hitSource);
+    const ref = renderer.xr.getReferenceSpace();
+    if (hits.length) {
+      const pose = hits[0].getPose(ref);
+      reticle.visible = true;
+      reticle.matrix.fromArray(pose.transform.matrix);
+      reticle.updateMatrixWorld(true);
+    } else {
+      reticle.visible = false;
+    }
+  }
+
+  // Billboard the control plates toward the viewer.
+  if (plates.visible) {
+    (inXR ? renderer.xr.getCamera() : camera).getWorldPosition(camPos);
+    for (const m of plateMeshes) {
+      m.lookAt(camPos);
+    }
+  }
+
+  if (!inXR) controls.update();
+  renderer.render(scene, camera);
+
+  frames++;
+  if (now - fpsClock > 500) {
+    fps = Math.round((frames * 1000) / (now - fpsClock));
+    frames = 0; fpsClock = now;
+    readout.innerHTML =
+      `<b>${SURFACES[surface].label}</b> · ${pigment}<br>` +
+      `${fps} fps · ${inXR ? (placed ? 'xr placed' : 'xr · point at the desk') : 'desktop'}`;
+  }
+});
+
+setSurface('mat');
+setPigment('still');
+drawTally();
+</script>
+</body>
+</html>
