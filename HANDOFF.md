@@ -25,6 +25,7 @@ updated: 2026-11-06 02:24 KST · by: codex
 - 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
 
 ## 최근 증거
+- 2026-11-06 build-a3a1-build-8c28 (Cursor Fable): 증거 L1+L2. `node --test unity/mood-picker/web/orion/test/*.test.mjs` 47/47 (스키마·재질·레이아웃·GLB headless 로드·서버 중계/업로드·headless Chrome CDP 로 프리셋/슬라이더→quest/GLB export). 스크린샷 `web/orion/test/shots/{editor,hero,look-web}.png`. 카드 proof, done·커밋은 오케스트레이터. 룩 비교 PNG 는 Unity build-3e76 결과 대기
 - 2026-11-06 build-be9a-build-2714: 증거 L1. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0: `files: PASS` (주석 포함), HandState Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 18개 소스 컴파일 PASS. 동일 HandStateTests.cs를 .NET NUnit에서 실행: `passed=54 failed=0 skipped=0`. 임시 복사본의 Paint+GrabLetter 허용 변조를 스냅샷 테스트가 거부: `PASS mutation`
 - 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-hand-state-check-08dtyq0u/` (mutation/은 의도적으로 실패시킨 테스트). Unity 실행 통과를 뜻하지 않음. `mr status`는 ps 권한 오류, `pgrep`는 프로세스 목록 접근 불가(exit 3)로 Unity 미실행
 - 손 상태 카드 변경분 공백·touch/canon 검사 PASS, Portal/Catch/PullOut/Hands 변경 없음. 기존 docs/board/.harness 변경 보존. 전체 `git diff --check`는 기존 docs/DECIDED.md:83,95 공백으로 실패

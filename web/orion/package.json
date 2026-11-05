@@ -1,0 +1,13 @@
+{
+  "name": "orion-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ORION mac-side three.js editor/loader and local relay server. No dependencies: three 0.170.0 is vendored, WebSocket is node:http upgrade.",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "shots": "sh test/shots.sh"
+  },
+  "engines": { "node": ">=22" }
+}

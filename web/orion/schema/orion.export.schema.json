@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orion.export.schema.json",
+  "title": "orion.export.json v1 (Unity -> web contract; validator is src/schema.js)",
+  "type": "object",
+  "required": ["version", "exportedAt", "word", "letters"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "word": {
+      "type": "object",
+      "required": ["tracking", "thickness", "rotationYDeg"],
+      "properties": {
+        "tracking": { "type": "number", "minimum": 0 },
+        "thickness": { "type": "number", "exclusiveMinimum": 0 },
+        "rotationYDeg": { "type": "number" }
+      }
+    },
+    "letters": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["name", "offset", "paint"],
+        "properties": {
+          "name": { "enum": ["O1", "R", "I", "O2", "N"] },
+          "offset": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "paint": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["kind"],
+                "additionalProperties": false,
+                "properties": { "kind": { "const": "clay" } }
+              },
+              {
+                "type": "object",
+                "required": ["kind", "id", "lightTone", "midTone", "shadowTone", "lightDir", "tile", "loop"],
+                "properties": {
+                  "kind": { "enum": ["chip", "gradient"] },
+                  "id": { "type": "string", "minLength": 1 },
+                  "lightTone": { "$ref": "#/$defs/hex" },
+                  "midTone": { "$ref": "#/$defs/hex" },
+                  "shadowTone": { "$ref": "#/$defs/hex" },
+                  "lightDir": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                  "tile": { "type": "string", "minLength": 1, "description": "relative to the JSON file; no '..' segments" },
+                  "loop": { "type": "null", "description": "loop chips are deferred; non-null is a warning, drawn as still" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hex": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+  }
+}

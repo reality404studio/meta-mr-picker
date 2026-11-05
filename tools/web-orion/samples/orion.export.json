@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "exportedAt": "2026-11-06T03:00:00+09:00",
+  "word": {
+    "tracking": 1.0,
+    "thickness": 1.0,
+    "rotationYDeg": 0
+  },
+  "letters": [
+    {
+      "name": "O1",
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "paint": {
+        "kind": "chip",
+        "id": "yunseul",
+        "shadowTone": "#6D7780",
+        "midTone": "#9FA2A3",
+        "lightTone": "#C5BEB0",
+        "lightDir": [
+          0.6,
+          0.65,
+          -0.45
+        ],
+        "tile": "chips/yunseul/tile.png",
+        "loop": null
+      }
+    },
+    {
+      "name": "R",
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "paint": {
+        "kind": "chip",
+        "id": "paint_20261104_143524_004",
+        "lightTone": "#A49883",
+        "midTone": "#968872",
+        "shadowTone": "#86755C",
+        "lightDir": [
+          -0.7129999995231628,
+          0.37959998846054077,
+          -0.5895000100135803
+        ],
+        "tile": "chips/paint_20261104_143524_004/tile.png",
+        "loop": null
+      }
+    },
+    {
+      "name": "I",
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "paint": {
+        "kind": "gradient",
+        "id": "gradient_sample",
+        "shadowTone": "#5A818B",
+        "midTone": "#A396B8",
+        "lightTone": "#DCA46D",
+        "lightDir": [
+          0.6,
+          0.65,
+          -0.45
+        ],
+        "tile": "chips/gradient_sample/tile.png",
+        "loop": null
+      }
+    },
+    {
+      "name": "O2",
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "paint": {
+        "kind": "chip",
+        "id": "yunseul",
+        "shadowTone": "#6D7780",
+        "midTone": "#9FA2A3",
+        "lightTone": "#C5BEB0",
+        "lightDir": [
+          0.6,
+          0.65,
+          -0.45
+        ],
+        "tile": "chips/yunseul/tile.png",
+        "loop": null
+      }
+    },
+    {
+      "name": "N",
+      "offset": [
+        0,
+        0,
+        0
+      ],
+      "paint": {
+        "kind": "gradient",
+        "id": "gradient_sample",
+        "shadowTone": "#5A818B",
+        "midTone": "#A396B8",
+        "lightTone": "#DCA46D",
+        "lightDir": [
+          0.6,
+          0.65,
+          -0.45
+        ],
+        "tile": "chips/gradient_sample/tile.png",
+        "loop": null
+      }
+    }
+  ]
+}

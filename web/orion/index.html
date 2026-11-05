@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ORION</title>
+<link rel="stylesheet" href="./style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+</head>
+<body data-mode="editor">
+<main id="stage">
+  <canvas id="view"></canvas>
+  <header id="top">
+    <div id="title">ORION</div>
+    <div id="status">
+      <span class="dot" id="dot-server" title="server"></span><span class="label">SERVER</span>
+      <span class="dot" id="dot-quest" title="quest"></span><span class="label">QUEST</span>
+    </div>
+  </header>
+  <section id="editor-ui" class="panel">
+    <div class="presets" id="presets">
+      <span class="label">MATERIAL</span>
+      <button data-preset="clay" class="on">CLAY</button>
+    </div>
+    <div class="sliders">
+      <label class="slider"><span class="name">TRACKING</span><input type="range" id="s-tracking" /><output id="o-tracking"></output></label>
+      <label class="slider"><span class="name">THICKNESS</span><input type="range" id="s-thickness" /><output id="o-thickness"></output></label>
+      <label class="slider"><span class="name">ROTATION</span><input type="range" id="s-rotationYDeg" /><output id="o-rotationYDeg"></output></label>
+    </div>
+  </section>
+  <section id="hero-ui" class="panel">
+    <code id="loader-line"></code>
+    <div class="row">
+      <button id="btn-download">DOWNLOAD GLB</button>
+      <button id="btn-outline">OUTLINE OFF</button>
+    </div>
+  </section>
+  <div id="toast"></div>
+</main>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>
