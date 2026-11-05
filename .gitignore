@@ -31,3 +31,7 @@ sysinfo.txt
 
 # Unity 임시
 /.utmp/
+
+# mr kit
+.harness/state.json
+.harness/state/

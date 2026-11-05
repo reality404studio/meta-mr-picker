@@ -1,0 +1,6 @@
+# 정본 — 에이전트가 편집하면 PreToolUse 훅이 막는다. 한 줄에 glob 하나 (프로젝트 루트 기준).
+# docs/, board/ 는 작업대(my-mr-studio) 사본. 작업대에서 고치고 scripts/sync-docs.sh
+docs/**
+board/**
+handoff/2026-11-05-orion-demo.md
+Assets/Fonts/Unbounded/OFL.txt

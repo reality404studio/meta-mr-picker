@@ -1,0 +1,18 @@
+{
+  "font": "Assets/Fonts/Unbounded/Unbounded-Black.ttf",
+  "text": "ORION",
+  "node_names": ["O1", "R", "I", "O2", "N"],
+  "expected_holes": {"O1": 1, "R": 1, "I": 0, "O2": 1, "N": 0},
+  "height_m": 0.12,
+  "expected_width_m": 0.615,
+  "dimension_tolerance": 0.1,
+  "extrude_m": 0.009,
+  "bevel_m": 0.0015,
+  "bevel_resolution": 3,
+  "curve_resolution": 16,
+  "weld_tolerance_m": 0.0000001,
+  "base_color": [0.8, 0.8, 0.8, 1.0],
+  "roughness": 1.0,
+  "metallic": 0.0,
+  "outputs": ["Assets/Models/ORION.glb", "web/orion/ORION.glb"]
+}

@@ -1,0 +1,8 @@
+# 지금 카드(build-402f-make-098a)가 건드려도 되는 경로
+Assets/Models/
+Assets/Fonts/Unbounded/
+Assets/Tests/EditMode/
+tools/orion-glb/
+web/orion/
+HANDOFF.md
+LESSONS.md
