@@ -15,3 +15,6 @@ Assets/Tests/EditMode/PullOut*
 # web-orion (Fable · Cursor)
 tools/web-orion/
 web/orion/
+# build-be9a-build-2714 (손 상태 기계)
+Assets/Scripts/HandState/
+Assets/Tests/EditMode/HandState*

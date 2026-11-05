@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.HandState",
+    "rootNamespace": "MoodPicker.HandStates",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": true
+}

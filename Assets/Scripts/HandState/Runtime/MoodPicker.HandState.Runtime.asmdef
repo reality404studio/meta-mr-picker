@@ -1,0 +1,11 @@
+{
+    "name": "MoodPicker.HandState.Runtime",
+    "rootNamespace": "MoodPicker.HandStates",
+    "references": [
+        "MoodPicker.HandState",
+        "MoodPicker.Portal.Runtime",
+        "MoodPicker.Catch"
+    ],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

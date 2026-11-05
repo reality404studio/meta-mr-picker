@@ -1,11 +1,11 @@
 # HANDOFF — ORION (Meta VR Start 2026 출품작)
-updated: 2026-11-06 02:10 KST · by: codex
+updated: 2026-11-06 02:24 KST · by: codex
 
 ## 목표 (한 줄)
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- 없음. build-73cd-build-d0e0 완료 (풀아웃 코어, 코드·테스트까지). 씬·손 입력 연결과 실기는 아직
+- 없음. build-be9a-build-2714 완료 (손 상태 기계 코어, 237/237). 손 마스크·손 색 표시(build-be9a-build-?)와 씬 연결은 아직
 
 ## 다음 할 일
 1. build-be9a 손 상태 기계 → build-3e76 글자 룩 셰이더 → build-e463 글자별 버킷 (11-10 게이트: 풀아웃→채집→바르기 한 번에)
@@ -25,6 +25,9 @@ updated: 2026-11-06 02:10 KST · by: codex
 - 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
 
 ## 최근 증거
+- 2026-11-06 build-be9a-build-2714: 증거 L1. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0: `files: PASS` (주석 포함), HandState Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 18개 소스 컴파일 PASS. 동일 HandStateTests.cs를 .NET NUnit에서 실행: `passed=54 failed=0 skipped=0`. 임시 복사본의 Paint+GrabLetter 허용 변조를 스냅샷 테스트가 거부: `PASS mutation`
+- 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-hand-state-check-08dtyq0u/` (mutation/은 의도적으로 실패시킨 테스트). Unity 실행 통과를 뜻하지 않음. `mr status`는 ps 권한 오류, `pgrep`는 프로세스 목록 접근 불가(exit 3)로 Unity 미실행
+- 손 상태 카드 변경분 공백·touch/canon 검사 PASS, Portal/Catch/PullOut/Hands 변경 없음. 기존 docs/board/.harness 변경 보존. 전체 `git diff --check`는 기존 docs/DECIDED.md:83,95 공백으로 실패
 - 2026-11-06 build-73cd-build-d0e0: 증거 L1 (파일·주석 게이트 및 컴파일 한정). `python3 -B Assets/Scripts/PullOut/Verification~/verify_compile.py` exit 0: `files: PASS`, PullOut Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 16개 소스 PASS. 새 테스트 25케이스의 Unity 실행은 미확인
 - 풀아웃 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-pull-out-check-h8cu7xah/`. 카드 변경분 공백·touch/canon 검사 PASS. 작업 도중 별도로 들어온 docs/board/.harness 변경은 수정하지 않음; 전체 `git diff --check`는 docs/DECIDED.md:81,93 공백으로 실패. `mr status`는 ps 권한 오류
 - 2026-11-06 build-7c8f-build-f55b: 증거 L1 (파일 게이트·컴파일 한정). `python3 -B Assets/Scripts/MacAnchor/Verification~/verify_compile.py` exit 0: `files: PASS`, Hands/DeskKeyboard/Core/Runtime 및 전체 EditMode 15개 소스 Roslyn PASS. 신규 NUnit 29케이스를 포함한 테스트 실행은 미확인
