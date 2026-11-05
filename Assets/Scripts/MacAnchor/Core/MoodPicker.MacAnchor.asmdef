@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.MacAnchor",
+    "rootNamespace": "MoodPicker.MacAnchoring",
+    "references": ["MoodPicker.Hands", "MoodPicker.DeskKeyboard"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

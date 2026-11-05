@@ -8,6 +8,8 @@
         "Reality404.BuildGate.Editor",
         "MoodPicker.Hands",
         "MoodPicker.DeskKeyboard",
+        "MoodPicker.MacAnchor",
+        "MoodPicker.MacAnchor.Runtime",
         "MoodPicker.Catch",
         "MoodPicker.Portal",
         "MoodPicker.Dab",

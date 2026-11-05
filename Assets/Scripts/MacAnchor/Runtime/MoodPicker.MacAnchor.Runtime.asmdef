@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.MacAnchor.Runtime",
+    "rootNamespace": "MoodPicker.MacAnchoring",
+    "references": ["MoodPicker.MacAnchor"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}
