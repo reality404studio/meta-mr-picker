@@ -6,3 +6,6 @@ tools/orion-glb/
 web/orion/
 HANDOFF.md
 LESSONS.md
+# build-7c8f-build-f55b (맥북 앵커)
+Assets/Scripts/MacAnchor/
+Assets/Tests/EditMode/MacAnchor*
