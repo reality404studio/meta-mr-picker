@@ -9,3 +9,6 @@ LESSONS.md
 # build-7c8f-build-f55b (맥북 앵커)
 Assets/Scripts/MacAnchor/
 Assets/Tests/EditMode/MacAnchor*
+# build-73cd-build-d0e0 (풀아웃)
+Assets/Scripts/PullOut/
+Assets/Tests/EditMode/PullOut*

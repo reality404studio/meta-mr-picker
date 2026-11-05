@@ -5,11 +5,16 @@ updated: 2026-11-06 01:14 KST · by: codex
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- 없음. build-7c8f-build-f55b 완료 (맥북 앵커 코어). 맥북 앞 실기 확인 카드(build-7c8f-verify-a375)는 사람 카드로 대기
+- id: build-73cd-build-d0e0 (보드 `--app orion`) · 상태: 대기 → Codex(Astra) · 필요한 증거: L1
+- 할 일: 풀아웃. MacAnchor 화면 사각형 안을 검지로 탭하면 글자 5개(O1 R I O2 N)가 시차 0.15s 로 화면 평면에서 앞으로 나와 두께 0→1 로 부풀며 호버링 위치에 선다. 새 폴더 Assets/Scripts/PullOut/ (Core 순수 C# + Runtime, asmdef)
+- 성공 조건: EditMode — 사각형 안 탭 1회 → 이벤트 순서 O1→R→I→O2→N, 사각형 밖 탭·손떨림 10회 중 오탐 ≤1, 애니메이션 완료 시 위치 = 호버링 설정값 ±1cm
+- 건드려도 되는 곳: .harness/touch.txt
+- stop: 테스트 코드와 컴파일 통과 후 커밋 보류하고 보고 (Unity 테스트 실행은 이 세션이 한다)
 
-## 다음 할 일 (최대 3)
-1. 보드에 §4 나머지 P0 카드 깔기 후 다음 카드 선택 (풀아웃 → 손 상태 기계 → 글자 바르기 순)
-3. 보드에 §4 나머지 P0 카드 깔기 (풀아웃, 손 상태 기계, 디밍, 재질 그대로 룩, 스포이드·작업대, 웹 로더, 던지기)
+## 다음 할 일
+1. build-be9a 손 상태 기계 → build-3e76 글자 룩 셰이더 → build-e463 글자별 버킷 (11-10 게이트: 풀아웃→채집→바르기 한 번에)
+2. build-8a30 스탬프 채집, build-5e10 스포이드·작업대, build-1b00 단독 패널·디밍, build-a3a1 던지기·내보내기·웹
+3. 사람 실기 카드: build-7c8f-verify-a375 (맥북 앵커), build-73cd 실기
 
 ## 정본 / 건드리지 말 것
 - 결정: 작업대 `studio/shared/DECIDED.md` `[orion]` D1~D17 (사본 docs/DECIDED.md). 버린 안: REJECTED.md
