@@ -18,3 +18,11 @@ web/orion/
 # build-be9a-build-2714 (손 상태 기계)
 Assets/Scripts/HandState/
 Assets/Tests/EditMode/HandState*
+# build-3e76-build-d8b8 (글자 룩 셰이더)
+Assets/Shaders/Cel/
+Assets/Materials/Orion/
+Assets/Scripts/Dab/Core/CelPaint.cs
+Assets/Scripts/Dab/Editor/
+Assets/Tests/EditMode/OrionLook*
+scripts/verify-orion-look.sh
+tools/hand-state-verify/

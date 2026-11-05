@@ -1,16 +1,17 @@
 # HANDOFF — ORION (Meta VR Start 2026 출품작)
-updated: 2026-11-06 02:24 KST · by: codex
+updated: 2026-11-06 08:52 KST · by: codex
 
 ## 목표 (한 줄)
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- 없음. build-be9a-build-2714 완료 (손 상태 기계 코어, 237/237). 손 마스크·손 색 표시(build-be9a-build-?)와 씬 연결은 아직
+- 없음. build-3e76-build-d8b8 완료 (재질 그대로 CelPaint + Clay.mat, 15/15, GPU 렌더 통과). 확정 토큰 반영 후속은 build-fd7e
 
 ## 다음 할 일
-1. build-be9a 손 상태 기계 → build-3e76 글자 룩 셰이더 → build-e463 글자별 버킷 (11-10 게이트: 풀아웃→채집→바르기 한 번에)
-2. build-8a30 스탬프 채집, build-5e10 스포이드·작업대, build-1b00 단독 패널·디밍, build-a3a1 던지기·내보내기·웹
-3. 사람 실기 카드: build-7c8f-verify-a375 (맥북 앵커), build-73cd 실기
+1. build-fd7e 디자인 토큰 → 코드 (Astra: OrionTokens + 풀아웃 0.08s·팔름업 히스테리시스·클레이 Half-Lambert 하한·디밍 값 / Fable: web 토큰, 레시피 .harness/briefs/web-tokens-fable.md)
+2. build-0707 병풍 폴리오 + 3D 칩 → build-e463 글자별 버킷 → build-bbc7 손 림라이트·검지 캡 → build-c6a2 파인더 (11-10 게이트: 풀아웃→채집→바르기)
+3. build-a4ae 소품 Blender (Astra 스크립트, 실행은 오케스트레이터. Blender 동시 사용 확인 후)
+- 휠·우물(PortalController 일부)은 폐기(REJECTED 2026-11-06). 이벤트 PaintPicked/Washed 계약만 폴리오가 이어 쓴다
 
 ## 정본 / 건드리지 말 것
 - 결정: 작업대 `studio/shared/DECIDED.md` `[orion]` D1~D17 (사본 docs/DECIDED.md). 버린 안: REJECTED.md
@@ -25,6 +26,10 @@ updated: 2026-11-06 02:24 KST · by: codex
 - 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
 
 ## 최근 증거
+- 2026-11-06 build-3e76-build-d8b8: 증거 L1 (컴파일·파일 게이트·셰이더 정적 한정). `sh scripts/verify-orion-look.sh --static` exit 0: `files: PASS`, Dab Core 4개/Runtime 1개/Editor 3개 및 의존 asmdef Roslyn PASS, 전체 EditMode 19개 소스·Assembly-CSharp 1개·Editor 9개 컴파일 PASS
+- 글자 룩 정적 결과: `PASS shader static` (연속/계단·트라이플래너·Cull Front·알파 1·스테레오·Clay GUID), `PASS gate fixtures` (ColorMask RGB 및 Cull Back 거부). 공용 BuildGate는 읽기만 했으며 동일 검사기를 임시 디렉터리에서 컴파일·실행
+- 글자 룩 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-look-check-az9ty8es/`. `sh -n scripts/verify-orion-look.sh`, 카드 변경분 `git diff --check`, touch/canon·새 파일 공백 검사 PASS. 기존 docs/board/.harness 변경 보존
+- 미확인: Unity EditMode 15케이스 실행·HLSL GPU 컴파일·구 3개 픽셀 판정·기기 룩. 렌더는 윤슬/그라데이션 PNG를 tools/web-orion/samples/chips에서 직접 읽고, 흰 텍스처 대조 렌더로 질감 표준편차를 검사. 요청한 stop에 따라 Unity 미실행; `mr status`는 ps 권한 오류
 - 2026-11-06 build-a3a1-build-8c28 (Cursor Fable): 증거 L1+L2. `node --test unity/mood-picker/web/orion/test/*.test.mjs` 47/47 (스키마·재질·레이아웃·GLB headless 로드·서버 중계/업로드·headless Chrome CDP 로 프리셋/슬라이더→quest/GLB export). 스크린샷 `web/orion/test/shots/{editor,hero,look-web}.png`. 카드 proof, done·커밋은 오케스트레이터. 룩 비교 PNG 는 Unity build-3e76 결과 대기
 - 2026-11-06 build-be9a-build-2714: 증거 L1. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0: `files: PASS` (주석 포함), HandState Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 18개 소스 컴파일 PASS. 동일 HandStateTests.cs를 .NET NUnit에서 실행: `passed=54 failed=0 skipped=0`. 임시 복사본의 Paint+GrabLetter 허용 변조를 스냅샷 테스트가 거부: `PASS mutation`
 - 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-hand-state-check-08dtyq0u/` (mutation/은 의도적으로 실패시킨 테스트). Unity 실행 통과를 뜻하지 않음. `mr status`는 ps 권한 오류, `pgrep`는 프로세스 목록 접근 불가(exit 3)로 Unity 미실행

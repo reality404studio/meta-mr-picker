@@ -9,9 +9,12 @@ namespace MoodPicker.Dab
 
         public static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
         public static readonly int LightTone = Shader.PropertyToID("_LightTone");
+        public static readonly int MidTone = Shader.PropertyToID("_MidTone");
         public static readonly int ShadowTone = Shader.PropertyToID("_ShadowTone");
         public static readonly int LightDir = Shader.PropertyToID("_LightDir");
         public static readonly int ToneMix = Shader.PropertyToID("_ToneMix");
+        public static readonly int ToneSteps = Shader.PropertyToID("_ToneSteps");
+        public static readonly int Outline = Shader.PropertyToID("_Outline");
 
         public static readonly Vector3 FallbackLightDir = Vector3.up;
 
@@ -25,8 +28,17 @@ namespace MoodPicker.Dab
             }
             m.SetColor(LightTone, ToneOf(r.lightTone, m.GetColor(LightTone)));
             m.SetColor(ShadowTone, ToneOf(r.shadowTone, m.GetColor(ShadowTone)));
+            m.SetColor(MidTone, ToneOf(r.midTone, Color.Lerp(m.GetColor(ShadowTone), m.GetColor(LightTone), 0.5f)));
             Vector3 d = LightDirOf(r);
             m.SetVector(LightDir, new Vector4(d.x, d.y, d.z, 0f));
+        }
+
+        public static void Apply(Material m, PaintRecord r, Texture caught, int toneSteps, bool outline)
+        {
+            if (m == null || r == null) return;
+            Apply(m, r, caught);
+            m.SetFloat(ToneSteps, Mathf.Max(0, toneSteps));
+            m.SetFloat(Outline, outline ? 1f : 0f);
         }
 
         public static Vector3 LightDirOf(PaintRecord r)

@@ -84,7 +84,7 @@ compile_assembly("MoodPicker.Tests.EditMode", sorted((root / "Assets/Tests/EditM
 
 core = root / "Assets/Scripts/HandState/Core"
 core_sources = sorted(core.glob("*.cs"))
-test_sources = [root / "Assets/Tests/EditMode/HandStateTests.cs", Path(__file__).with_name("RunCoreTests.cs")]
+test_sources = [root / "Assets/Tests/EditMode/HandStateTests.cs", root / "tools/hand-state-verify/RunCoreTests.cs"]
 pure_refs = [p for p in refs if not p.name.startswith("UnityEngine")]
 core_name = "MoodPicker.HandState"
 runner_name = "HandState.CoreTests"

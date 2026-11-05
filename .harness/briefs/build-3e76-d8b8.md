@@ -1,0 +1,10 @@
+너는 ORION 앱 레포(현재 디렉터리, 브랜치 orion)의 구현 담당이다. 먼저 HANDOFF.md, AGENTS.md, docs/UNITY_GUARDRAILS.md(특히 §4 셰이더·알파 쓰기, ColorMask RGB 금지), handoff/2026-11-05-orion-demo.md 의 §1 D13·D14, §4-8 을 읽어. 기존 셰이더 Assets/Shaders/Cel/ 과 그 검증 방식 scripts/verify-dab-shader.sh, Assets/Scripts/Dab/Editor/CelShaderRender.cs, 게이트 unity/shared/BuildGate(읽기만) 를 파악해.
+
+HANDOFF.md 의 '지금 카드' build-3e76-build-d8b8 하나만 해. "재질 그대로" 룩:
+- Assets/Shaders/Cel/CelPaint.shader (MoodPicker/CelPaint) 확장: 프로퍼티 _ToneSteps (0 = 연속, 기본 0). 0 이면 라이트 램프를 N·lightDir 에서 smoothstep 으로 부드럽게 lightTone→midTone→shadowTone 3색 보간(_ToneSoftness 한 개), 정수이면 그 수만큼 계단. 담긴 타일 질감은 트라이플래너로 그대로 보존(_ToneMix 로 램프와 섞는 기존 방식 유지, ORION 기본 mix 는 질감이 죽지 않는 값). 외곽선 토글 _Outline(0/1) + 기존 CelOutline 패스 규칙 유지(뒷면 Cull Front, 클라인 #15317C). 알파는 1 로 쓴다(ColorMask RGB 금지).
+- 클레이 기본 재질: Assets/Materials/Orion/Clay.mat — 무광 연회색(블렌더 기본 베이스 컬러 0.8 → sRGB 약 #E7E7E7), 램프는 약하게(질감 없음·균일해 보이게), 외곽선 꺼짐. .mat 는 셰이더 GUID 를 직접 참조하는 YAML 로 만들어(Shader.Find 금지, 셰이더 .meta 의 guid 사용). 수치는 한곳(OrionLookSettings 또는 .mat 프로퍼티)에만.
+- 기존 CelPaint.cs Apply 에 _ToneSteps·_Outline 지정 경로를 추가하되 기존 시그니처·동작은 깨지 않는다(dab 테스트가 의존).
+- 검증 스크립트 scripts/verify-orion-look.sh (verify-dab-shader.sh 패턴): (1) preflight 컴파일 (2) 게이트 셰이더 검사 통과 (3) Unity 배치 렌더(진짜 그래픽, 광원 0개·검은 앰비언트·스카이박스 없음): 글자 모양 대신 구 3개를 윤슬 칩·그라데이션 칩·클레이로 렌더 → 판정: 윤슬 구의 고유 색 톤 수 > 2 와 질감 표준편차 > 임계 (그라데이션이 2톤으로 뭉개지지 않음), 클레이 구 객체 평균색 #E7E7E7 ±8, 마젠타 0, 배경 알파 0·객체 알파 1. 칩 PNG 는 tools/web-orion/samples/chips/*/tile.png 를 복사해 Assets/Tests/OrionLook/ (EditMode 가 읽을 위치) 에 둬도 되고 배치 렌더가 직접 읽어도 됨. 이 스크립트가 Unity 를 실행하는 부분은 샌드박스에서 못 돌 수 있으니, 돌리는 쪽은 오케스트레이터가 한다. 너는 스크립트·렌더 진입점(Assets/Scripts/Dab/Editor 안 새 파일)·EditMode 테스트(Assets/Tests/EditMode/OrionLookTests.cs: 프로퍼티 존재, 기본값, _ToneSteps=0 과 정수 분기, Clay.mat 가 셰이더 GUID 로 연결됨)까지 쓰고 Roslyn 컴파일 확인(기존 verify_compile 방식)과 셰이더 정적 검사까지 돌려.
+- 규칙: .harness/touch.txt 밖은 고치지 마. 설계 이유 주석 금지(주석 린트 있음). 보라/마젠타가 나오면 셰이더 컴파일 실패 신호이니 문법에 특히 주의(URP, 인스턴싱·스테레오 매크로 유지).
+- 커밋하지 마. 푸시하지 마. 다른 카드 시작하지 마.
+- 끝나면 HANDOFF.md 의 '지금 카드'와 '최근 증거'를 갱신하고, 마지막 메시지로 보고: 카드 / 한 일 / 돌린 검증(명령) / 결과(핵심 줄) / 증거: L1 / 못 한 것.
