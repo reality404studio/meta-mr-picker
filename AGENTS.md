@@ -32,5 +32,6 @@
   - 글자 룩은 재질 그대로 (2톤 셀 단순화 안 함, D13). 안 칠한 글자 = 블렌더 기본 클레이 연회색 (D14)
   - 손은 항상 가상 오브제 위 (손 마스크), 손 색 = 모드 (D6)
   - 장식 금지, 에디토리얼 (흰 제도선 #F0EEE6, Plex Mono)
+- 라운드 시작 셀프 체크 (사람에게 묻지 않고 먼저 한다): `git fetch --all` 로 원격 브랜치·최근 커밋, 작업대 `studio/shared/DECIDED.md`·`REJECTED.md` 최상단과 보드 변경(다른 에이전트가 만든 카드·메모, 예: Gemini Argon 의 interface-design), 디자인 토큰 확정 여부(`design/tokens/orion.tokens.json` ↔ 작업대 interface-design §8), 남은 프로세스. 결정이 바뀌었으면 진행 중 카드 브리핑과 보드를 먼저 맞춘다. 사람은 결정만 한다.
 - 기기 라운드: mr-round 스킬. 마무리: wrap 스킬.
 <!-- mrkit:project:end -->

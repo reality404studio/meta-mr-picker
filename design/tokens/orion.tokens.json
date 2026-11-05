@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "source": "작업대 studio/apps/orion/nodes/interface-design/README.md §8 (2026-11-06 사람 + Gemini Argon 확정)",
+  "color": {
+    "paper.face": "#F0EEE6",
+    "paper.edge": "#D2CEC3",
+    "ink.klein": "#15317C",
+    "print.cobalt": "#2559B4",
+    "aux.sky": "#7FA6D9",
+    "accent.red": "#D23A2C",
+    "clay.bare": "#E7E7E7",
+    "clay.shadowFloor": "#A8AEB8",
+    "web.stage": "#0E1322",
+    "pigment.vermil": "#D23A2C",
+    "pigment.amber": "#F4B03A",
+    "pigment.mint": "#38B29C",
+    "pigment.violet": "#8E5ED0",
+    "pigment.cream": "#F0EEE6"
+  },
+  "env": {
+    "passthrough.workspace": 0.78,
+    "passthrough.hero": 0.32,
+    "passthrough.transitionSeconds": 0.45
+  },
+  "type": {
+    "hero.sculpture": { "family": "Unbounded", "weight": 900, "minDeg": 12.0, "heightCm": 8.5 },
+    "spec.mono": { "family": "IBM Plex Mono", "weight": 500, "minDeg": 0.75, "minMm": 5.2 },
+    "editorial.display": { "family": "Fraunces", "weight": [500, 600], "minDeg": 1.8, "minMm": 12.5 },
+    "forbidden": { "weights": ["Thin", "Light", "Italic"], "minDegBelow": 0.65, "koreanAtlas": false }
+  },
+  "stroke": {
+    "line.primaryMm": 1.8,
+    "line.primaryBackingMm": 0.8,
+    "line.dashedMm": 1.4,
+    "line.dashOnMm": 6,
+    "line.dashOffMm": 4,
+    "hand.rimPower": 6.0,
+    "hand.inflateMm": 1.5
+  },
+  "geometry": {
+    "chip.cardCm": [5.4, 6.8],
+    "chip.cardThicknessMm": 3.0,
+    "chip.tileCm": [4.2, 4.2],
+    "chip.tileRaiseMm": 4.0,
+    "chip.trisTotal": 22,
+    "folio.foldAngleDeg": 15,
+    "folio.slotGapMm": 2,
+    "folio.slots": [4, 5],
+    "frame.f1Cm": [34, 21],
+    "frame.f1SlotBarCm": 1.8,
+    "console.cm": [28, 22],
+    "console.thicknessMm": 6,
+    "console.basinCm": [15, 15],
+    "console.basinDepthMm": 3
+  },
+  "zone": {
+    "canvas": { "zMin": 0.55, "zMax": 0.60, "y": -0.15 },
+    "hero": { "z": 0.40, "y": -0.14, "folioX": -0.26 },
+    "desk": { "zMin": 0.32, "zMax": 0.36, "y": -0.36 },
+    "hand": { "folioAboveCm": 7, "finderZ": 0.45 }
+  },
+  "hysteresis": {
+    "touch.dab": { "enterMm": 3.0, "exitMm": 6.0 },
+    "pinch": { "enterCm": 2.2, "exitCm": 3.2 },
+    "palmUp": { "enterDot": 0.80, "exitDot": 0.50, "holdSeconds": 0.27, "releaseSeconds": 0.30 },
+    "hold.snapSeconds": 3.0,
+    "hit.minSizeCm": [3.6, 3.6],
+    "hit.minDeg": 3.0
+  },
+  "motion": {
+    "finder.unfold": { "seconds": 0.28, "ease": "CubicOut" },
+    "chip.flyToFolio": { "seconds": 0.55, "ease": "CubicInOut" },
+    "pullout.stagger": { "staggerSeconds": 0.08, "seconds": 0.65, "ease": "EaseOutBack", "fromZ": 0.58, "toZ": 0.40, "thicknessFrom": 0.02, "thicknessTo": 1.0 }
+  }
+}
