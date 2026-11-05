@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.PullOut",
+    "rootNamespace": "MoodPicker.PullOut",
+    "references": ["MoodPicker.Hands", "MoodPicker.DeskKeyboard", "MoodPicker.MacAnchor"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

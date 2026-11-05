@@ -1,15 +1,11 @@
 # HANDOFF — ORION (Meta VR Start 2026 출품작)
-updated: 2026-11-06 01:14 KST · by: codex
+updated: 2026-11-06 02:10 KST · by: codex
 
 ## 목표 (한 줄)
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- id: build-73cd-build-d0e0 (보드 `--app orion`) · 상태: 대기 → Codex(Astra) · 필요한 증거: L1
-- 할 일: 풀아웃. MacAnchor 화면 사각형 안을 검지로 탭하면 글자 5개(O1 R I O2 N)가 시차 0.15s 로 화면 평면에서 앞으로 나와 두께 0→1 로 부풀며 호버링 위치에 선다. 새 폴더 Assets/Scripts/PullOut/ (Core 순수 C# + Runtime, asmdef)
-- 성공 조건: EditMode — 사각형 안 탭 1회 → 이벤트 순서 O1→R→I→O2→N, 사각형 밖 탭·손떨림 10회 중 오탐 ≤1, 애니메이션 완료 시 위치 = 호버링 설정값 ±1cm
-- 건드려도 되는 곳: .harness/touch.txt
-- stop: 테스트 코드와 컴파일 통과 후 커밋 보류하고 보고 (Unity 테스트 실행은 이 세션이 한다)
+- 없음. build-73cd-build-d0e0 완료 (풀아웃 코어, 코드·테스트까지). 씬·손 입력 연결과 실기는 아직
 
 ## 다음 할 일
 1. build-be9a 손 상태 기계 → build-3e76 글자 룩 셰이더 → build-e463 글자별 버킷 (11-10 게이트: 풀아웃→채집→바르기 한 번에)
@@ -29,6 +25,8 @@ updated: 2026-11-06 01:14 KST · by: codex
 - 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
 
 ## 최근 증거
+- 2026-11-06 build-73cd-build-d0e0: 증거 L1 (파일·주석 게이트 및 컴파일 한정). `python3 -B Assets/Scripts/PullOut/Verification~/verify_compile.py` exit 0: `files: PASS`, PullOut Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 16개 소스 PASS. 새 테스트 25케이스의 Unity 실행은 미확인
+- 풀아웃 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-pull-out-check-h8cu7xah/`. 카드 변경분 공백·touch/canon 검사 PASS. 작업 도중 별도로 들어온 docs/board/.harness 변경은 수정하지 않음; 전체 `git diff --check`는 docs/DECIDED.md:81,93 공백으로 실패. `mr status`는 ps 권한 오류
 - 2026-11-06 build-7c8f-build-f55b: 증거 L1 (파일 게이트·컴파일 한정). `python3 -B Assets/Scripts/MacAnchor/Verification~/verify_compile.py` exit 0: `files: PASS`, Hands/DeskKeyboard/Core/Runtime 및 전체 EditMode 15개 소스 Roslyn PASS. 신규 NUnit 29케이스를 포함한 테스트 실행은 미확인
 - 위 검증 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-mac-anchor-check-r1uxozci/`. `git diff --check` 통과, touch/canon 경로 검사 통과. 검증 스크립트는 기존 GateFileChecks를 그대로 임시 디렉터리에서 컴파일·실행하며 Unity 테스트 통과를 주장하지 않음
 - 제한: `mr status`는 ps 권한 오류, `pgrep -f 'projectPath .*unity/mood-picker'`는 exit 3. `sh ../shared/BuildGate/Preflight~/preflight.sh .`는 공용 Checker/obj 쓰기 권한에서 실패(Assembly-CSharp 1개·Editor 9개 컴파일은 PASS); 위 임시 폴더 검증으로 파일 게이트·새 asmdef 컴파일 확인

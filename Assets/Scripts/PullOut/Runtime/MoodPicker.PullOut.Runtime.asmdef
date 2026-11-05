@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.PullOut.Runtime",
+    "rootNamespace": "MoodPicker.PullOut",
+    "references": ["MoodPicker.PullOut", "MoodPicker.MacAnchor", "MoodPicker.MacAnchor.Runtime"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

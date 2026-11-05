@@ -10,6 +10,8 @@
         "MoodPicker.DeskKeyboard",
         "MoodPicker.MacAnchor",
         "MoodPicker.MacAnchor.Runtime",
+        "MoodPicker.PullOut",
+        "MoodPicker.PullOut.Runtime",
         "MoodPicker.Catch",
         "MoodPicker.Portal",
         "MoodPicker.Dab",

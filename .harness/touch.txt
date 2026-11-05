@@ -12,3 +12,6 @@ Assets/Tests/EditMode/MacAnchor*
 # build-73cd-build-d0e0 (풀아웃)
 Assets/Scripts/PullOut/
 Assets/Tests/EditMode/PullOut*
+# web-orion (Fable · Cursor)
+tools/web-orion/
+web/orion/
