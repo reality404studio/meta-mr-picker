@@ -26,3 +26,13 @@ Assets/Scripts/Dab/Editor/
 Assets/Tests/EditMode/OrionLook*
 scripts/verify-orion-look.sh
 tools/hand-state-verify/
+# build-fd7e-build-214c (토큰 → 코드)
+Assets/Scripts/Tokens/
+Assets/Scripts/PullOut/
+Assets/Scripts/HandState/
+Assets/Scripts/Portal/Core/PortalSettings.cs
+Assets/Scripts/Portal/Core/PalettePortal.cs
+Assets/Tests/EditMode/OrionTokens*
+tools/orion-tokens/
+scripts/verify-tokens.sh
+Assets/Scripts/Portal/Core/MoodPicker.Portal.asmdef

@@ -53,6 +53,8 @@ if result.returncode:
 compiled = []
 by_name = {}
 for directory in [
+    "Assets/Scripts/Tokens",
+    "Assets/Scripts/HandState/Core",
     "Assets/Scripts/Hands/Core",
     "Assets/Scripts/Experiments/DeskKeyboard/Core",
     "Assets/Scripts/MacAnchor/Core",

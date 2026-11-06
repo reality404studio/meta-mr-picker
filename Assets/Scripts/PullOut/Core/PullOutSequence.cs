@@ -70,8 +70,23 @@ namespace MoodPicker.PullOut
         {
             if (!PullOutSettings.Finite(time)) throw new ArgumentOutOfRangeException(nameof(time));
             float progress = HasStarted ? Mathf.Clamp01((time - StartTime(letter)) / _settings.DurationSeconds) : 0f;
-            float eased = progress * progress * (3f - 2f * progress);
-            return new LetterPose(Vector3.LerpUnclamped(ScreenPosition(letter), HoverPosition(letter), eased), eased);
+            float eased = Ease(progress);
+            return new LetterPose(Vector3.LerpUnclamped(ScreenPosition(letter), HoverPosition(letter), eased),
+                Mathf.LerpUnclamped(PullOutSettings.ThicknessFrom, PullOutSettings.ThicknessTo, eased));
+        }
+
+        static float Ease(float progress)
+        {
+            switch (PullOutSettings.Ease)
+            {
+                case "EaseOutBack":
+                    if (progress <= 0f) return 0f;
+                    if (progress >= 1f) return 1f;
+                    const float overshoot = 1.70158f;
+                    float t = progress - 1f;
+                    return 1f + (overshoot + 1f) * t * t * t + overshoot * t * t;
+                default: throw new InvalidOperationException("Unsupported pullout easing: " + PullOutSettings.Ease);
+            }
         }
 
         public void Advance(float time)

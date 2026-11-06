@@ -1,4 +1,5 @@
 using System;
+using MoodPicker.Tokens;
 using System.Collections.Generic;
 using System.Linq;
 using MoodPicker.MacAnchoring;
@@ -46,7 +47,7 @@ namespace MoodPicker.Tests
             Assert.That(starts.Select(e => e.Letter), Is.EqualTo(new[] { PullOutLetter.O1 }));
             for (int i = 1; i < 5; i++)
             {
-                float start = sequence.TapTime + 0.15f * i;
+                float start = sequence.TapTime + OrionTokens.MotionPulloutStaggerStaggerSeconds * i;
                 sequence.Advance(start - 0.0001f);
                 Assert.That(starts.Count, Is.EqualTo(i));
                 sequence.Advance(start);
@@ -59,7 +60,7 @@ namespace MoodPicker.Tests
             Assert.That(starts.Select(e => e.Letter), Is.EqualTo(new[]
                 { PullOutLetter.O1, PullOutLetter.R, PullOutLetter.I, PullOutLetter.O2, PullOutLetter.N }));
             for (int i = 0; i < 5; i++)
-                Assert.That(starts[i].Time, Is.EqualTo(sequence.TapTime + 0.15f * i).Within(0.00001f));
+                Assert.That(starts[i].Time, Is.EqualTo(sequence.TapTime + OrionTokens.MotionPulloutStaggerStaggerSeconds * i).Within(0.00001f));
         }
 
         [TestCase(-0.17f, 0f)]
@@ -184,14 +185,14 @@ namespace MoodPicker.Tests
                     + Screen.normal * 0.27f + Screen.up * 0.18f;
                 var pose = sequence.Sample(letter, sequence.EndTime);
                 Assert.That(Vector3.Distance(pose.Position, expected), Is.LessThanOrEqualTo(0.01f));
-                Assert.That(pose.ThicknessScale, Is.EqualTo(1f).Within(0.00001f));
+                Assert.That(pose.ThicknessScale, Is.EqualTo(OrionTokens.MotionPulloutStaggerThicknessTo).Within(0.00001f));
                 Assert.That(Vector3.Distance(sequence.Sample(letter, sequence.EndTime + 2f).Position, expected),
                     Is.LessThanOrEqualTo(0.01f));
             }
         }
 
         [Test]
-        public void AllLetters_StartOnScreenAtZeroThickness_AndUseTheSameSmoothstepForMotionAndDepth()
+        public void AllLetters_StartAtTokenThickness_AndUseEaseOutBackForMotionAndDepth()
         {
             var settings = new PullOutSettings();
             var sequence = new PullOutSequence(Screen, settings);
@@ -199,17 +200,21 @@ namespace MoodPicker.Tests
             {
                 var pose = sequence.Sample((PullOutLetter)i, 0f);
                 Assert.That(Mathf.Abs(Screen.Plane.Height(pose.Position)), Is.LessThan(0.00001f));
-                Assert.That(pose.ThicknessScale, Is.Zero);
+                Assert.That(pose.ThicknessScale, Is.EqualTo(OrionTokens.MotionPulloutStaggerThicknessFrom));
             }
             Tap(sequence.UpdateTip);
             for (int i = 0; i < 5; i++)
             {
                 var letter = (PullOutLetter)i;
-                Assert.That(sequence.Sample(letter, sequence.StartTime(letter)).ThicknessScale, Is.Zero);
+                Assert.That(sequence.Sample(letter, sequence.StartTime(letter)).ThicknessScale, Is.EqualTo(OrionTokens.MotionPulloutStaggerThicknessFrom));
                 var quarter = sequence.Sample(letter, sequence.StartTime(letter) + settings.DurationSeconds * 0.25f);
-                Assert.That(quarter.ThicknessScale, Is.EqualTo(0.15625f).Within(0.00001f));
-                var expected = Vector3.Lerp(sequence.ScreenPosition(letter), sequence.HoverPosition(letter), 0.15625f);
+                Assert.That(quarter.ThicknessScale, Is.EqualTo(Mathf.LerpUnclamped(OrionTokens.MotionPulloutStaggerThicknessFrom, OrionTokens.MotionPulloutStaggerThicknessTo, 0.8174097f)).Within(0.00001f));
+                var expected = Vector3.Lerp(sequence.ScreenPosition(letter), sequence.HoverPosition(letter), 0.8174097f);
                 Assert.That(Vector3.Distance(quarter.Position, expected), Is.LessThan(0.00001f));
+                var overshoot = sequence.Sample(letter, sequence.StartTime(letter) + settings.DurationSeconds * 0.6f);
+                Assert.That(overshoot.ThicknessScale, Is.GreaterThan(OrionTokens.MotionPulloutStaggerThicknessTo));
+                Assert.That(Vector3.Dot(overshoot.Position - sequence.HoverPosition(letter),
+                    sequence.HoverPosition(letter) - sequence.ScreenPosition(letter)), Is.GreaterThan(0f));
             }
         }
 
@@ -262,7 +267,8 @@ namespace MoodPicker.Tests
                 for (int i = 0; i < 5; i++)
                 {
                     var letter = instance.Find(((PullOutLetter)i).ToString());
-                    Assert.That(letter.localScale.z, Is.Zero);
+                    Assert.That(letter.localScale.z, Is.EqualTo(prefab.transform.Find(((PullOutLetter)i).ToString()).localScale.z
+                        * settings.ModelScale * OrionTokens.MotionPulloutStaggerThicknessFrom).Within(0.00001f));
                     Assert.That(Mathf.Abs(Screen.Plane.Height(letter.localPosition)), Is.LessThan(0.00001f));
                 }
                 Tap(view.SubmitTip);

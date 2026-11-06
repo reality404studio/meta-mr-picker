@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Tokens",
+    "rootNamespace": "MoodPicker.Tokens",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

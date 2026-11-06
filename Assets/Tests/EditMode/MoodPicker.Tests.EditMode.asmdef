@@ -18,7 +18,8 @@
         "MoodPicker.Catch",
         "MoodPicker.Portal",
         "MoodPicker.Dab",
-        "MoodPicker.Dab.Editor"
+        "MoodPicker.Dab.Editor",
+        "MoodPicker.Tokens"
     ],
     "includePlatforms": [
         "Editor"

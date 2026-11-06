@@ -1,3 +1,4 @@
+using MoodPicker.Tokens;
 using UnityEngine;
 
 namespace MoodPicker.Portal
@@ -6,16 +7,16 @@ namespace MoodPicker.Portal
     public class PortalSettings : ScriptableObject
     {
         [Header("Open / close (baseline)")]
-        public float openUpDot = 0.8f;
-        public float closeUpDot = 0.5f;
-        public float openHoldSeconds = 0.27f;
-        public float closeHoldSeconds = 0.3f;
+        public float openUpDot = OrionTokens.HysteresisPalmUpEnterDot;
+        public float closeUpDot = OrionTokens.HysteresisPalmUpExitDot;
+        public float openHoldSeconds = OrionTokens.HysteresisPalmUpHoldSeconds;
+        public float closeHoldSeconds = OrionTokens.HysteresisPalmUpReleaseSeconds;
         public float lostCloseSeconds = 0.5f;
         public float maxPalmSpeed = 0.6f;
         public bool invertPalmNormal;
 
         [Header("Placement (baseline)")]
-        [Range(0.05f, 0.10f)] public float heightAbovePalm = 0.07f;
+        [Range(0.05f, 0.10f)] public float heightAbovePalm = OrionTokens.ZoneHandFolioAboveMeters;
         public float radius = 0.09f;
         public float normalSmoothing = 12f;
 

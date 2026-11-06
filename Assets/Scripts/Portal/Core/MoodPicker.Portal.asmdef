@@ -1,7 +1,7 @@
 {
     "name": "MoodPicker.Portal",
     "rootNamespace": "MoodPicker.Portal",
-    "references": ["MoodPicker.Hands"],
+    "references": ["MoodPicker.Hands", "MoodPicker.Tokens"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

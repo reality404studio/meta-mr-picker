@@ -1,4 +1,5 @@
 using System;
+using MoodPicker.Tokens;
 
 namespace MoodPicker.PullOut
 {
@@ -6,7 +7,11 @@ namespace MoodPicker.PullOut
     public sealed class PullOutSettings
     {
         public const int LetterCount = 5;
-        public const float LetterDelaySeconds = 0.15f;
+        public const float LetterDelaySeconds = OrionTokens.MotionPulloutStaggerStaggerSeconds;
+
+        public const string Ease = OrionTokens.MotionPulloutStaggerEase;
+        public const float ThicknessFrom = OrionTokens.MotionPulloutStaggerThicknessFrom;
+        public const float ThicknessTo = OrionTokens.MotionPulloutStaggerThicknessTo;
 
         public float EnterDepthMeters = 0.005f;
         public float ExitDepthMeters = 0.012f;
@@ -18,7 +23,7 @@ namespace MoodPicker.PullOut
         public float MinContactSpeed = 0.06f;
         public float PredictLeadSeconds = 0.04f;
         public float VelocitySmoothing = 0.5f;
-        public float DurationSeconds = 0.45f;
+        public float DurationSeconds = OrionTokens.MotionPulloutStaggerSeconds;
         public float HoverNormalOffsetMeters = 0.20f;
         public float HoverLetterSpacingMeters = 0.08f;
         public float HoverHeightMeters = 0.15f;

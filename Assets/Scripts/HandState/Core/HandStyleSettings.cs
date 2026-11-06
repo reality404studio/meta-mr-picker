@@ -1,11 +1,19 @@
 using System;
+using MoodPicker.Tokens;
 
 namespace MoodPicker.HandStates
 {
     public sealed class HandStyleSettings
     {
-        public HandColor Bare { get; set; } = new HandColor(240f / 255f, 238f / 255f, 230f / 255f);
-        public HandColor Stamp { get; set; } = new HandColor(37f / 255f, 89f / 255f, 180f / 255f);
+        public const float RimPower = OrionTokens.StrokeHandRimPower;
+        public const float InflateMm = OrionTokens.StrokeHandInflateMm;
+        public const float InflateMeters = OrionTokens.StrokeHandInflateMeters;
+        public const float PassthroughWorkspace = OrionTokens.EnvPassthroughWorkspace;
+        public const float PassthroughHero = OrionTokens.EnvPassthroughHero;
+        public const float PassthroughTransitionSeconds = OrionTokens.EnvPassthroughTransitionSeconds;
+
+        public HandColor Bare { get; set; } = new HandColor(OrionTokens.ColorPaperFaceR, OrionTokens.ColorPaperFaceG, OrionTokens.ColorPaperFaceB);
+        public HandColor Stamp { get; set; } = new HandColor(OrionTokens.ColorPrintCobaltR, OrionTokens.ColorPrintCobaltG, OrionTokens.ColorPrintCobaltB);
 
         public HandColor ColorFor(HandSnapshot state)
         {

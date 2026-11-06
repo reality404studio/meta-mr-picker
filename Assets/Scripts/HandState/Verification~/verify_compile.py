@@ -55,6 +55,7 @@ if result.returncode:
 compiled = []
 by_name = {}
 for directory in [
+    "Assets/Scripts/Tokens",
     "Assets/Scripts/Hands/Core",
     "Assets/Scripts/Catch/Core",
     "Assets/Scripts/Portal/Core",
@@ -88,7 +89,7 @@ test_sources = [root / "Assets/Tests/EditMode/HandStateTests.cs", root / "tools/
 pure_refs = [p for p in refs if not p.name.startswith("UnityEngine")]
 core_name = "MoodPicker.HandState"
 runner_name = "HandState.CoreTests"
-runner = compile_assembly(runner_name, test_sources, pure_refs + [by_name[core_name], nunit], True)
+runner = compile_assembly(runner_name, test_sources, pure_refs + [by_name["MoodPicker.Tokens"], by_name[core_name], nunit], True)
 shutil.copyfile(nunit, output / nunit.name)
 runtime_config = (output / "Checker.runtimeconfig.json").read_text()
 (output / (runner_name + ".runtimeconfig.json")).write_text(runtime_config)
@@ -107,7 +108,7 @@ after = "[HandState.Paint] = Array.AsReadOnly(new[] { HandAction.FillLetter, Han
 assert source.read_text().count(before) == 1
 mutant = output / source.name
 mutant.write_text(source.read_text().replace(before, after))
-compile_assembly(core_name, [mutant if p == source else p for p in core_sources], pure_refs)
+compile_assembly(core_name, [mutant if p == source else p for p in core_sources], pure_refs + [by_name["MoodPicker.Tokens"]])
 for name in [runner_name + ".dll", runner_name + ".runtimeconfig.json", nunit.name]:
     shutil.copyfile(original_output / name, output / name)
 result = subprocess.run(["dotnet", str(output / runner.name), str(output / "core-tests.xml")], capture_output=True, text=True)

@@ -1,11 +1,11 @@
 # HANDOFF — ORION (Meta VR Start 2026 출품작)
-updated: 2026-11-06 08:52 KST · by: codex
+updated: 2026-11-06 09:04 KST · by: codex
 
 ## 목표 (한 줄)
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- 없음. build-3e76-build-d8b8 완료 (재질 그대로 CelPaint + Clay.mat, 15/15, GPU 렌더 통과). 확정 토큰 반영 후속은 build-fd7e
+- 없음. build-fd7e-build-214c 완료 (OrionTokens 생성기·동기 검증·PullOut/Portal/HandStyle 연결, 255/255). 웹 토큰(build-fd7e-build-2f75)은 Fable 대기
 
 ## 다음 할 일
 1. build-fd7e 디자인 토큰 → 코드 (Astra: OrionTokens + 풀아웃 0.08s·팔름업 히스테리시스·클레이 Half-Lambert 하한·디밍 값 / Fable: web 토큰, 레시피 .harness/briefs/web-tokens-fable.md)
@@ -26,6 +26,11 @@ updated: 2026-11-06 08:52 KST · by: codex
 - 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
 
 ## 최근 증거
+- 2026-11-06 build-fd7e-build-214c: 증거 L1 (부분 구현). 생성기·전체 JSON 상수 대조·단위 변환·PullOut 0.08s/0.65s/EaseOutBack/0.02→1·손 색/림/디밍 상수 연결. Portal 연결은 위 경로 승인 대기, 카드 완료 아님
+- `sh scripts/verify-tokens.sh` exit 0: `PASS token sync`, `PASS generator`, `files: PASS`, Tokens 및 관련 15개 asmdef·전체 EditMode 21개 소스·Assembly-CSharp/Editor Roslyn PASS. `.NET NUnit passed=56 failed=0 skipped=0`; 임시 JSON 색/시간 변조 각각 거부 (정본 미수정)
+- 토큰 검증 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-tokens-check-nlfvix5h/`. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0 (54/54·권한 변조 거부), `python3 -B Assets/Scripts/PullOut/Verification~/verify_compile.py` exit 0 (신규 Tokens/HandState 의존성 반영)
+- `sh -n scripts/verify-tokens.sh`, 카드 변경분 공백·touch/canon 검사 PASS. 기존 docs/board/.harness 변경 보존. git fetch 통과, mr status/pgrep는 프로세스 조회 제한. 커밋·푸시·다른 카드·Unity 실행 없음
+- 미확인: Unity EditMode 실행·기기. HoverHeightMeters/NormalOffset/Spacing은 화면 앵커 기준이며 눈 기준 zone과 직접 대응이 불명확하여 유지. 림/디밍은 상수 노출까지이며 렌더 적용은 후속 카드
 - 2026-11-06 build-3e76-build-d8b8: 증거 L1 (컴파일·파일 게이트·셰이더 정적 한정). `sh scripts/verify-orion-look.sh --static` exit 0: `files: PASS`, Dab Core 4개/Runtime 1개/Editor 3개 및 의존 asmdef Roslyn PASS, 전체 EditMode 19개 소스·Assembly-CSharp 1개·Editor 9개 컴파일 PASS
 - 글자 룩 정적 결과: `PASS shader static` (연속/계단·트라이플래너·Cull Front·알파 1·스테레오·Clay GUID), `PASS gate fixtures` (ColorMask RGB 및 Cull Back 거부). 공용 BuildGate는 읽기만 했으며 동일 검사기를 임시 디렉터리에서 컴파일·실행
 - 글자 룩 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-look-check-az9ty8es/`. `sh -n scripts/verify-orion-look.sh`, 카드 변경분 `git diff --check`, touch/canon·새 파일 공백 검사 PASS. 기존 docs/board/.harness 변경 보존

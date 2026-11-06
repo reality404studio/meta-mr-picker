@@ -9,7 +9,7 @@ OUT="$PROJ/Library/TestResults"
 mkdir -p "$OUT"
 rm -f "$OUT/editmode.xml"
 "$UNITY" -batchmode -nographics -projectPath "$PROJ" -buildTarget Android \
-  -runTests -testPlatform EditMode ${1:+-testFilter "$1"} -testResults "$OUT/editmode.xml" -logFile "$OUT/editmode.log"
+  -runTests -testPlatform EditMode -testCategory "!Gpu" ${1:+-testFilter "$1"} -testResults "$OUT/editmode.xml" -logFile "$OUT/editmode.log"
 code=$?
 if [ ! -f "$OUT/editmode.xml" ]; then
   echo "결과 XML 없음 (exit $code). 로그: $OUT/editmode.log"

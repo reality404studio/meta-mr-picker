@@ -128,6 +128,7 @@ namespace MoodPicker.Tests
         [TestCase(2)]
         [TestCase(4)]
         [TestCase(8)]
+        [Category("Gpu")]
         public void RenderedRampHasContinuousOrExactIntegerToneCount(int steps)
         {
             material.SetFloat(CelPaint.ToneMix, 1);
@@ -150,7 +151,7 @@ namespace MoodPicker.Tests
             finally { Object.DestroyImmediate(image); }
         }
 
-        [Test]
+        [Test, Category("Gpu")]
         public void OutlineToggleAddsOnlyOpaqueKleinBorder()
         {
             var clay = new Material(AssetDatabase.LoadAssetAtPath<Material>(OrionLookRender.ClayPath));
