@@ -46,3 +46,11 @@ Assets/Scripts/Dab/Editor/ChipRender*
 scripts/verify-chip.sh
 Assets/Scripts/Dab/Editor/MoodPicker.Dab.Editor.asmdef
 Assets/Tests/EditMode/MoodPicker.Tests.EditMode.asmdef
+# Gemini Flash 카드들 (웹 토큰·소품·ORION.glb 규격)
+tools/orion-props/
+tools/orion-glb/
+Assets/Models/Props/
+Assets/Textures/Props/
+Assets/Models/ORION.glb
+Assets/Tests/EditMode/OrionGlbTests.cs
+web/orion/

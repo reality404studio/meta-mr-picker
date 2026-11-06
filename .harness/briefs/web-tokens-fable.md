@@ -1,4 +1,6 @@
-# 레시피: 웹 디자인 토큰 반영 (Fable · Cursor)
+# 레시피: 웹 디자인 토큰 반영 (Fable · Cursor, 한도 시 Gemini Flash)
+
+> 담당이 Fable 이든 Flash 든 같은 레시피. `--as` 이름만 자기 이름으로. 공통 규칙은 `.harness/ROUTING.md`.
 
 카드: `build-fd7e` 의 하위 과업 "[Fable] 웹 토큰" (`npm run studio -- show build-fd7e --app orion` 로 id 확인, 작업대 루트에서).
 먼저 `.harness/briefs/web-orion-fable.md` 의 §1(건드려도 되는 곳)·§2(결정)·§5(일하는 순서)를 다시 읽는다. 아래 내용이 그와 다르면 **이 파일이 이긴다** (2026-11-06 Argon 확정 토큰).
@@ -18,5 +20,5 @@
 ## 성공 조건
 > node 테스트: web 토큰 == design/tokens/orion.tokens.json, 배경색 #0E1322, [RAW TEXTURE / 2-TONE CEL] 토글 두 값이 화면에 존재. 기존 47개 테스트는 그대로 통과.
 
-검증: 작업대 루트에서 `npm run studio -- check <하위 과업 id> --app orion --as "Cursor Fable" -- "cd unity/mood-picker/web/orion && node --test test/*.test.mjs"` (글롭 형식. 폴더 인자 금지).
+검증: 작업대 루트에서 `npm run studio -- check <하위 과업 id> --app orion --as "<자기 이름: Cursor Fable 또는 Gemini Flash>" -- "cd unity/mood-picker/web/orion && node --test test/*.test.mjs"` (글롭 형식. 폴더 인자 금지).
 끝나면 note 를 남기되 done 은 하지 않는다 (오케스트레이터가 같은 명령을 다시 돌려 done). 커밋: 네 파일만, 메시지 `<하위 과업 카드 id>: <관찰 가능한 변화>`, 푸시 금지. HANDOFF 「최근 증거」 한 줄. 보고 형식은 이전 레시피와 같다.

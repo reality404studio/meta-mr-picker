@@ -8,7 +8,7 @@
 - 설계 이유는 주석으로 남기지 않는다. 흔하지 않은 결정은 에디터 검증(`IPreprocessBuildWithReport`, `OnValidate`), EditMode 테스트, 타입으로 만들어 되돌리면 실패하게 한다. Why 는 카드 메모·PR 본문에
 - 그런 게이트가 있으면 되돌리지 말고 통과하는 쪽으로만 고친다
 
-## 누가 무엇을 (2026-11-06 사람 결정)
+## 누가 무엇을 (2026-11-06 사람 결정 · 상세 규칙은 `.harness/ROUTING.md`, Gemini 는 `GEMINI.md`)
 | 역할 | 모델 | 깊이 |
 |---|---|---|
 | 구현 (Unity C#·셰이더·손 상태 기계·Blender) | Codex CLI · Astra | 셰이더·상태 기계·투영 high, 스크립트·에셋 medium |
@@ -17,7 +17,8 @@
 | 기기 라운드 (`mr` 명령) | Claude Code Haiku/Sonnet 또는 Codex | low |
 | 로그 요약 | logcat-reader (Haiku) | low |
 | 다른 눈 (큰 덩어리만) | 구현과 다른 회사: Astra 구현 → Claude 리뷰 | medium |
-| 영상·룩 판정 | Gemini Argon | medium |
+| 영상·룩 판정 · 디자인 토큰·시안 | Gemini Argon | medium |
+| Blender 실행 에셋·소규모 코드·웹(한도 시) | Gemini Flash (Antigravity) | medium |
 | 구상·콘티 | 채팅 (claude.ai / Gemini) → handoff/ 로 들여옴 | high, 드물게 |
 - 일감은 HANDOFF.md 「지금 카드」로 넘긴다. 세션끼리 메시지 안 씀. 결과는 커밋 + HANDOFF 갱신 + 마지막 보고
 
