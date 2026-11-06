@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Folio.Runtime",
+    "rootNamespace": "MoodPicker.Folio",
+    "references": ["MoodPicker.Folio", "MoodPicker.Tokens", "MoodPicker.Catch", "MoodPicker.Hands", "MoodPicker.HandState", "MoodPicker.HandState.Runtime"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

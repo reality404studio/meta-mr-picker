@@ -5,9 +5,14 @@
         "MoodPicker.Dab",
         "MoodPicker.Catch",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.RenderPipelines.Universal.Runtime"
+        "Unity.RenderPipelines.Universal.Runtime",
+        "MoodPicker.Folio",
+        "MoodPicker.Folio.Runtime",
+        "MoodPicker.Tokens"
     ],
-    "includePlatforms": ["Editor"],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "autoReferenced": true,

@@ -5,13 +5,13 @@ updated: 2026-11-06 09:04 KST · by: codex
 현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
 
 ## 지금 카드
-- 없음. build-fd7e-build-214c 완료 (OrionTokens 생성기·동기 검증·PullOut/Portal/HandStyle 연결, 255/255). 웹 토큰(build-fd7e-build-2f75)은 Fable 대기
+- 없음. build-0707 의 에이전트 카드 둘 완료 (3D 칩 메시·셰이더, 병풍 폴리오 코어; 278/278, 칩 GPU 렌더 통과). 씬 연결과 실기(build-0707-verify-d2bb, 사람)는 아직
 
 ## 다음 할 일
-1. build-fd7e 디자인 토큰 → 코드 (Astra: OrionTokens + 풀아웃 0.08s·팔름업 히스테리시스·클레이 Half-Lambert 하한·디밍 값 / Fable: web 토큰, 레시피 .harness/briefs/web-tokens-fable.md)
-2. build-0707 병풍 폴리오 + 3D 칩 → build-e463 글자별 버킷 → build-bbc7 손 림라이트·검지 캡 → build-c6a2 파인더 (11-10 게이트: 풀아웃→채집→바르기)
-3. build-a4ae 소품 Blender (Astra 스크립트, 실행은 오케스트레이터. Blender 동시 사용 확인 후)
-- 휠·우물(PortalController 일부)은 폐기(REJECTED 2026-11-06). 이벤트 PaintPicked/Washed 계약만 폴리오가 이어 쓴다
+1. build-e463 글자별 버킷 → build-bbc7 손 림라이트·검지 캡 → build-c6a2 파인더 → 씬 연결(폴리오·글자·손 상태·풀아웃) → 11-10 게이트
+2. build-a4ae 소품 Blender (Astra 스크립트, 실행은 오케스트레이터)
+3. 대기: build-fd7e-build-2f75 웹 토큰 (Fable 한도 → Astra 또는 Fable 복귀 후), 클레이 Half-Lambert 하한(#A8AEB8)
+- Astra 한도 오후 1:45 해제. 휠·우물은 폐기, 이벤트 계약(PaintPicked/Washed)만 폴리오가 이어 씀
 
 ## 정본 / 건드리지 말 것
 - 결정: 작업대 `studio/shared/DECIDED.md` `[orion]` D1~D17 (사본 docs/DECIDED.md). 버린 안: REJECTED.md

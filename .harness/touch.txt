@@ -36,3 +36,13 @@ Assets/Tests/EditMode/OrionTokens*
 tools/orion-tokens/
 scripts/verify-tokens.sh
 Assets/Scripts/Portal/Core/MoodPicker.Portal.asmdef
+# build-0707 (병풍 폴리오 + 3D 칩)
+Assets/Scripts/Folio/
+Assets/Shaders/Chip/
+Assets/Materials/Orion/Chip*
+Assets/Tests/EditMode/Folio*
+Assets/Tests/EditMode/Chip*
+Assets/Scripts/Dab/Editor/ChipRender*
+scripts/verify-chip.sh
+Assets/Scripts/Dab/Editor/MoodPicker.Dab.Editor.asmdef
+Assets/Tests/EditMode/MoodPicker.Tests.EditMode.asmdef

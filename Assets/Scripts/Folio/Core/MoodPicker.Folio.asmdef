@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Folio",
+    "rootNamespace": "MoodPicker.Folio",
+    "references": ["MoodPicker.Tokens", "MoodPicker.Catch"],
+    "autoReferenced": true,
+    "noEngineReferences": true
+}

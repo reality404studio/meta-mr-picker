@@ -19,7 +19,9 @@
         "MoodPicker.Portal",
         "MoodPicker.Dab",
         "MoodPicker.Dab.Editor",
-        "MoodPicker.Tokens"
+        "MoodPicker.Tokens",
+        "MoodPicker.Folio",
+        "MoodPicker.Folio.Runtime"
     ],
     "includePlatforms": [
         "Editor"
