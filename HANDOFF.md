@@ -1,53 +1,22 @@
-# HANDOFF — ORION (Meta VR Start 2026 출품작)
-updated: 2026-11-06 09:04 KST · by: codex
+# HANDOFF — Letter Pigment Splat (splatter 브랜치)
+updated: 2026-11-09 16:43 KST · by: Gemini Argon
 
 ## 목표 (한 줄)
-현실에서 떠 온 재질로 3D 웹 타이틀을 만드는 공간 디자인 툴. 데모 흐름 v2 (handoff/2026-11-05-orion-demo.md §2) 를 Quest 3 실기로 찍을 수 있게 만든다. 제출 11-18 저녁 KST.
+짧은 영상 3개를 이음매 없는 루프 텍스처(물감)로 만들고, 3D 입체 글자를 가우시안 스플랫 구름으로 샘플링해 매 프레임 GPU에서 트라이플래너 셰이더(2톤 셀·Glint·Chrome·Caustic·그대로)로 입히는 Quest 3 MR 앱.
 
 ## 지금 카드
-- 없음. build-0707 의 에이전트 카드 둘 완료 (3D 칩 메시·셰이더, 병풍 폴리오 코어; 278/278, 칩 GPU 렌더 통과). 씬 연결과 실기(build-0707-verify-d2bb, 사람)는 아직
+- 없음 (`brief-draft`, `build-414a-build-28a1` 완료)
 
 ## 다음 할 일
-1. build-e463 글자별 버킷 → build-bbc7 손 림라이트·검지 캡 → build-c6a2 파인더 → 씬 연결(폴리오·글자·손 상태·풀아웃) → 11-10 게이트
-2. build-a4ae 소품 Blender (Astra 스크립트, 실행은 오케스트레이터)
-3. 대기: build-fd7e-build-2f75 웹 토큰 (Fable 한도 → Astra 또는 Fable 복귀 후), 클레이 Half-Lambert 하한(#A8AEB8)
-- Astra 한도 오후 1:45 해제. 휠·우물은 폐기, 이벤트 계약(PaintPicked/Washed)만 폴리오가 이어 씀
+1. `build-541d-build-a242`: 메시 삼각형 면적 가중 샘플링, 접평면 스케일·노멀 쿼터니언 및 외곽선 스플랫 층 생성 (`Assets/Scripts/Splatter/Core/MeshSplatSampler.cs`)
+2. `build-bb7f-build-cbae`: `LetterSplatURP.shader` (5종 모드·트라이플래너 플립북·유한차분 범프) 및 `SplatLetterRenderer` 구현
+3. `build-d4b6-build-7c9f`: 물감 3슬롯 로더, 글자별 슬롯·모드 할당 및 회전·둥실 애니메이션 연결 (`Splatter.unity`)
 
 ## 정본 / 건드리지 말 것
-- 결정: 작업대 `studio/shared/DECIDED.md` `[orion]` D1~D17 (사본 docs/DECIDED.md). 버린 안: REJECTED.md
-- 원천 문서: handoff/2026-11-05-orion-demo.md
-- docs/, board/ 는 사본 (편집 차단: .harness/canon.txt)
-- 컬러피커는 main 브랜치에 보존. orion 에서 컬러피커 코드(Catch, Portal, Dab)는 재사용하되 지우지 않는다
-- Unity 는 이 폴더에서만 연다 (git worktree 금지: Library 11GB, 디스크 여유 약 7GB)
-
-## 기기·환경
-- Quest 3 (panther) · USB · 패키지/경로는 .harness/device.env
-- Unity 6000.3.27f2, Unity CLI `~/.unity/bin/unity` (test/build/recompile), Blender.app 배치모드
-- 동시에 Unity 를 여는 프로세스는 하나만: `pgrep -f "projectPath .*unity/mood-picker"` 확인 후
+- 결정: 작업대 `studio/shared/DECIDED.md` `[splatter]` (사본 `docs/DECIDED.md`). 버린 안: `REJECTED.md`
+- 원천 브리프: 작업대 `splatter/letter-pigment-splat-brief.md` 및 `studio/apps/splatter/nodes/brief/README.md`
+- `docs/`, `board/` 는 사본 (`scripts/sync-docs.sh` 로만 갱신)
+- 브랜치 보존: `main` = 컬러피커, `orion` = ORION (직전 미커밋 작업은 `git stash` `orion-wip-build-00ab` 에 보존됨). `Library/` 중복 방지를 위해 이 폴더에서만 작업한다.
 
 ## 최근 증거
-- 2026-11-06 build-fd7e-build-214c: 증거 L1 (부분 구현). 생성기·전체 JSON 상수 대조·단위 변환·PullOut 0.08s/0.65s/EaseOutBack/0.02→1·손 색/림/디밍 상수 연결. Portal 연결은 위 경로 승인 대기, 카드 완료 아님
-- `sh scripts/verify-tokens.sh` exit 0: `PASS token sync`, `PASS generator`, `files: PASS`, Tokens 및 관련 15개 asmdef·전체 EditMode 21개 소스·Assembly-CSharp/Editor Roslyn PASS. `.NET NUnit passed=56 failed=0 skipped=0`; 임시 JSON 색/시간 변조 각각 거부 (정본 미수정)
-- 토큰 검증 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-tokens-check-nlfvix5h/`. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0 (54/54·권한 변조 거부), `python3 -B Assets/Scripts/PullOut/Verification~/verify_compile.py` exit 0 (신규 Tokens/HandState 의존성 반영)
-- `sh -n scripts/verify-tokens.sh`, 카드 변경분 공백·touch/canon 검사 PASS. 기존 docs/board/.harness 변경 보존. git fetch 통과, mr status/pgrep는 프로세스 조회 제한. 커밋·푸시·다른 카드·Unity 실행 없음
-- 미확인: Unity EditMode 실행·기기. HoverHeightMeters/NormalOffset/Spacing은 화면 앵커 기준이며 눈 기준 zone과 직접 대응이 불명확하여 유지. 림/디밍은 상수 노출까지이며 렌더 적용은 후속 카드
-- 2026-11-06 build-3e76-build-d8b8: 증거 L1 (컴파일·파일 게이트·셰이더 정적 한정). `sh scripts/verify-orion-look.sh --static` exit 0: `files: PASS`, Dab Core 4개/Runtime 1개/Editor 3개 및 의존 asmdef Roslyn PASS, 전체 EditMode 19개 소스·Assembly-CSharp 1개·Editor 9개 컴파일 PASS
-- 글자 룩 정적 결과: `PASS shader static` (연속/계단·트라이플래너·Cull Front·알파 1·스테레오·Clay GUID), `PASS gate fixtures` (ColorMask RGB 및 Cull Back 거부). 공용 BuildGate는 읽기만 했으며 동일 검사기를 임시 디렉터리에서 컴파일·실행
-- 글자 룩 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-look-check-az9ty8es/`. `sh -n scripts/verify-orion-look.sh`, 카드 변경분 `git diff --check`, touch/canon·새 파일 공백 검사 PASS. 기존 docs/board/.harness 변경 보존
-- 미확인: Unity EditMode 15케이스 실행·HLSL GPU 컴파일·구 3개 픽셀 판정·기기 룩. 렌더는 윤슬/그라데이션 PNG를 tools/web-orion/samples/chips에서 직접 읽고, 흰 텍스처 대조 렌더로 질감 표준편차를 검사. 요청한 stop에 따라 Unity 미실행; `mr status`는 ps 권한 오류
-- 2026-11-06 build-a3a1-build-8c28 (Cursor Fable): 증거 L1+L2. `node --test unity/mood-picker/web/orion/test/*.test.mjs` 47/47 (스키마·재질·레이아웃·GLB headless 로드·서버 중계/업로드·headless Chrome CDP 로 프리셋/슬라이더→quest/GLB export). 스크린샷 `web/orion/test/shots/{editor,hero,look-web}.png`. 카드 proof, done·커밋은 오케스트레이터. 룩 비교 PNG 는 Unity build-3e76 결과 대기
-- 2026-11-06 build-be9a-build-2714: 증거 L1. `python3 -B Assets/Scripts/HandState/Verification~/verify_compile.py` exit 0: `files: PASS` (주석 포함), HandState Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 18개 소스 컴파일 PASS. 동일 HandStateTests.cs를 .NET NUnit에서 실행: `passed=54 failed=0 skipped=0`. 임시 복사본의 Paint+GrabLetter 허용 변조를 스냅샷 테스트가 거부: `PASS mutation`
-- 로그·rsp·DLL·NUnit XML: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-hand-state-check-08dtyq0u/` (mutation/은 의도적으로 실패시킨 테스트). Unity 실행 통과를 뜻하지 않음. `mr status`는 ps 권한 오류, `pgrep`는 프로세스 목록 접근 불가(exit 3)로 Unity 미실행
-- 손 상태 카드 변경분 공백·touch/canon 검사 PASS, Portal/Catch/PullOut/Hands 변경 없음. 기존 docs/board/.harness 변경 보존. 전체 `git diff --check`는 기존 docs/DECIDED.md:83,95 공백으로 실패
-- 2026-11-06 build-73cd-build-d0e0: 증거 L1 (파일·주석 게이트 및 컴파일 한정). `python3 -B Assets/Scripts/PullOut/Verification~/verify_compile.py` exit 0: `files: PASS`, PullOut Core 3개/Runtime 1개 및 의존 asmdef Roslyn PASS, 전체 EditMode 16개 소스 PASS. 새 테스트 25케이스의 Unity 실행은 미확인
-- 풀아웃 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-pull-out-check-h8cu7xah/`. 카드 변경분 공백·touch/canon 검사 PASS. 작업 도중 별도로 들어온 docs/board/.harness 변경은 수정하지 않음; 전체 `git diff --check`는 docs/DECIDED.md:81,93 공백으로 실패. `mr status`는 ps 권한 오류
-- 2026-11-06 build-7c8f-build-f55b: 증거 L1 (파일 게이트·컴파일 한정). `python3 -B Assets/Scripts/MacAnchor/Verification~/verify_compile.py` exit 0: `files: PASS`, Hands/DeskKeyboard/Core/Runtime 및 전체 EditMode 15개 소스 Roslyn PASS. 신규 NUnit 29케이스를 포함한 테스트 실행은 미확인
-- 위 검증 로그·rsp·DLL: `/var/folders/n_/8p5lyp65519c7k__7vz83jgm0000gn/T/orion-mac-anchor-check-r1uxozci/`. `git diff --check` 통과, touch/canon 경로 검사 통과. 검증 스크립트는 기존 GateFileChecks를 그대로 임시 디렉터리에서 컴파일·실행하며 Unity 테스트 통과를 주장하지 않음
-- 제한: `mr status`는 ps 권한 오류, `pgrep -f 'projectPath .*unity/mood-picker'`는 exit 3. `sh ../shared/BuildGate/Preflight~/preflight.sh .`는 공용 Checker/obj 쓰기 권한에서 실패(Assembly-CSharp 1개·Editor 9개 컴파일은 PASS); 위 임시 폴더 검증으로 파일 게이트·새 asmdef 컴파일 확인
-- 2026-11-06 build-402f-make-098a: 증거 L1. `sh tools/orion-glb/verify.sh` 통과 (GLB 파싱·글자 5개·구멍 O1/R/O2=1·크기·three.js 로드·Unity EditMode OrionGlbTests 1/1). 로그 studio/apps/orion/nodes/build-402f-make-098a/assets/
-- 2026-11-06 build-dce1: 패스스루는 metacam 스크린샷에 담김, adb screenrecord 는 검은 영상 → 영상은 MQDH 캐스팅 녹화로 (사람 확정). 맥북 화면은 큰 글자·슬라이더만 읽힘
-- glTFast 6.20.0 추가 (사람 승인 2026-11-06). Blender 는 Codex 샌드박스 밖(Claude 쪽)에서 돌림: `TMPDIR=.harness/state/tmp /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/orion-glb/make_orion.py`
-- 컬러피커 마지막 빌드 mvp-dev2 6d25a43-1104-151623 (미실기, main)
-
-## 열린 질문 (사람에게)
-- 취향 앵커 3줄(AGENTS.md)은 DECIDED D6·D13·D14 에서 옮겨 적음 — 사람이 고쳐도 됨
+- 2026-11-09 `build-414a-build-28a1`: 증거 L1. `python3 -B Assets/Scripts/Splatter/Verification~/verify_compile.py` exit 0: `files: PASS` (BuildGate 주석·파일 게이트 통과), `MoodPicker.Pigment` 4개 / `MoodPicker.Splatter` 1개 / `Splatter.CoreTests` Roslyn 컴파일 PASS, `.NET NUnit passed=5 failed=0 skipped=0` (`BaselineExcludesZeroDiffDuplicateFrames`, `FlipbookLayoutCapsFramesAt48AndScalesFps`, `PeriodicTileReducesBoundarySeamErrorBelowOne`, `TwoToneExtractorSeparatesShadowAndLightAndMidpointThreshold`, `LetterPoseMathFollowsBriefEquations`).

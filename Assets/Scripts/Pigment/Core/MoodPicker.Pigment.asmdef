@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Pigment",
+    "rootNamespace": "Pigment",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": true
+}

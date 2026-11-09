@@ -1,6 +1,6 @@
 # 에이전트 안내
 
-- 이 레포는 작업대 `my-mr-studio` 안의 `unity/mood-picker/` 에 놓인 앱 레포예요. 브랜치 `orion` = ORION 앱(보드 `--app orion`), `main` = 컬러피커 보존본(보드 `--app mood-picker`, 보류). 할 일은 작업대 루트에서 `npm run studio -- next --app orion --by agent`
+- 이 레포는 작업대 `my-mr-studio` 안의 `unity/mood-picker/` 에 놓인 앱 레포예요. 브랜치 `splatter` = Letter Pigment Splat 앱(보드 `--app splatter`), `orion` = ORION 앱(보드 `--app orion`, 보류), `main` = 컬러피커 보존본(보드 `--app mood-picker`, 보류). 할 일은 작업대 루트에서 `npm run studio -- next --app splatter --by agent`
 - Unity 작업 전에 `docs/UNITY_GUARDRAILS.md` (정본: 작업대 `studio/shared/nodes/unity-guardrails/README.md`)
 - 사람에게 묻기 전에 `docs/DECIDED.md`, `docs/REJECTED.md`
 - `docs/`, `board/` 는 직접 고치지 않는다. 작업대에서 고치고 `scripts/sync-docs.sh` (보드 내보내기 포함) → 커밋·푸시
