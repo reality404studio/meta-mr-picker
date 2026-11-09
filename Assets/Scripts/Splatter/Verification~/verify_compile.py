@@ -54,6 +54,27 @@ if result.returncode:
 pure_refs = [p for p in refs if not p.name.startswith("UnityEngine")]
 pigment_dll = compile_assembly("MoodPicker.Pigment", sorted((root / "Assets/Scripts/Pigment/Core").glob("*.cs")), pure_refs)
 splatter_dll = compile_assembly("MoodPicker.Splatter", sorted((root / "Assets/Scripts/Splatter/Core").glob("*.cs")), pure_refs + [pigment_dll])
+runtime_sources = sorted((root / "Assets/Scripts/Splatter/Runtime").glob("*.cs"))
+if runtime_sources:
+    compile_assembly("MoodPicker.Splatter.Runtime", runtime_sources, refs + [pigment_dll, splatter_dll])
+
+shader_path = root / "Assets/Shaders/Splatter/LetterSplatURP.shader"
+if shader_path.exists():
+    shader_text = shader_path.read_text()
+    required_tokens = [
+        "SampleFlipbookTriplanar",
+        "PerturbNormalFromHeightFiniteDiff",
+        "UNITY_VERTEX_OUTPUT_STEREO",
+        "mode == 0",
+        "mode == 1",
+        "mode == 2",
+        "mode == 3",
+    ]
+    missing = [tok for tok in required_tokens if tok not in shader_text]
+    if missing:
+        print(f"FAIL shader static check missing: {missing}", flush=True)
+        raise SystemExit(1)
+    print("PASS shader static check: LetterSplatURP.shader", flush=True)
 
 nunit = sorted((root / "Library/PackageCache").glob("com.unity.ext.nunit@*/net40/unity-custom/nunit.framework.dll"))[-1]
 test_sources = [root / "Assets/Tests/EditMode/SplatterCoreTests.cs", root / "tools/hand-state-verify/RunCoreTests.cs"]

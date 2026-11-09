@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Splatter.Runtime",
+    "rootNamespace": "MoodPicker.Splatter",
+    "references": ["MoodPicker.Pigment", "MoodPicker.Splatter"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}
