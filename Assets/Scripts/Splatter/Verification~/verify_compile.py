@@ -54,14 +54,21 @@ if result.returncode:
 pure_refs = [p for p in refs if not p.name.startswith("UnityEngine")]
 pigment_dll = compile_assembly("MoodPicker.Pigment", sorted((root / "Assets/Scripts/Pigment/Core").glob("*.cs")), pure_refs)
 splatter_dll = compile_assembly("MoodPicker.Splatter", sorted((root / "Assets/Scripts/Splatter/Core").glob("*.cs")), pure_refs + [pigment_dll])
+assemblies = root / "Library/ScriptAssemblies"
+sim_refs = [assemblies / "Unity.Mathematics.dll"]
+sim_dll = compile_assembly("MoodPicker.Splatter.Sim", sorted((root / "Assets/Scripts/Splatter/Sim").glob("*.cs")), pure_refs + sim_refs)
+runtime_refs = refs + [pigment_dll, splatter_dll, sim_dll] + sim_refs + [
+    assemblies / "Unity.Burst.dll", assemblies / "Unity.Collections.dll", assemblies / "Meta.XR.ImmersiveDebugger.Interface.dll"]
 runtime_sources = sorted((root / "Assets/Scripts/Splatter/Runtime").glob("*.cs"))
-if runtime_sources:
-    compile_assembly("MoodPicker.Splatter.Runtime", runtime_sources, refs + [pigment_dll, splatter_dll])
+runtime_dll = compile_assembly("MoodPicker.Splatter.Runtime", runtime_sources, runtime_refs)
+compile_assembly("MoodPicker.Splatter.Ovr", sorted((root / "Assets/Scripts/Splatter/Ovr").glob("*.cs")),
+                 runtime_refs + [runtime_dll, assemblies / "Oculus.VR.dll", assemblies / "meta.xr.mrutilitykit.dll", assemblies / "MoodPicker.Hands.dll"])
 
 shader_path = root / "Assets/Shaders/Splatter/LetterSplatURP.shader"
 if shader_path.exists():
     shader_text = shader_path.read_text()
     required_tokens = [
+        "LOAD_TEXTURE2D_LOD(_SimTex",
         "SampleFlipbookTriplanar",
         "PerturbNormalFromHeightFiniteDiff",
         "UNITY_VERTEX_OUTPUT_STEREO",
@@ -87,3 +94,8 @@ print(result.stdout + result.stderr, flush=True)
 if result.returncode:
     raise SystemExit(result.returncode)
 print("PASS Splatter Core & PigmentCore NUnit tests", flush=True)
+
+result = subprocess.run(["python3", str(root / "Assets/Scripts/Splatter/Sim/Verification~/verify_sim.py")], capture_output=True, text=True)
+print(result.stdout + result.stderr, flush=True)
+if result.returncode:
+    raise SystemExit(result.returncode)

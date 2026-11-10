@@ -1,7 +1,15 @@
 {
     "name": "MoodPicker.Splatter.Runtime",
     "rootNamespace": "MoodPicker.Splatter",
-    "references": ["MoodPicker.Pigment", "MoodPicker.Splatter"],
+    "references": [
+        "MoodPicker.Pigment",
+        "MoodPicker.Splatter",
+        "MoodPicker.Splatter.Sim",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.Mathematics",
+        "Meta.XR.ImmersiveDebugger.Interface"
+    ],
     "autoReferenced": true,
     "noEngineReferences": false
 }

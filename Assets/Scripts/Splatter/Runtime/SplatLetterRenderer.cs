@@ -1,10 +1,37 @@
 using System;
+using MoodPicker.Splatter.Sim;
 using Pigment;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace MoodPicker.Splatter
 {
+    public struct SplatLook
+    {
+        public float flowAmplitude;
+        public float flowSpeed;
+        public float contrast;
+        public float detachDistance;
+        public float stretchSeconds;
+        public float stretchMax;
+        public float grain;
+        public float glowGain;
+        public float sparkle;
+
+        public static SplatLook Default => new SplatLook
+        {
+            flowAmplitude = 0.0008f,
+            flowSpeed = 1.6f,
+            contrast = 1f,
+            detachDistance = 0.012f,
+            stretchSeconds = 0.008f,
+            stretchMax = 2.5f,
+            grain = 0.6f,
+            glowGain = 0.35f,
+            sparkle = 0.6f
+        };
+    }
+
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class SplatLetterRenderer : MonoBehaviour
     {
@@ -19,16 +46,13 @@ namespace MoodPicker.Splatter
         public static readonly int PropShadowTone = Shader.PropertyToID("_ShadowTone");
         public static readonly int PropThreshold = Shader.PropertyToID("_Threshold");
         public static readonly int PropOutline = Shader.PropertyToID("_Outline");
-        public static readonly int PropHandLeftWS = Shader.PropertyToID("_HandLeftWS");
-        public static readonly int PropHandRightWS = Shader.PropertyToID("_HandRightWS");
-        public static readonly int PropHandLeftVelWS = Shader.PropertyToID("_HandLeftVelWS");
-        public static readonly int PropHandRightVelWS = Shader.PropertyToID("_HandRightVelWS");
-        public static readonly int PropRipple0 = Shader.PropertyToID("_Ripple0");
-        public static readonly int PropRipple1 = Shader.PropertyToID("_Ripple1");
-        public static readonly int PropRipple2 = Shader.PropertyToID("_Ripple2");
-        public static readonly int PropRipple3 = Shader.PropertyToID("_Ripple3");
-        public static readonly int PropMagicParams = Shader.PropertyToID("_MagicParams");
-        public static readonly int PropSummonOriginWS = Shader.PropertyToID("_SummonOriginWS");
+        public static readonly int PropAtlasCrop = Shader.PropertyToID("_AtlasCrop");
+        public static readonly int PropCropOn = Shader.PropertyToID("_CropOn");
+        public static readonly int PropSimTex = Shader.PropertyToID("_SimTex");
+        public static readonly int PropSimOn = Shader.PropertyToID("_SimOn");
+        public static readonly int PropFlowParams = Shader.PropertyToID("_FlowParams");
+        public static readonly int PropDropParams = Shader.PropertyToID("_DropParams");
+        public static readonly int PropGlowParams = Shader.PropertyToID("_GlowParams");
 
         [SerializeField] Mesh sourceMesh;
         [SerializeField] Material splatMaterial;
@@ -43,29 +67,43 @@ namespace MoodPicker.Splatter
         MeshRenderer _renderer;
         MaterialPropertyBlock _block;
         int _splatCount;
-        Vector4 _handLeftWS;
-        Vector4 _handRightWS;
-        Vector4 _handLeftVelWS = new Vector4(0f, 0f, 0f, 0.095f);
-        Vector4 _handRightVelWS = new Vector4(0f, 0f, 0f, 0.095f);
-        Vector4 _ripple0 = new Vector4(0f, 0f, 0f, -1f);
-        Vector4 _ripple1 = new Vector4(0f, 0f, 0f, -1f);
-        Vector4 _ripple2 = new Vector4(0f, 0f, 0f, -1f);
-        Vector4 _ripple3 = new Vector4(0f, 0f, 0f, -1f);
-        Vector4 _magicParams = new Vector4(1f, 0f, 0f, 0f);
-        Vector4 _summonOriginWS = Vector4.zero;
+        Vector3[] _homes;
+        SplatSimRunner _sim;
+        int _simClusterSize;
+        SplatLook _look = SplatLook.Default;
+        Vector4 _crop = new Vector4(1f, 1f, 0f, 0f);
+        bool _cropOn;
+        float _cropGamma = 1f;
 
         public int SplatCount => _splatCount;
         public SplatShaderMode Mode { get => shaderMode; set => shaderMode = value; }
         public int AssignedSlot { get => assignedSlot; set => assignedSlot = value; }
+        public SplatSimRunner Sim => _sim;
+        public float LetterSize => letterSize;
 
-        public void SetMagicState(Vector4 magicParams)
+        public SplatSimRunner EnsureSim(int particlesPerCluster)
         {
-            _magicParams = magicParams;
+            if (_cloudMesh == null && sourceMesh != null) Rebuild();
+            if (_homes == null || _homes.Length == 0) return null;
+            if (_sim != null && _simClusterSize == particlesPerCluster) return _sim;
+            SplatSimMode mode = _sim != null ? _sim.Mode : SplatSimMode.Formed;
+            _sim?.Dispose();
+            _sim = new SplatSimRunner(_homes, particlesPerCluster);
+            _simClusterSize = particlesPerCluster;
+            if (mode == SplatSimMode.Hidden) _sim.Hide();
+            return _sim;
         }
 
-        public void SetSummonOrigin(Vector3 originWS)
+        public void SetLook(SplatLook look)
         {
-            _summonOriginWS = new Vector4(originWS.x, originWS.y, originWS.z, 1f);
+            _look = look;
+        }
+
+        public void SetCrop(bool on, Vector4 crop, float gamma)
+        {
+            _cropOn = on;
+            _crop = crop;
+            _cropGamma = gamma;
         }
 
         void Awake()
@@ -144,34 +182,27 @@ namespace MoodPicker.Splatter
             _cloudMesh.normals = norms;
             _cloudMesh.uv = uvs;
             _cloudMesh.SetUVs(1, centers);
+
+            _homes = new Vector3[samples.Length];
+            var simUV = new Vector2[vCount];
+            for (int i = 0; i < samples.Length; i++)
+            {
+                _homes[i] = new Vector3(samples[i].CenterX, samples[i].CenterY, samples[i].CenterZ);
+                Vector2 texel = SplatSimRunner.TexelFor(i);
+                for (int c = 0; c < 4; c++) simUV[i * 4 + c] = texel;
+            }
+            _cloudMesh.SetUVs(2, simUV);
+            _sim?.Dispose();
+            _sim = null;
             _cloudMesh.SetTriangles(data.Indices, 0, true);
+            _cloudMesh.bounds = new Bounds(_cloudMesh.bounds.center, _cloudMesh.bounds.size + Vector3.one * 4f);
 
             _filter.sharedMesh = _cloudMesh;
             if (splatMaterial != null) _renderer.sharedMaterial = splatMaterial;
         }
 
-        public void SetHandWaterState(
-            Vector4 handLeftWS,
-            Vector4 handRightWS,
-            Vector4 handLeftVelWS,
-            Vector4 handRightVelWS,
-            Vector4 ripple0,
-            Vector4 ripple1,
-            Vector4 ripple2,
-            Vector4 ripple3)
-        {
-            _handLeftWS = handLeftWS;
-            _handRightWS = handRightWS;
-            _handLeftVelWS = handLeftVelWS;
-            _handRightVelWS = handRightVelWS;
-            _ripple0 = ripple0;
-            _ripple1 = ripple1;
-            _ripple2 = ripple2;
-            _ripple3 = ripple3;
-        }
-
         public void ApplyPigmentState(
-            Texture2D atlas,
+            Texture atlas,
             FlipbookLayout layout,
             float currentFrame,
             bool hasSlot,
@@ -196,17 +227,17 @@ namespace MoodPicker.Splatter
             _block.SetColor(PropShadowTone, new Color(palette.ShadowR, palette.ShadowG, palette.ShadowB, 1f));
             _block.SetFloat(PropThreshold, palette.Threshold);
             _block.SetFloat(PropOutline, outlineEnabled ? 1f : 0f);
-            _block.SetVector(PropHandLeftWS, _handLeftWS);
-            _block.SetVector(PropHandRightWS, _handRightWS);
-            _block.SetVector(PropHandLeftVelWS, _handLeftVelWS);
-            _block.SetVector(PropHandRightVelWS, _handRightVelWS);
-            _block.SetVector(PropRipple0, _ripple0);
-            _block.SetVector(PropRipple1, _ripple1);
-            _block.SetVector(PropRipple2, _ripple2);
-            _block.SetVector(PropRipple3, _ripple3);
-            _block.SetVector(PropMagicParams, _magicParams);
-            _block.SetVector(PropSummonOriginWS, _summonOriginWS);
+            bool simOn = _sim != null && _sim.DrivesShader;
+            if (simOn) _block.SetTexture(PropSimTex, _sim.Texture);
+            _block.SetFloat(PropSimOn, simOn ? 1f : 0f);
+            _block.SetVector(PropFlowParams, new Vector4(_look.flowAmplitude, _look.flowSpeed, _look.contrast, _cropGamma));
+            _block.SetVector(PropAtlasCrop, _crop);
+            _block.SetFloat(PropCropOn, _cropOn ? 1f : 0f);
+            _block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, _look.detachDistance), _look.stretchSeconds, _look.stretchMax, _look.grain));
+            _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, 0f, 0f));
             _renderer.SetPropertyBlock(_block);
+            bool hidden = _sim != null && _sim.Mode == SplatSimMode.Hidden;
+            if (_renderer.enabled == hidden) _renderer.enabled = !hidden;
         }
 
         void EnsureComponents()
@@ -218,6 +249,8 @@ namespace MoodPicker.Splatter
 
         void OnDestroy()
         {
+            _sim?.Dispose();
+            _sim = null;
             if (_cloudMesh != null)
             {
                 if (Application.isPlaying) Destroy(_cloudMesh);

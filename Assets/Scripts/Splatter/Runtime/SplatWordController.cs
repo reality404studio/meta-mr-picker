@@ -1,21 +1,50 @@
+using System.Diagnostics;
+using MoodPicker.Splatter.Sim;
 using Pigment;
 using UnityEngine;
 
 namespace MoodPicker.Splatter
 {
-    public enum SplatMagicState
+    public struct SplatHandPoints
     {
-        Formed = 0,
-        Summoning = 1,
-        Dissolving = 2,
-        Hidden = 3
+        public const int Count = 6;
+
+        public bool tracked;
+        public bool pinching;
+        public Vector3 thumb;
+        public Vector3 index;
+        public Vector3 middle;
+        public Vector3 ring;
+        public Vector3 little;
+        public Vector3 palm;
+
+        public Vector3 Pinch => 0.5f * (thumb + index);
+
+        public Vector3 this[int i]
+        {
+            get
+            {
+                switch (i)
+                {
+                    case 0: return thumb;
+                    case 1: return index;
+                    case 2: return middle;
+                    case 3: return ring;
+                    case 4: return little;
+                    default: return palm;
+                }
+            }
+        }
     }
 
     public sealed class SplatWordController : MonoBehaviour
     {
+        const float MaxHandSpeed = 3f;
+
         [SerializeField] SplatLetterRenderer[] letters;
         [SerializeField] SplatPigmentSlotAsset[] presetSlots;
         [SerializeField] Transform head;
+        [SerializeField] SplatTuning tuning;
         [SerializeField] float placeDistance = 0.38f;
         [SerializeField] float placeOffsetY = -0.06f;
         [SerializeField] float letterSize = 0.12f;
@@ -23,25 +52,29 @@ namespace MoodPicker.Splatter
         [SerializeField] float intensity = 1.15f;
         [SerializeField] bool outlineEnabled = false;
         [SerializeField] bool autoFillSampleSlot0 = true;
+        [SerializeField] bool summonOnPlace = true;
 
         readonly BuiltPigmentSlot[] _slots = new BuiltPigmentSlot[SplatWordState.MaxSlots];
         readonly Texture2D[] _slotTextures = new Texture2D[SplatWordState.MaxSlots];
         readonly bool[] _ownsTexture = new bool[SplatWordState.MaxSlots];
         readonly float[] _slotFrames = new float[SplatWordState.MaxSlots];
-        readonly Vector4[] _rippleHitOS =
-        {
-            new Vector4(0f, 0f, 0f, -10f),
-            new Vector4(0f, 0f, 0f, -10f),
-            new Vector4(0f, 0f, 0f, -10f),
-            new Vector4(0f, 0f, 0f, -10f)
-        };
+        readonly SplatCollider[] _colliders = new SplatCollider[SplatHandPoints.Count * 2];
+        readonly Vector3[] _prevPoint = new Vector3[SplatHandPoints.Count * 2];
+        readonly Vector3[] _pointVelocity = new Vector3[SplatHandPoints.Count * 2];
+        readonly bool[] _hadHand = new bool[2];
+        readonly Stopwatch _watch = new Stopwatch();
 
-        Vector3[] _baseLocalPositions;
-        Quaternion[] _baseLocalRotations;
         SplatWordState _state;
-        int _headAlignFrames;
-        bool _headAligned;
-        bool _userInteracted;
+        int _colliderCount;
+        int _placeFrames;
+        bool _placed;
+        int _strideFrames;
+        float _strideDt;
+        float _awakeSmoothed;
+        float _nextSimLog;
+        Texture _overrideTexture;
+        Vector4 _overrideCrop = new Vector4(1f, 1f, 0f, 0f);
+        float _overrideGamma = 1f;
 
         float _wordScale = 1f;
         bool _twoHandGrabbing;
@@ -52,44 +85,52 @@ namespace MoodPicker.Splatter
         float _grabStartYawDeg;
         Quaternion _grabStartWordRot = Quaternion.identity;
 
-        public const float SummonSeconds = 3.4f;
-        public const float DissolveSeconds = 1.7f;
-
-        SplatMagicState _magicState = SplatMagicState.Formed;
-        float _magicStartTime = -10f;
-        float _magicDuration = 1.35f;
-        Vector3 _lastLeftPinchWS;
-        bool _hasLeftPinchWS;
+        Vector3 _emitterWS;
+        Vector3 _emitterVelocityWS;
+        bool _hasEmitter;
         bool _wasLeftPinching;
-        float _lastLeftPinchToggleTime = -10f;
+        float _lastToggleTime = -10f;
 
-        bool _hadLeftPos;
-        bool _hadRightPos;
-        Vector3 _prevLeftTipWS;
-        Vector3 _prevRightTipWS;
-        Vector3 _leftVelWS;
-        Vector3 _rightVelWS;
-        Vector4 _handLeftWS;
-        Vector4 _handRightWS;
-        Vector4 _handLeftVelWS = new Vector4(0f, 0f, 0f, 0.075f);
-        Vector4 _handRightVelWS = new Vector4(0f, 0f, 0f, 0.075f);
-        int _nextRippleIndex;
-        float _lastLeftRippleTime = -10f;
-        float _lastRightRippleTime = -10f;
-        bool _externalHandFeed;
-
-        public SplatMagicState MagicState => _magicState;
         public SplatWordState State => _state;
         public float WordScale => _wordScale;
         public bool IsTwoHandGrabbing => _twoHandGrabbing;
+        public int ColliderCount => _colliderCount;
+
+        public SplatSimMode SimMode
+        {
+            get
+            {
+                SplatSimRunner sim = FirstSim();
+                return sim != null ? sim.Mode : SplatSimMode.Formed;
+            }
+        }
 
         void Awake()
         {
             _wordScale = Mathf.Max(0.1f, transform.localScale.x);
-            _magicState = SplatMagicState.Summoning;
-            _magicStartTime = Time.time;
-            _magicDuration = SummonSeconds;
             InitializeIfNeeded();
+        }
+
+        void OnEnable()
+        {
+            if (tuning == null) return;
+            tuning.RecenterRequested += Recenter;
+            tuning.ToggleRequested += ToggleSummon;
+        }
+
+        void OnDisable()
+        {
+            if (tuning == null) return;
+            tuning.RecenterRequested -= Recenter;
+            tuning.ToggleRequested -= ToggleSummon;
+        }
+
+        SplatSimRunner FirstSim()
+        {
+            if (letters == null) return null;
+            for (int i = 0; i < letters.Length; i++)
+                if (letters[i] != null && letters[i].Sim != null) return letters[i].Sim;
+            return null;
         }
 
         public void InitializeIfNeeded()
@@ -102,44 +143,32 @@ namespace MoodPicker.Splatter
             {
                 _state = new SplatWordState(count, 0, SplatShaderMode.Raw);
                 _state.SetSharedParameters(triplanarScale, intensity, outlineEnabled);
-                _baseLocalPositions = new Vector3[count];
-                _baseLocalRotations = new Quaternion[count];
                 for (int i = 0; i < count; i++)
-                {
-                    if (letters[i] != null)
-                    {
-                        _baseLocalPositions[i] = letters[i].transform.localPosition;
-                        _baseLocalRotations[i] = letters[i].transform.localRotation;
-                        _state.SetLetterDirect(i, letters[i].AssignedSlot, letters[i].Mode);
-                    }
-                }
+                    if (letters[i] != null) _state.SetLetterDirect(i, letters[i].AssignedSlot, letters[i].Mode);
             }
 
             if (presetSlots != null)
             {
                 for (int s = 0; s < presetSlots.Length && s < SplatWordState.MaxSlots; s++)
-                {
                     if (presetSlots[s] != null && presetSlots[s].atlasTexture != null && _slots[s] == null)
-                    {
                         SetSlotAsset(s, presetSlots[s]);
-                    }
-                }
             }
 
             if (autoFillSampleSlot0 && _slots[0] == null)
-            {
                 SetSlot(0, PigmentAtlasBuilder.BuildSampleWaterWaveSlot(64, 24, 15f));
-            }
+        }
+
+        void ReleaseOwnedTexture(int slotIndex)
+        {
+            if (!_ownsTexture[slotIndex] || _slotTextures[slotIndex] == null) return;
+            if (Application.isPlaying) Destroy(_slotTextures[slotIndex]);
+            else DestroyImmediate(_slotTextures[slotIndex]);
         }
 
         public void SetSlotAsset(int slotIndex, SplatPigmentSlotAsset asset)
         {
             if (slotIndex < 0 || slotIndex >= SplatWordState.MaxSlots || asset == null || asset.atlasTexture == null) return;
-            if (_ownsTexture[slotIndex] && _slotTextures[slotIndex] != null)
-            {
-                if (Application.isPlaying) Destroy(_slotTextures[slotIndex]);
-                else DestroyImmediate(_slotTextures[slotIndex]);
-            }
+            ReleaseOwnedTexture(slotIndex);
             _slots[slotIndex] = new BuiltPigmentSlot
             {
                 Layout = asset.ToLayout(),
@@ -154,14 +183,8 @@ namespace MoodPicker.Splatter
         public void SetSlot(int slotIndex, BuiltPigmentSlot built)
         {
             if (slotIndex < 0 || slotIndex >= SplatWordState.MaxSlots || built == null) return;
+            ReleaseOwnedTexture(slotIndex);
             _slots[slotIndex] = built;
-
-            if (_ownsTexture[slotIndex] && _slotTextures[slotIndex] != null)
-            {
-                if (Application.isPlaying) Destroy(_slotTextures[slotIndex]);
-                else DestroyImmediate(_slotTextures[slotIndex]);
-            }
-
             var tex = new Texture2D(built.Layout.Width, built.Layout.Height, TextureFormat.RGBA32, false, true)
             {
                 wrapMode = TextureWrapMode.Clamp,
@@ -173,92 +196,150 @@ namespace MoodPicker.Splatter
             _ownsTexture[slotIndex] = true;
         }
 
-        public void TriggerMagicToggle()
+        public void SetOverrideTexture(Texture texture, Vector4 crop, float gamma)
         {
-            float now = Time.time;
-            if (_magicState == SplatMagicState.Formed || _magicState == SplatMagicState.Summoning)
-            {
-                _magicState = SplatMagicState.Dissolving;
-                _magicStartTime = now;
-                _magicDuration = DissolveSeconds;
-            }
-            else
-            {
-                _magicState = SplatMagicState.Summoning;
-                _magicStartTime = now;
-                _magicDuration = SummonSeconds;
-            }
+            _overrideTexture = texture;
+            _overrideCrop = crop;
+            _overrideGamma = gamma;
         }
 
-        Vector3 ResolveSummonOrigin()
+        public void ClearOverrideTexture()
         {
-            if (_hasLeftPinchWS) return _lastLeftPinchWS;
+            _overrideTexture = null;
+        }
+
+        int ClusterSize => tuning != null ? Mathf.Max(8, tuning.particlesPerCluster) : 300;
+
+        SplatSimParams CurrentParams()
+        {
+            float floorBelow = tuning != null ? tuning.floorBelow : 0.45f;
+            float floorY = transform.position.y - floorBelow;
+            if (tuning != null) return tuning.ToSimParams(floorY);
+            SplatSimParams p = SplatSimParams.WaterDroplet;
+            p.floorY = floorY;
+            return p;
+        }
+
+        Vector3 FallbackEmitter()
+        {
             if (head != null) return head.position + head.forward * 0.22f + Vector3.down * 0.14f;
-            return transform.position + Vector3.down * 0.25f;
+            return transform.position + Vector3.down * 0.2f;
         }
 
-        public void UpdateHandInteraction(
-            bool leftTracked,
-            Vector3 leftEffectorWS,
-            Vector3 leftPinchWS,
-            bool leftPinching,
-            bool rightTracked,
-            Vector3 rightEffectorWS,
-            Vector3 rightPinchWS,
-            bool rightPinching,
-            float timeSeconds,
-            float dt)
+        public void BeginSummon(Vector3 emitterWS)
         {
-            _externalHandFeed = true;
+            if (letters == null) return;
+            float spread = tuning != null ? tuning.summonSpread : 1.4f;
+            _emitterWS = emitterWS;
+            for (int i = 0; i < letters.Length; i++)
+            {
+                if (letters[i] == null) continue;
+                SplatSimRunner sim = letters[i].EnsureSim(ClusterSize);
+                sim?.BeginSummon(letters[i].transform.localToWorldMatrix, emitterWS, spread, 0.9f);
+            }
+        }
+
+        public void BeginDissolve()
+        {
+            if (letters == null) return;
+            float sag = tuning != null ? tuning.dissolveSag : 0.2f;
+            float spread = tuning != null ? tuning.dissolveSpread : 0.4f;
+            for (int i = 0; i < letters.Length; i++)
+            {
+                if (letters[i] == null) continue;
+                SplatSimRunner sim = letters[i].EnsureSim(ClusterSize);
+                sim?.BeginDissolve(sag, spread, 2.2f);
+            }
+        }
+
+        public void ToggleSummon()
+        {
+            SplatSimMode mode = SimMode;
+            if (mode == SplatSimMode.Formed || mode == SplatSimMode.Summoning) BeginDissolve();
+            else BeginSummon(_hasEmitter ? _emitterWS : FallbackEmitter());
+            UnityEngine.Debug.Log($"[MP] toggle from={mode} to={SimMode}");
+        }
+
+        public void Recenter()
+        {
+            if (head == null) return;
+            Vector3 fwd = Vector3.ProjectOnPlane(head.forward, Vector3.up);
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
+            fwd.Normalize();
+            transform.position = head.position + fwd * placeDistance + Vector3.up * placeOffsetY;
+            transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+        }
+
+        void TrackHand(int handIndex, in SplatHandPoints hand, float dt)
+        {
+            int baseIndex = handIndex * SplatHandPoints.Count;
+            if (!hand.tracked)
+            {
+                _hadHand[handIndex] = false;
+                for (int k = 0; k < SplatHandPoints.Count; k++) _pointVelocity[baseIndex + k] = Vector3.zero;
+                return;
+            }
+            float blend = 1f - Mathf.Exp(-20f * dt);
+            for (int k = 0; k < SplatHandPoints.Count; k++)
+            {
+                Vector3 p = hand[k];
+                Vector3 raw = _hadHand[handIndex] ? (p - _prevPoint[baseIndex + k]) / dt : Vector3.zero;
+                _pointVelocity[baseIndex + k] = Vector3.Lerp(_pointVelocity[baseIndex + k], Vector3.ClampMagnitude(raw, MaxHandSpeed), blend);
+                _prevPoint[baseIndex + k] = p;
+            }
+            _hadHand[handIndex] = true;
+        }
+
+        void AddColliders(int handIndex, in SplatHandPoints hand)
+        {
+            if (!hand.tracked) return;
+            float tip = tuning != null ? tuning.tipRadius : 0.022f;
+            float palm = tuning != null ? tuning.palmRadius : 0.045f;
+            int baseIndex = handIndex * SplatHandPoints.Count;
+            for (int k = 0; k < SplatHandPoints.Count; k++)
+            {
+                _colliders[_colliderCount++] = new SplatCollider
+                {
+                    position = hand[k],
+                    velocity = _pointVelocity[baseIndex + k],
+                    radius = k == SplatHandPoints.Count - 1 ? palm : tip,
+                    strength = 1f
+                };
+            }
+        }
+
+        public void UpdateHands(in SplatHandPoints left, in SplatHandPoints right, float timeSeconds, float dt)
+        {
             float safeDt = Mathf.Max(dt, 0.001f);
+            TrackHand(0, left, safeDt);
+            TrackHand(1, right, safeDt);
+            _colliderCount = 0;
 
-            if (leftTracked)
+            if (left.tracked)
             {
-                _lastLeftPinchWS = leftPinchWS;
-                _hasLeftPinchWS = true;
-                Vector3 rawVel = _hadLeftPos ? (leftEffectorWS - _prevLeftTipWS) / safeDt : Vector3.zero;
-                _leftVelWS = Vector3.Lerp(_leftVelWS, Vector3.ClampMagnitude(rawVel, 3.0f), 1f - Mathf.Exp(-20f * safeDt));
-                _prevLeftTipWS = leftEffectorWS;
-                _hadLeftPos = true;
-            }
-            else
-            {
-                _hadLeftPos = false;
-                _leftVelWS = Vector3.zero;
+                _emitterWS = left.Pinch;
+                _emitterVelocityWS = 0.5f * (_pointVelocity[0] + _pointVelocity[1]);
+                _hasEmitter = true;
             }
 
-            if (rightTracked)
+            bool formed = SimMode == SplatSimMode.Formed;
+            bool bothPinching = left.tracked && right.tracked && left.pinching && right.pinching;
+            if (bothPinching && formed)
             {
-                Vector3 rawVel = _hadRightPos ? (rightEffectorWS - _prevRightTipWS) / safeDt : Vector3.zero;
-                _rightVelWS = Vector3.Lerp(_rightVelWS, Vector3.ClampMagnitude(rawVel, 3.0f), 1f - Mathf.Exp(-20f * safeDt));
-                _prevRightTipWS = rightEffectorWS;
-                _hadRightPos = true;
-            }
-            else
-            {
-                _hadRightPos = false;
-                _rightVelWS = Vector3.zero;
-            }
-
-            bool bothPinching = leftTracked && rightTracked && leftPinching && rightPinching;
-            if (bothPinching && _magicState == SplatMagicState.Formed)
-            {
-                Vector3 midWS = 0.5f * (leftPinchWS + rightPinchWS);
-                float span = Mathf.Max(0.04f, Vector3.Distance(leftPinchWS, rightPinchWS));
-                Vector3 handLine = rightPinchWS - leftPinchWS;
+                Vector3 l = left.Pinch;
+                Vector3 r = right.Pinch;
+                Vector3 midWS = 0.5f * (l + r);
+                float span = Mathf.Max(0.04f, Vector3.Distance(l, r));
+                Vector3 handLine = r - l;
                 handLine.y = 0f;
-                float currentYaw = handLine.sqrMagnitude > 1e-4f
-                    ? Mathf.Atan2(handLine.z, handLine.x) * Mathf.Rad2Deg
-                    : 0f;
+                float currentYaw = handLine.sqrMagnitude > 1e-4f ? Mathf.Atan2(handLine.z, handLine.x) * Mathf.Rad2Deg : 0f;
 
                 if (!_twoHandGrabbing)
                 {
-                    float distToWord = Vector3.Distance(midWS, transform.position);
                     float maxGrabDist = Mathf.Max(0.55f, 0.65f * _wordScale);
-                    if (distToWord <= maxGrabDist)
+                    if (Vector3.Distance(midWS, transform.position) <= maxGrabDist)
                     {
                         _twoHandGrabbing = true;
-                        _userInteracted = true;
                         _grabStartMidWS = midWS;
                         _grabStartSpan = span;
                         _grabStartWordPos = transform.position;
@@ -273,124 +354,83 @@ namespace MoodPicker.Splatter
                     _wordScale = Mathf.Clamp(_grabStartWordScale * scaleRatio, 0.25f, 3.80f);
                     transform.localScale = Vector3.one * _wordScale;
 
-                    Vector3 targetPos = _grabStartWordPos + (midWS - _grabStartMidWS);
-                    float posFollow = 1f - Mathf.Exp(-28f * safeDt);
-                    transform.position = Vector3.Lerp(transform.position, targetPos, posFollow);
-
+                    float follow = 1f - Mathf.Exp(-28f * safeDt);
+                    transform.position = Vector3.Lerp(transform.position, _grabStartWordPos + (midWS - _grabStartMidWS), follow);
                     if (handLine.sqrMagnitude > 1e-4f)
                     {
                         float yawDelta = Mathf.DeltaAngle(_grabStartYawDeg, currentYaw);
-                        Quaternion targetRot = Quaternion.Euler(0f, -yawDelta, 0f) * _grabStartWordRot;
-                        transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, posFollow);
+                        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(0f, -yawDelta, 0f) * _grabStartWordRot, follow);
                     }
                 }
-
-                float radiusSuppressed = 0.075f * _wordScale;
-                _handLeftWS = Vector4.zero;
-                _handRightWS = Vector4.zero;
-                _handLeftVelWS = new Vector4(0f, 0f, 0f, radiusSuppressed);
-                _handRightVelWS = new Vector4(0f, 0f, 0f, radiusSuppressed);
+                _wasLeftPinching = false;
                 return;
             }
 
             _twoHandGrabbing = false;
 
-            bool leftOnlyPinch = leftTracked && leftPinching && !(rightTracked && rightPinching);
+            bool leftOnlyPinch = left.tracked && left.pinching && !(right.tracked && right.pinching);
             bool leftTriggered = leftOnlyPinch && !_wasLeftPinching;
             _wasLeftPinching = leftOnlyPinch;
-
-            if (leftTriggered && !_twoHandGrabbing && (timeSeconds - _lastLeftPinchToggleTime >= 0.45f))
+            if (leftTriggered && timeSeconds - _lastToggleTime >= 0.45f)
             {
-                _lastLeftPinchToggleTime = timeSeconds;
-                _userInteracted = true;
-                if (_magicState == SplatMagicState.Formed || _magicState == SplatMagicState.Summoning)
-                {
-                    _magicState = SplatMagicState.Dissolving;
-                    _magicStartTime = timeSeconds;
-                    _magicDuration = DissolveSeconds;
-                }
-                else
-                {
-                    _magicState = SplatMagicState.Summoning;
-                    _magicStartTime = timeSeconds;
-                    _magicDuration = SummonSeconds;
-                }
+                _lastToggleTime = timeSeconds;
+                ToggleSummon();
             }
 
-            if (_magicState != SplatMagicState.Formed)
-            {
-                _handLeftWS = Vector4.zero;
-                _handRightWS = Vector4.zero;
-                _handLeftVelWS = new Vector4(0f, 0f, 0f, 0.075f * _wordScale);
-                _handRightVelWS = new Vector4(0f, 0f, 0f, 0.075f * _wordScale);
-                return;
-            }
-
-            float splashRadiusWS = 0.075f * _wordScale;
-            _handLeftWS = leftTracked ? new Vector4(leftEffectorWS.x, leftEffectorWS.y, leftEffectorWS.z, 1f) : Vector4.zero;
-            _handRightWS = rightTracked ? new Vector4(rightEffectorWS.x, rightEffectorWS.y, rightEffectorWS.z, 1f) : Vector4.zero;
-            _handLeftVelWS = new Vector4(_leftVelWS.x, _leftVelWS.y, _leftVelWS.z, splashRadiusWS);
-            _handRightVelWS = new Vector4(_rightVelWS.x, _rightVelWS.y, _rightVelWS.z, splashRadiusWS);
-
-            if (letters != null && letters.Length > 0)
-            {
-                float hitThreshold = 0.12f * _wordScale;
-
-                if (leftTracked && timeSeconds - _lastLeftRippleTime >= 0.085f)
-                {
-                    for (int i = 0; i < letters.Length; i++)
-                    {
-                        if (letters[i] == null) continue;
-                        Transform lt = letters[i].transform;
-                        float distL = Vector3.Distance(leftEffectorWS, lt.position);
-                        if (distL <= hitThreshold && (_leftVelWS.sqrMagnitude > 0.002f || timeSeconds - _lastLeftRippleTime > 0.35f))
-                        {
-                            _userInteracted = true;
-                            Vector3 hitOS = lt.InverseTransformPoint(leftEffectorWS);
-                            _rippleHitOS[_nextRippleIndex] = new Vector4(hitOS.x, hitOS.y, hitOS.z, timeSeconds);
-                            _nextRippleIndex = (_nextRippleIndex + 1) & 3;
-                            _lastLeftRippleTime = timeSeconds;
-                            break;
-                        }
-                    }
-                }
-
-                if (rightTracked && timeSeconds - _lastRightRippleTime >= 0.085f)
-                {
-                    for (int i = 0; i < letters.Length; i++)
-                    {
-                        if (letters[i] == null) continue;
-                        Transform lt = letters[i].transform;
-                        float distR = Vector3.Distance(rightEffectorWS, lt.position);
-                        if (distR <= hitThreshold && (_rightVelWS.sqrMagnitude > 0.002f || timeSeconds - _lastRightRippleTime > 0.35f))
-                        {
-                            _userInteracted = true;
-                            Vector3 hitOS = lt.InverseTransformPoint(rightEffectorWS);
-                            _rippleHitOS[_nextRippleIndex] = new Vector4(hitOS.x, hitOS.y, hitOS.z, timeSeconds);
-                            _nextRippleIndex = (_nextRippleIndex + 1) & 3;
-                            _lastRightRippleTime = timeSeconds;
-                            break;
-                        }
-                    }
-                }
-            }
+            AddColliders(0, left);
+            AddColliders(1, right);
         }
 
-        public void TriggerSampleSplash(Vector3 hitPosOS, Vector3 handPosWS, Vector3 handVelWS, float timeSeconds)
+        public void SetColliders(SplatCollider[] source, int count)
         {
-            float splashRadiusWS = 0.075f * _wordScale;
-            _handRightWS = new Vector4(handPosWS.x, handPosWS.y, handPosWS.z, 1f);
-            _handRightVelWS = new Vector4(handVelWS.x, handVelWS.y, handVelWS.z, splashRadiusWS);
-            _rippleHitOS[0] = new Vector4(hitPosOS.x, hitPosOS.y, hitPosOS.z, timeSeconds - 0.16f);
-            _rippleHitOS[1] = new Vector4(hitPosOS.x * 0.5f, hitPosOS.y * 0.5f, hitPosOS.z, timeSeconds - 0.05f);
+            _colliderCount = source != null ? Mathf.Min(count, _colliders.Length) : 0;
+            for (int i = 0; i < _colliderCount; i++) _colliders[i] = source[i];
         }
 
-        Vector4 BuildRippleShaderVector(int idx, float timeSeconds)
+        public void StepSimulation(float dt)
         {
-            Vector4 raw = _rippleHitOS[idx];
-            float age = raw.w < -1f ? -1f : (timeSeconds - raw.w);
-            if (age < 0f || age > 1.8f) age = -1f;
-            return new Vector4(raw.x, raw.y, raw.z, age);
+            if (letters == null) return;
+            int stride = tuning != null ? Mathf.Clamp(tuning.stepEveryFrames, 1, 3) : 1;
+            _strideFrames++;
+            _strideDt += dt;
+            if (_strideFrames < stride) return;
+            float stepDt = _strideDt;
+            _strideFrames = 0;
+            _strideDt = 0f;
+
+            SplatSimParams p = CurrentParams();
+            bool frozen = tuning != null && tuning.frozen;
+            bool anyAwake = false;
+            float activity = 0f;
+            int active = 0;
+            _watch.Restart();
+            for (int i = 0; i < letters.Length; i++)
+            {
+                if (letters[i] == null) continue;
+                SplatSimRunner sim = letters[i].EnsureSim(ClusterSize);
+                if (sim == null) continue;
+                sim.Frozen = frozen;
+                sim.Step(letters[i].transform.localToWorldMatrix, stepDt, p, _colliders, _colliderCount, _emitterWS, _emitterVelocityWS);
+                anyAwake |= sim.DrivesShader && sim.Mode != SplatSimMode.Hidden && !sim.Asleep;
+                activity = Mathf.Max(activity, sim.Activity);
+                active = Mathf.Max(active, sim.LastColliderCount);
+            }
+            _watch.Stop();
+
+            if (tuning == null) return;
+            float ms = (float)_watch.Elapsed.TotalMilliseconds;
+            tuning.simMilliseconds = Mathf.Lerp(tuning.simMilliseconds, ms, 0.1f);
+            _awakeSmoothed = Mathf.Lerp(_awakeSmoothed, anyAwake ? 1f : 0f, 0.02f);
+            tuning.awakeFraction = _awakeSmoothed;
+            tuning.simAsleep = !anyAwake;
+            tuning.activity = activity;
+            tuning.activeColliders = active;
+            if (Time.unscaledTime >= _nextSimLog)
+            {
+                _nextSimLog = Time.unscaledTime + 5f;
+                SplatSimRunner first = FirstSim();
+                UnityEngine.Debug.Log($"[MP] sim ms={tuning.simMilliseconds:0.00} awake={_awakeSmoothed:0.00} colliders={active} mode={SimMode} activity={activity:E2} moved={first != null && first.LastMoved} touching={first != null && first.LastTouching} wakes={(first != null ? first.WakeCount : 0)} damping={tuning.homeDamping:0.00} cohesion={tuning.cohesion:0.00} stride={tuning.stepEveryFrames}");
+            }
         }
 
         public void StepAnimationAndMaterials(float timeSeconds)
@@ -398,7 +438,23 @@ namespace MoodPicker.Splatter
             InitializeIfNeeded();
             if (letters == null || _state == null) return;
 
-            _state.SetSharedParameters(triplanarScale, intensity, outlineEnabled);
+            float scale = tuning != null ? tuning.triplanarScale : triplanarScale;
+            float gain = tuning != null ? tuning.intensity : intensity;
+            _state.SetSharedParameters(scale, gain, outlineEnabled);
+
+            SplatLook look = SplatLook.Default;
+            if (tuning != null)
+            {
+                look.flowAmplitude = tuning.flowAmplitude;
+                look.flowSpeed = tuning.flowSpeed;
+                look.contrast = tuning.contrast;
+                look.detachDistance = tuning.detachDistance;
+                look.stretchSeconds = tuning.stretchSeconds;
+                look.stretchMax = tuning.stretchMax;
+                look.grain = tuning.grain;
+                look.glowGain = tuning.glowGain;
+                look.sparkle = tuning.sparkle;
+            }
 
             for (int s = 0; s < SplatWordState.MaxSlots; s++)
             {
@@ -408,150 +464,62 @@ namespace MoodPicker.Splatter
                     : 0f;
             }
 
-            Vector4 r0 = BuildRippleShaderVector(0, timeSeconds);
-            Vector4 r1 = BuildRippleShaderVector(1, timeSeconds);
-            Vector4 r2 = BuildRippleShaderVector(2, timeSeconds);
-            Vector4 r3 = BuildRippleShaderVector(3, timeSeconds);
-
-            Vector4 magicVec = Vector4.zero;
-            Vector3 summonOrigin = Vector3.zero;
-            if (_magicState == SplatMagicState.Formed)
-            {
-                magicVec = new Vector4(1f, 0f, 0f, 0f);
-            }
-            else if (_magicState == SplatMagicState.Summoning)
-            {
-                float p = Mathf.Clamp01((timeSeconds - _magicStartTime) / Mathf.Max(0.1f, _magicDuration));
-                if (p >= 1f)
-                {
-                    _magicState = SplatMagicState.Formed;
-                    magicVec = new Vector4(1f, 0f, 0f, 0f);
-                }
-                else
-                {
-                    float flash = 0f;
-                    if (p >= 0.87f)
-                    {
-                        float fNorm = (p - 0.87f) / 0.13f;
-                        flash = Mathf.Sin(fNorm * Mathf.PI) * 1.2f;
-                    }
-                    magicVec = new Vector4(p, 1f, flash, timeSeconds - _magicStartTime);
-                    summonOrigin = ResolveSummonOrigin();
-                }
-            }
-            else if (_magicState == SplatMagicState.Dissolving)
-            {
-                float p = Mathf.Clamp01((timeSeconds - _magicStartTime) / Mathf.Max(0.1f, _magicDuration));
-                if (p >= 1f)
-                {
-                    _magicState = SplatMagicState.Hidden;
-                    magicVec = new Vector4(0f, 3f, 0f, 0f);
-                }
-                else
-                {
-                    magicVec = new Vector4(p, 2f, 0f, timeSeconds - _magicStartTime);
-                }
-            }
-            else if (_magicState == SplatMagicState.Hidden)
-            {
-                magicVec = new Vector4(0f, 3f, 0f, 0f);
-            }
-
-            float rotScale = letters.Length == 1 ? 0.15f : 0.18f;
-
             for (int i = 0; i < letters.Length; i++)
             {
                 SplatLetterRenderer letter = letters[i];
                 if (letter == null) continue;
 
-                float rotYDeg = LetterPoseMath.RotationYRadians(timeSeconds, i) * Mathf.Rad2Deg * rotScale;
-                float bobY = _twoHandGrabbing ? 0f : LetterPoseMath.BobOffsetY(timeSeconds, i, letterSize) * 0.45f;
-                Vector3 basePos = _baseLocalPositions != null && i < _baseLocalPositions.Length
-                    ? _baseLocalPositions[i]
-                    : letter.transform.localPosition;
-                Quaternion baseRot = _baseLocalRotations != null && i < _baseLocalRotations.Length
-                    ? _baseLocalRotations[i]
-                    : Quaternion.identity;
-
-                letter.transform.localPosition = new Vector3(basePos.x, basePos.y + bobY, basePos.z);
-                letter.transform.localRotation = baseRot * Quaternion.Euler(0f, rotYDeg, 0f);
-
                 int slotIdx = _state.GetSlot(i);
                 letter.AssignedSlot = slotIdx;
-                letter.Mode = _state.GetMode(i);
-                letter.SetMagicState(magicVec);
-                letter.SetSummonOrigin(summonOrigin);
-                letter.SetHandWaterState(_handLeftWS, _handRightWS, _handLeftVelWS, _handRightVelWS, r0, r1, r2, r3);
+                letter.Mode = tuning != null ? (SplatShaderMode)Mathf.Clamp(tuning.shaderMode, 0, 4) : _state.GetMode(i);
+                letter.SetLook(look);
 
                 bool hasSlot = slotIdx >= 0 && slotIdx < SplatWordState.MaxSlots && _slots[slotIdx] != null && _slotTextures[slotIdx] != null;
-                if (hasSlot)
+                letter.SetCrop(_overrideTexture != null, _overrideCrop, _overrideGamma);
+                if (_overrideTexture != null)
+                {
+                    letter.ApplyPigmentState(_overrideTexture, new FlipbookLayout { Frames = 1, Cols = 1, Rows = 1, Tile = 256, Fps = 1f }, 0f, true,
+                        hasSlot ? _slots[slotIdx].Palette : default, _state.TriplanarScale, _state.Intensity, _state.OutlineEnabled);
+                }
+                else if (hasSlot)
                 {
                     BuiltPigmentSlot slot = _slots[slotIdx];
-                    letter.ApplyPigmentState(
-                        _slotTextures[slotIdx],
-                        slot.Layout,
-                        _slotFrames[slotIdx],
-                        true,
-                        slot.Palette,
-                        _state.TriplanarScale,
-                        _state.Intensity,
-                        _state.OutlineEnabled);
+                    letter.ApplyPigmentState(_slotTextures[slotIdx], slot.Layout, _slotFrames[slotIdx], true, slot.Palette,
+                        _state.TriplanarScale, _state.Intensity, _state.OutlineEnabled);
                 }
                 else
                 {
-                    letter.ApplyPigmentState(
-                        null,
-                        default,
-                        0f,
-                        false,
-                        default,
-                        _state.TriplanarScale,
-                        _state.Intensity,
-                        _state.OutlineEnabled);
+                    letter.ApplyPigmentState(null, default, 0f, false, default,
+                        _state.TriplanarScale, _state.Intensity, _state.OutlineEnabled);
                 }
             }
         }
 
+        void PlaceWhenHeadIsReady()
+        {
+            if (_placed || head == null) return;
+            if (_placeFrames == 0 && summonOnPlace && letters != null)
+            {
+                for (int i = 0; i < letters.Length; i++)
+                    if (letters[i] != null) letters[i].EnsureSim(ClusterSize)?.Hide();
+            }
+            _placeFrames++;
+            Recenter();
+            if (head.position.sqrMagnitude <= 1e-4f && _placeFrames < 20) return;
+            _placed = true;
+            if (summonOnPlace) BeginSummon(FallbackEmitter());
+        }
+
         void Update()
         {
-            if (head != null && !_twoHandGrabbing)
-            {
-                Vector3 fwd = Vector3.ProjectOnPlane(head.forward, Vector3.up);
-                if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.forward;
-                fwd.Normalize();
-                Vector3 idealPos = head.position + fwd * placeDistance + Vector3.up * placeOffsetY;
-                Quaternion idealRot = Quaternion.LookRotation(fwd, Vector3.up);
-
-                if (!_headAligned)
-                {
-                    _headAlignFrames++;
-                    transform.position = idealPos;
-                    transform.rotation = idealRot;
-                    if (head.position.sqrMagnitude > 1e-4f || _headAlignFrames >= 20)
-                    {
-                        _headAligned = true;
-                    }
-                }
-                else if (!_userInteracted || Vector3.Distance(transform.position, idealPos) > 0.45f)
-                {
-                    float follow = 1f - Mathf.Exp(-6f * Mathf.Max(Time.deltaTime, 0.001f));
-                    transform.position = Vector3.Lerp(transform.position, idealPos, follow);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, idealRot, follow);
-                }
-            }
+            PlaceWhenHeadIsReady();
+            StepSimulation(Time.deltaTime);
             StepAnimationAndMaterials(Time.time);
         }
 
         void OnDestroy()
         {
-            for (int i = 0; i < _slotTextures.Length; i++)
-            {
-                if (_ownsTexture[i] && _slotTextures[i] != null)
-                {
-                    if (Application.isPlaying) Destroy(_slotTextures[i]);
-                    else DestroyImmediate(_slotTextures[i]);
-                }
-            }
+            for (int i = 0; i < _slotTextures.Length; i++) ReleaseOwnedTexture(i);
         }
     }
 }

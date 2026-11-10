@@ -97,11 +97,7 @@ public static class FontCandidatePreview
             ctrl.StepAnimationAndMaterials(0.35f);
             ok &= Capture(cam, rt, Path.Combine(fullDir, key + "_rest.png"));
 
-            ctrl.TriggerSampleSplash(
-                new Vector3(0.025f, 0.015f, -0.004f),
-                new Vector3(0.025f, 0.015f, -0.02f),
-                new Vector3(0.55f, 0.35f, -0.20f),
-                0.35f);
+            SplatterPreviewRender.PokeWithFinger(ctrl, new Vector3(-0.08f, -0.03f, -0.05f), new Vector3(0.08f, 0.03f, 0.03f), 0.45f);
             ctrl.StepAnimationAndMaterials(0.35f);
             ok &= Capture(cam, rt, Path.Combine(fullDir, key + "_touch.png"));
 

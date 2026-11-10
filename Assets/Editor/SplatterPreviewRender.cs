@@ -1,7 +1,8 @@
-// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>
+// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>   (시간 흐름 시트는 RenderSequenceBatch)
 using System;
 using System.IO;
 using MoodPicker.Splatter;
+using MoodPicker.Splatter.Sim;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -29,7 +30,7 @@ public static class SplatterPreviewRender
         try
         {
             SplatterSceneSetup.Run();
-            code = Run(Arg("-splatOut")) ? 0 : 1;
+            code = (_sequence ? RunSequence(Arg("-splatOut")) : Run(Arg("-splatOut"))) ? 0 : 1;
         }
         catch (Exception e)
         {
@@ -45,6 +46,143 @@ public static class SplatterPreviewRender
         string[] a = Environment.GetCommandLineArgs();
         for (int i = 0; i < a.Length - 1; i++) if (a[i] == name) return a[i + 1];
         return ".harness/state/splatter-preview.png";
+    }
+
+    static bool _sequence;
+
+    public static void RenderSequenceBatch()
+    {
+        _sequence = true;
+        RenderBatch();
+    }
+
+    static Texture2D Shoot(Camera cam, RenderTexture rt)
+    {
+        var req = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
+        if (RenderPipeline.SupportsRenderRequest(cam, req)) RenderPipeline.SubmitRenderRequest(cam, req);
+        else cam.Render();
+        var prev = RenderTexture.active;
+        RenderTexture.active = rt;
+        var img = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false, false);
+        img.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        img.Apply();
+        RenderTexture.active = prev;
+        return img;
+    }
+
+    static void Advance(SplatWordController ctrl, float seconds, ref float clock)
+    {
+        const float dt = 1f / 72f;
+        int steps = Mathf.Max(1, Mathf.RoundToInt(seconds / dt));
+        for (int i = 0; i < steps; i++)
+        {
+            ctrl.SetColliders(null, 0);
+            ctrl.StepSimulation(dt);
+        }
+        clock += seconds;
+        ctrl.StepAnimationAndMaterials(clock);
+    }
+
+    public static bool RunSequence(string outPng)
+    {
+        const int cell = 420;
+        const int cols = 6;
+        const int rows = 3;
+        MoodPickerUrpSetup.Ensure();
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        Material splatMat = SplatterSceneSetup.EnsureSplatMaterial();
+        SplatPigmentSlotAsset[] presets = SplatterSceneSetup.EnsureRealVideoSlotAssets();
+        GameObject word = SplatterSceneSetup.CreateLetterUpperASplat("Sequence_UpperA", splatMat, presets, 30000, SplatShaderMode.Raw, 0);
+        word.transform.position = Vector3.zero;
+        var ctrl = word.GetComponent<SplatWordController>();
+
+        var camGo = new GameObject("SequenceCam");
+        var cam = camGo.AddComponent<Camera>();
+        cam.transform.position = new Vector3(0f, -0.04f, -0.62f);
+        cam.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+        cam.fieldOfView = 34f;
+        cam.nearClipPlane = 0.05f;
+        cam.farClipPlane = 5f;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.08f, 0.09f, 0.13f, 1f);
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
+        var rt = new RenderTexture(cell, cell, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
+        rt.Create();
+        cam.targetTexture = rt;
+        cam.aspect = 1f;
+
+        var sheet = new Texture2D(cell * cols, cell * rows, TextureFormat.RGBA32, false, false);
+        float clock = 0f;
+        int col = 0;
+        int row = 0;
+        void Put()
+        {
+            Texture2D img = Shoot(cam, rt);
+            sheet.SetPixels(col * cell, (rows - 1 - row) * cell, cell, cell, img.GetPixels());
+            UnityEngine.Object.DestroyImmediate(img);
+            col++;
+        }
+
+        Vector3 from = new Vector3(-0.11f, -0.02f, -0.03f);
+        Vector3 to = new Vector3(0.11f, 0.03f, 0.02f);
+        Vector3 mid = Vector3.Lerp(from, to, 0.5f);
+        PokeWithFinger(ctrl, from, mid, 0.14f);
+        ctrl.StepAnimationAndMaterials(0.14f);
+        Put();
+        PokeWithFinger(ctrl, mid, to, 0.14f);
+        ctrl.StepAnimationAndMaterials(0.28f);
+        Put();
+        foreach (float wait in new[] { 0.15f, 0.25f, 0.5f, 1.6f })
+        {
+            Advance(ctrl, wait, ref clock);
+            Put();
+        }
+
+        row = 1;
+        col = 0;
+        ctrl.BeginSummon(new Vector3(-0.14f, -0.13f, -0.22f));
+        foreach (float wait in new[] { 0.25f, 0.3f, 0.4f, 0.5f, 0.7f, 1.4f })
+        {
+            Advance(ctrl, wait, ref clock);
+            Put();
+        }
+
+        row = 2;
+        col = 0;
+        ctrl.BeginDissolve();
+        foreach (float wait in new[] { 0.15f, 0.25f, 0.25f, 0.3f, 0.4f, 0.6f })
+        {
+            Advance(ctrl, wait, ref clock);
+            Put();
+        }
+
+        sheet.Apply();
+        string fullOut = Path.GetFullPath(outPng);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOut));
+        File.WriteAllBytes(fullOut, sheet.EncodeToPNG());
+        EditorSceneManager.OpenScene(SplatterSceneSetup.ScenePath, OpenSceneMode.Single);
+        Debug.Log("[MP] splatter-sequence out=" + fullOut);
+        return true;
+    }
+
+    public static void PokeWithFinger(SplatWordController ctrl, Vector3 from, Vector3 to, float seconds)
+    {
+        const float dt = 1f / 72f;
+        int steps = Mathf.Max(1, Mathf.RoundToInt(seconds / dt));
+        Vector3 velocity = (to - from) / seconds;
+        var colliders = new SplatCollider[1];
+        for (int i = 0; i < steps; i++)
+        {
+            colliders[0] = new SplatCollider
+            {
+                position = Vector3.Lerp(from, to, (i + 1f) / steps),
+                velocity = velocity,
+                radius = 0.022f,
+                strength = 1f
+            };
+            ctrl.SetColliders(colliders, 1);
+            ctrl.StepSimulation(dt);
+        }
     }
 
     public static bool Run(string outPng)
@@ -73,11 +211,7 @@ public static class SplatterPreviewRender
             0);
         rightA.transform.position = new Vector3(0.13f, 0f, 0f);
         var rightCtrl = rightA.GetComponent<SplatWordController>();
-        rightCtrl.TriggerSampleSplash(
-            new Vector3(0.02f, 0.01f, -0.01f),
-            new Vector3(0.15f, 0.01f, -0.02f),
-            new Vector3(0.55f, 0.35f, -0.20f),
-            0.35f);
+        PokeWithFinger(rightCtrl, new Vector3(0.05f, -0.03f, -0.05f), new Vector3(0.21f, 0.03f, 0.03f), 0.45f);
         rightCtrl.StepAnimationAndMaterials(0.35f);
 
         var camGo = new GameObject("PreviewCam");

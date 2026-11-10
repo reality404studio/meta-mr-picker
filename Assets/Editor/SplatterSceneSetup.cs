@@ -56,21 +56,51 @@ public static class SplatterSceneSetup
         SceneManager.MoveGameObjectToScene(upperAWord, scene);
         upperAWord.transform.position = new Vector3(0f, 1.22f, 0.35f);
 
+        var tuning = upperAWord.AddComponent<SplatTuning>();
+        var wordSo = new SerializedObject(upperAWord.GetComponent<SplatWordController>());
+        wordSo.FindProperty("tuning").objectReferenceValue = tuning;
+        wordSo.ApplyModifiedPropertiesWithoutUndo();
+
         var bridge = upperAWord.AddComponent<SplatOvrHandBridge>();
         var bso = new SerializedObject(bridge);
         bso.FindProperty("wordController").objectReferenceValue = upperAWord.GetComponent<SplatWordController>();
-        bso.FindProperty("leftSkeleton").objectReferenceValue = leftSkel;
-        bso.FindProperty("rightSkeleton").objectReferenceValue = rightSkel;
-        bso.FindProperty("leftHand").objectReferenceValue = leftSkel != null ? leftSkel.GetComponent<OVRHand>() : null;
-        bso.FindProperty("rightHand").objectReferenceValue = rightSkel != null ? rightSkel.GetComponent<OVRHand>() : null;
+        bso.FindProperty("tuning").objectReferenceValue = tuning;
+        bso.FindProperty("passthroughLayer").objectReferenceValue = rig.GetComponent<OVRPassthroughLayer>();
+        var handInput = upperAWord.AddComponent<MoodPicker.Hands.Ovr.OvrHandInput>();
+        var hso = new SerializedObject(handInput);
+        hso.FindProperty("rig").objectReferenceValue = rig.GetComponent<OVRCameraRig>();
+        hso.FindProperty("leftSkeleton").objectReferenceValue = leftSkel;
+        hso.FindProperty("rightSkeleton").objectReferenceValue = rightSkel;
+        hso.ApplyModifiedPropertiesWithoutUndo();
+        bso.FindProperty("handInputSource").objectReferenceValue = handInput;
+        bso.FindProperty("trackingSpace").objectReferenceValue = rig.transform.Find("TrackingSpace");
         bso.ApplyModifiedPropertiesWithoutUndo();
+
+        var pcaGo = new GameObject("PassthroughCameraAccess");
+        SceneManager.MoveGameObjectToScene(pcaGo, scene);
+        var pca = pcaGo.AddComponent<PassthroughCameraAccess>();
+        pca.CameraPosition = PassthroughCameraAccess.CameraPositionType.Left;
+        pca.RequestedResolution = new Vector2Int(1280, 960);
+        pca.enabled = false;
+
+        var catcher = upperAWord.AddComponent<SplatCameraCatch>();
+        var catchSo = new SerializedObject(catcher);
+        catchSo.FindProperty("wordController").objectReferenceValue = upperAWord.GetComponent<SplatWordController>();
+        catchSo.FindProperty("tuning").objectReferenceValue = tuning;
+        catchSo.FindProperty("cameraAccess").objectReferenceValue = pca;
+        catchSo.ApplyModifiedPropertiesWithoutUndo();
+
+        OVROverlayCanvasSettings overlaySettings = OVROverlayCanvasSettings.Instance;
+        if (overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Transparent) == null || overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Opaque) == null)
+            throw new InvalidOperationException("OVROverlayCanvasSettings 에 조율 패널용 셰이더가 없음");
+        EditorUtility.SetDirty(overlaySettings);
 
         Directory.CreateDirectory("Assets/Scenes");
         EditorSceneManager.SaveScene(scene, ScenePath);
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
         AssetDatabase.SaveAssets();
-        Debug.Log("[MP] splatter scene setup done (uppercase A letter + 3s mystical summon): " + ScenePath);
+        Debug.Log("[MP] splatter scene setup done (uppercase A, particle sim, tuning panel): " + ScenePath);
     }
 
     public static SplatPigmentSlotAsset[] EnsureRealVideoSlotAssets()

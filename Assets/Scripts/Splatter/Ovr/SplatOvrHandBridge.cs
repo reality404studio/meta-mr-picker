@@ -1,3 +1,4 @@
+using MoodPicker.Hands;
 using UnityEngine;
 
 namespace MoodPicker.Splatter
@@ -6,123 +7,58 @@ namespace MoodPicker.Splatter
     public sealed class SplatOvrHandBridge : MonoBehaviour
     {
         [SerializeField] SplatWordController wordController;
-        [SerializeField] OVRSkeleton leftSkeleton;
-        [SerializeField] OVRSkeleton rightSkeleton;
-        [SerializeField] OVRHand leftHand;
-        [SerializeField] OVRHand rightHand;
+        [SerializeField] SplatTuning tuning;
+        [SerializeField] OVRPassthroughLayer passthroughLayer;
+        [SerializeField] MonoBehaviour handInputSource;
+        [SerializeField] Transform trackingSpace;
 
-        readonly int[] _thumbIdx = { -1, -1 };
-        readonly int[] _indexIdx = { -1, -1 };
-        readonly int[] _middleIdx = { -1, -1 };
-        readonly int[] _palmIdx = { -1, -1 };
-        readonly bool[] _wasPinching = { false, false };
+        readonly PinchDetector _pinch = new PinchDetector();
+        IHandInput _input;
+        Vector3 _appliedPassthrough = new Vector3(float.NaN, 0f, 0f);
+
+        void Awake()
+        {
+            _input = handInputSource as IHandInput;
+        }
 
         void Update()
         {
-            if (wordController == null) return;
-
-            Vector3 targetPos = wordController.transform.position;
-            bool lTracked = ReadHand(leftSkeleton, leftHand, 0, targetPos, out Vector3 lEffector, out Vector3 lPinch, out bool lPinching);
-            bool rTracked = ReadHand(rightSkeleton, rightHand, 1, targetPos, out Vector3 rEffector, out Vector3 rPinch, out bool rPinching);
-
-            wordController.UpdateHandInteraction(
-                lTracked,
-                lEffector,
-                lPinch,
-                lPinching,
-                rTracked,
-                rEffector,
-                rPinch,
-                rPinching,
-                Time.time,
-                Time.deltaTime);
+            ApplyPassthrough();
+            if (wordController == null || _input == null || trackingSpace == null) return;
+            if (!_input.TryGetFrame(out HandFrame frame)) return;
+            if (tuning != null)
+            {
+                _pinch.startDistance = tuning.pinchStart;
+                _pinch.endDistance = tuning.pinchEnd;
+            }
+            _pinch.Update(frame);
+            SplatHandPoints left = ToWorld(frame.left, _pinch.IsPinching(Handedness.Left));
+            SplatHandPoints right = ToWorld(frame.right, _pinch.IsPinching(Handedness.Right));
+            wordController.UpdateHands(left, right, Time.time, Time.deltaTime);
         }
 
-        bool ReadHand(
-            OVRSkeleton skel,
-            OVRHand hand,
-            int h,
-            Vector3 targetWorldPos,
-            out Vector3 effectorWS,
-            out Vector3 pinchWS,
-            out bool isPinching)
+        SplatHandPoints ToWorld(in HandPose pose, bool pinching)
         {
-            effectorWS = Vector3.zero;
-            pinchWS = Vector3.zero;
-            isPinching = false;
+            var points = new SplatHandPoints();
+            if (!pose.tracked) return points;
+            points.tracked = true;
+            points.pinching = pinching;
+            points.thumb = trackingSpace.TransformPoint(pose.thumbTip);
+            points.index = trackingSpace.TransformPoint(pose.indexTip);
+            points.middle = trackingSpace.TransformPoint(pose.middleTip);
+            points.ring = trackingSpace.TransformPoint(pose.ringTip);
+            points.little = trackingSpace.TransformPoint(pose.littleTip);
+            points.palm = trackingSpace.TransformPoint(pose.palm);
+            return points;
+        }
 
-            if (skel == null || !skel.IsInitialized || !skel.IsDataValid || skel.Bones == null)
-            {
-                _wasPinching[h] = false;
-                return false;
-            }
-
-            if (hand == null) hand = skel.GetComponent<OVRHand>();
-            if (hand != null && !hand.IsTracked)
-            {
-                _wasPinching[h] = false;
-                return false;
-            }
-
-            if (_indexIdx[h] < 0 || _thumbIdx[h] < 0)
-            {
-                for (int i = 0; i < skel.Bones.Count; i++)
-                {
-                    var id = skel.Bones[i].Id;
-                    if (id == OVRSkeleton.BoneId.XRHand_ThumbTip) _thumbIdx[h] = i;
-                    else if (id == OVRSkeleton.BoneId.XRHand_IndexTip) _indexIdx[h] = i;
-                    else if (id == OVRSkeleton.BoneId.XRHand_MiddleTip) _middleIdx[h] = i;
-                    else if (id == OVRSkeleton.BoneId.XRHand_Palm) _palmIdx[h] = i;
-                }
-                if (_indexIdx[h] < 0 || _thumbIdx[h] < 0)
-                {
-                    _wasPinching[h] = false;
-                    return false;
-                }
-            }
-
-            Vector3 indexTip = skel.Bones[_indexIdx[h]].Transform.position;
-            Vector3 thumbTip = skel.Bones[_thumbIdx[h]].Transform.position;
-            pinchWS = 0.5f * (indexTip + thumbTip);
-
-            effectorWS = indexTip;
-            float bestDistSq = (indexTip - targetWorldPos).sqrMagnitude;
-
-            if (_middleIdx[h] >= 0 && _middleIdx[h] < skel.Bones.Count)
-            {
-                Vector3 middleTip = skel.Bones[_middleIdx[h]].Transform.position;
-                float dSq = (middleTip - targetWorldPos).sqrMagnitude;
-                if (dSq < bestDistSq)
-                {
-                    bestDistSq = dSq;
-                    effectorWS = middleTip;
-                }
-            }
-
-            if (_palmIdx[h] >= 0 && _palmIdx[h] < skel.Bones.Count)
-            {
-                Vector3 palmPos = skel.Bones[_palmIdx[h]].Transform.position;
-                float dSq = (palmPos - targetWorldPos).sqrMagnitude;
-                if (dSq < bestDistSq)
-                {
-                    effectorWS = palmPos;
-                }
-            }
-
-            float pinchDist = Vector3.Distance(indexTip, thumbTip);
-            float distThreshold = _wasPinching[h] ? 0.038f : 0.026f;
-            bool distPinch = pinchDist <= distThreshold;
-            bool ovrPinch = false;
-            if (hand != null)
-            {
-                float strengthThreshold = _wasPinching[h] ? 0.55f : 0.72f;
-                ovrPinch = hand.GetFingerIsPinching(OVRHand.HandFinger.Index)
-                        && hand.GetFingerPinchStrength(OVRHand.HandFinger.Index) >= strengthThreshold;
-            }
-
-            isPinching = hand != null ? (distPinch && ovrPinch) : distPinch;
-            _wasPinching[h] = isPinching;
-            return true;
+        void ApplyPassthrough()
+        {
+            if (tuning == null || passthroughLayer == null) return;
+            var wanted = new Vector3(tuning.passthroughBrightness, tuning.passthroughContrast, tuning.passthroughSaturation);
+            if (wanted == _appliedPassthrough) return;
+            _appliedPassthrough = wanted;
+            passthroughLayer.SetBrightnessContrastSaturation(wanted.x, wanted.y, wanted.z);
         }
     }
 }

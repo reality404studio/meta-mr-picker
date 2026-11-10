@@ -27,16 +27,26 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _SimTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _CropOn: 0
     - _Frame: 0
     - _HasSlot: 0
     - _Intensity: 1
     - _Mode: 1
     - _Outline: 1
     - _Scale: 1.2
+    - _SimOn: 0
     - _Threshold: 0.5
     m_Colors:
+    - _AtlasCrop: {r: 1, g: 1, b: 0, a: 0}
+    - _DropParams: {r: 0.012, g: 0.008, b: 2.5, a: 0.85}
+    - _FlowParams: {r: 0.0008, g: 1.6, b: 1, a: 0}
+    - _GlowParams: {r: 0.35, g: 0.6, b: 0, a: 0}
     - _HandLeftVelWS: {r: 0, g: 0, b: 0, a: 0.095}
     - _HandLeftWS: {r: 0, g: 0, b: 0, a: 0}
     - _HandRightVelWS: {r: 0, g: 0, b: 0, a: 0.095}

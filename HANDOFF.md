@@ -1,45 +1,44 @@
-# HANDOFF — Letter Pigment Splat (splatter 브랜치)
-updated: 2026-11-10 14:26 KST · by: claude-code
+# HANDOFF — 물성 채집 MR 도구 (gather 브랜치, 보드 splatter)
+updated: 2026-11-10 20:50 KST · by: claude-code
 
 ## 목표 (한 줄)
-짧은 영상 3개를 이음매 없는 루프 텍스처(물감)로 만들고, 3D 입체 글자를 가우시안 스플랫 구름으로 샘플링해 매 프레임 GPU에서 트라이플래너 셰이더(2톤 셀·Glint·Chrome·Caustic·그대로)로 입히는 Quest 3 MR 앱.
+현실의 물성을 채집해서 손안에 갖고 형태에 입혀 쓰는 Quest MR 창작 도구. 손안의 느낌과 아름다움 > 한 바퀴가 걸림 없이 도는 것 > 기능 수. 마감 2026-11-19 05:00 KST. 원문: `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/1110HANDOFF_claude_code.md`
 
 ## 지금 카드
-- id: `build-9c56` (글자 폰트 Fraunces + 소환·소멸 연출 재설계) · 상태: 하는중 · 필요한 증거: L4 (사람이 헤드셋에서 확인, 화면 녹화는 `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/videref/`)
-- 성공 조건(사람 합격 문장): 소환 때 내가 부른 손끝에서 파티클이 서서히 글자로 흘러들어 글자가 만들어지는 게 보이고, 소멸 때 힘 빠지듯 아래로 떨어지는 과정이 보인다. (사람 말: "서서히 파티클들이 촥 와서 글자를 만들고", "슉 하고 아래로 떨어졌음")
-- stop: 글자 위치 결정(`build-9c56-decide-634f`)과 실기 확인(`build-9c56-verify-1340`)은 사람 몫. 거기서 멈추고 보고한다.
-- 보드: 폰트 `build-9c56-build-8c8f` 완료, 소환 `-9286`·소멸 `-2d8e` 확인 대기(review), 수치 조정 `-08c4` 대기
+- id: `build-4a39` (입자 모델 통합: 위치·속도를 기억하는 CPU 시뮬레이션) · 상태: 증명 대기 · 필요한 증거: L3 (기기 측정) + L4 (사람 느낌)
+- 성공 조건(사람 합격 문장): 손이 지나가면 입자가 손을 따라가고 손가락 사이로 갈라졌다가 돌아온다. 발열·프레임이 기존 빌드보다 나쁘지 않다. (사람 말: "발열이 괜찮다면 가능합니다")
+- stop: 발열 비교(`-verify-133b`)와 느낌 조율(`-verify-7df5`)은 사람 몫. 발열이 나쁘면 방향을 바꾸기 전에 멈추고 보고한다.
+- 보드: 코어 `-f7a2` 완료·커밋(`42ba43f`). 셰이더 `-d0ce`, 손가락 충돌체 `-2681`, 조율 패널 `-b775`, 채집 실험 `build-9580-build-959a` 는 확인 대기(review)이고 **미커밋** (훅이 done 카드만 받음)
 
 ## 다음 할 일 (최대 3)
-1. `-08c4` 수치 조정 적용: 손끝 덩어리 반경 절반, 늘이기 상한 6배→2.5배, 비행 크기 0.55→0.4, 경로 갈라짐 ±35%→±20%, 출발 0.5→0.25초 → 빌드·설치
-2. 사람에게 글자 위치 고정 여부(`-634f`) 묻기: 소환 순간 시선 정면 팔 길이 고정 / 지금처럼 머리 방향 추종
-3. 새 녹화를 프레임으로 뽑아 이전과 비교(`evidence/build-d4b6-verify-2edf/<빌드>/videref-*.png`). 소멸은 아직 사람이 평가하지 않음
+1. (끝남) 빌드 `42ba43f-dirty-1110-204027` 이 기기에 설치돼 돌고 있음
+2. 발열 비교: `python3 scripts/thermal-compare.py evidence/build-d4b6-verify-2edf/8c63c15-dirty-1110-103808/8c63c15-dirty-1110-103808.apk old 10` → 새 APK 로 `new 10` → `--report`. 같은 동작(30초 쉬고 30초 휘젓기)
+3. 사람이 조율 패널(오른손 핀치)로 물방울 느낌 찾기 → `SaveTuning` → `sh scripts/tuning.sh pull` → `SplatTuning` 기본값으로 옮김. 이어서 `8 Catch > liveCamera` 로 채집 실험 판정
 
 ## 정본 / 건드리지 말 것
-- 폰트 = Fraunces 72pt Black (사람: "폰트는 좋아요", 보드 a9 확정). 재생성은 `tools/splatter-glyph/make_glyph.py` (Blender)
-- 털뭉치 질감은 서랍 보류 `h1`. 작업대 `studio/apps/splatter/nodes/build-9c56/assets/` 의 shader·cs·png 사본을 지우지 않는다 (수치 조정하면 현재 코드에서는 사라짐)
-- `docs/`, `board/` 는 직접 고치지 않는다. 이번 세션 변경은 전부 미커밋 (커밋은 게이트 통과 카드만)
+- 되돌릴 기준점: 커밋 `65af4f8` (수식 소환·소멸이 든 옛 방식)과 그 APK. 지우지 않는다
+- 입자 힘 계산 정본 = `Assets/Scripts/Splatter/Sim/SplatSimKernel.cs`. 값 정본 = `SplatTuning` (전부 베이스라인). 셰이더에 수치를 새로 박지 않는다
+- 렌더는 불투명 + AlphaToMask 1패스 유지 (`unity/shared/VideoSplat/README.md` §3)
+- 손 뼈대는 `MoodPicker.Hands.IHandInput` 으로만 읽는다 (EditMode 규칙 테스트가 막음)
+- `docs/`, `board/` 는 직접 고치지 않는다. 폰트 Fraunces 72pt Black 확정. 털뭉치 질감은 서랍 보류 `h1`
 
 ## 기기·환경
 - Quest 3S `340YC10G9707W0`, 패키지 `com.DefaultCompany.moodpicker`, 에디터 6000.3.27f2
-- 빌드: `Unity -batchmode -projectPath . -buildTarget Android -executeMethod MoodPickerBuild.BuildSplatterApkBatch` **`-quit` 없이**. 장면 재생성·프리뷰 렌더 뒤 `Builds/splatter-dev.apk` 생성. 끝난 뒤 APK 시각이 새것인지, 로그에 `No space`가 없는지 확인
-- `mr build-unity` 는 이 프로젝트에 없는 `MRKit.Build.Android` 를 부른다. `mr preflight`는 에디터가 닫혀 있어도 "열림"으로 오탐한다. `mr logcat` 은 시각 형식 오류. 대신 adb 직접 사용 (Unity SDK의 platform-tools)
-- IL2CPP 재빌드는 디스크가 수 GB 필요 (`Library/Bee` 8.2GB). 한 번 디스크 가득 차서 실패함
+- 빌드: `Unity -batchmode -projectPath . -buildTarget Android -executeMethod MoodPickerBuild.BuildSplatterApkBatch` **`-quit` 없이**. `mr build-unity`·`mr preflight`·`mr logcat` 은 이 프로젝트에서 안 맞음 (LESSONS.md), adb 는 Unity SDK platform-tools
+- 헤드셋 없이 보기: `-executeMethod SplatterPreviewRender.RenderSequenceBatch -splatOut <png>` (쓸기·소환·소멸 18장 시트)
+- 검증: `python3 Assets/Scripts/Splatter/Verification~/verify_compile.py`, `sh scripts/run-editmode-tests.sh`
+- 맥에서 값 바꾸기: `sh scripts/tuning.sh push <json>` (기기가 0.5초마다 읽음, 실기 미확인)
+- 디스크 여유 21GB (2026-11-10 20:40). 증분 빌드는 75초 안팎
 
 ## 최근 증거
-- 2026-11-10 `build-9c56` 빌드 `8c63c15-dirty-1110-103808`: 증거 L3 일부. 설치·실행·프로세스 생존·크래시 없음, 녹화 `videref/화면 기록 2026-11-10 오전 10.46.50.mov` 프레임 검토. 손→흐름→글자 인과는 생김. 손끝 덩어리가 10cm 털뭉치로 1.2초 정지하고 흐름이 두꺼운 털 원뿔이라 개별 입자가 안 보임. 사람 판정(L4) 미확인
-- 2026-11-10 빌드 `8c63c15-dirty-1110-004047`: 증거 L3. 대문자 A Fraunces 렌더 확인(스크린샷), VrApi FPS 72/72 위주(샘플 62개 중 73/72 32, 72/72 27, 70/72 2, 69/72 1). 직전 소환(반경 0.22 구름)은 녹화에서 구름과 글자가 따로 보여 폐기
-- 2026-11-10 `verify_compile.py` exit 0, NUnit 10/10 (L1, 셰이더·컨트롤러 변경 후)
-- 2026-11-09 `build-d4b6-build-7c9f`: 증거 L1. `files: PASS`, Roslyn 4/5/2 PASS, NUnit 10/10
-
-## 구현 완료 목록
-1. `build-414a-build-28a1`: `PigmentCore` (`LoopFinder`, `PeriodicTile`, `FlipbookLayout`, `TwoToneExtractor`), `PigmentCommon.hlsl`
-2. `build-541d-build-a242`: `MeshSplatSampler` (면적 CDF 층화 샘플링, Welded 스무스 노멀 외곽선 층 `0.018*size`)
-3. `build-bb7f-build-cbae`: `SplatCloudMeshBuilder`, `LetterSplatURP.shader` (5종 모드), `SplatLetterRenderer`
-4. `build-d4b6-build-7c9f`: `PigmentAtlasBuilder`, `SplatWordState`, `SplatWordController`
+- 2026-11-10 `build-4a39` 빌드 `42ba43f-dirty-1110-204027`: 증거 L3. 예외 0, 72~73fps (124개 중 70 미만 2개), 손 닿을 때 시뮬레이션 1.6~1.9ms·손 떼면 잠듦, 조율 패널이 기기에 뜸 (`evidence/build-4a39/42ba43f-dirty-1110-204027/summary.md`). 발열 비교·사람 판정·카메라 질감은 미확인
+- 2026-11-10 `build-4a39-build-f7a2`: 증거 L1. `verify_sim.py` NUnit 10/10 (손 쓸기 속도 전달, 손가락 구멍, 뭉침, 묻어남, 소환 지나침 2cm 미만, 소멸, 최대 dt 안정)
+- 2026-11-10 셰이더·러너·손 입력·패널·채집: 증거 L2. `verify_compile.py` exit 0, EditMode 297/298 (실패 1개는 손대지 않은 `FolioRuntimeTests`, 원인 미확인), 에디터 시트 `evidence/build-4a39/editor-sequence-1110.png`. 기기 실행·Burst AOT·정점 텍스처 읽기·패널 손 조작·카메라 질감은 전부 미확인
+- 2026-11-10 `build-9c56` 빌드 `8c63c15-dirty-1110-103808`: 증거 L3 일부, 72fps 위주. 이 카드의 남은 조정은 접음 (사람 결정, 보드 a10)
 
 ## 열린 질문 (사람에게)
-- 소환할 때 글자를 시선 정면 팔 길이에 고정할지, 머리 방향을 따라가게 둘지 (`u3`, `-634f`)
-- 소멸 연출(처짐 후 가속 낙하)이 의도와 맞는지: 아직 평가 없음
+- 발열 비교 결과가 괜찮은가 (측정 뒤 판정)
+- 대비: ORION 때 정한 "패스스루 78% 디밍"을 여기에도 쓸지. 패널 `6 Look > passthroughBrightness` 로 먼저 눈으로 볼 수 있음
+- 채집 제스처: 폐기된 양손 사각형 대신 시선 앞 창틀(펀치)로 갈지. 지금은 패널 버튼으로만 찰칵
 
-첫 발화 한 줄: `HANDOFF.md 읽고 지금 카드 build-9c56 의 수치 조정(-08c4)부터. 글자 위치 결정에서 stop.`
+첫 발화 한 줄: `HANDOFF.md 읽고 지금 카드 build-4a39 의 빌드와 발열 비교부터. 발열 판정과 느낌 조율에서 stop.`

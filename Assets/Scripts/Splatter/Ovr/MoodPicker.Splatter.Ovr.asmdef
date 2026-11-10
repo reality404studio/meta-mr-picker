@@ -5,7 +5,9 @@
         "MoodPicker.Pigment",
         "MoodPicker.Splatter",
         "MoodPicker.Splatter.Runtime",
-        "Oculus.VR"
+        "MoodPicker.Hands",
+        "Oculus.VR",
+        "meta.xr.mrutilitykit"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

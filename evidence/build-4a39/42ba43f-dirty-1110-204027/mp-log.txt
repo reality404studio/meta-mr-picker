@@ -1,0 +1,31 @@
+11-10 20:42:02.168 10972 11007 I Unity   : [MP] build=42ba43f-dirty-1110-204027
+11-10 20:42:02.703 10972 11007 I Unity   : [MP] sim ms=0.00 awake=0.00 colliders=0 mode=Hidden activity=0.00E+000 moved=False touching=False wakes=0 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:06.992 10972 11007 I Unity   : [MP] toggle from=Formed to=Dissolving
+11-10 20:42:07.534 10972 11007 I Unity   : [MP] sim ms=1.87 awake=0.99 colliders=12 mode=Dissolving activity=2.39E-002 moved=False touching=True wakes=3 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:09.537 10972 11007 I Unity   : [MP] toggle from=Dissolving to=Summoning
+11-10 20:42:12.535 10972 11007 I Unity   : [MP] sim ms=1.59 awake=1.00 colliders=0 mode=Formed activity=1.43E-003 moved=True touching=False wakes=4 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:16.562 10972 11007 I Unity   : [MP] toggle from=Formed to=Dissolving
+11-10 20:42:17.541 10972 11007 I Unity   : [MP] sim ms=1.90 awake=1.00 colliders=12 mode=Dissolving activity=2.49E-001 moved=False touching=True wakes=5 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:17.873 10972 11007 I Unity   : [MP] toggle from=Dissolving to=Summoning
+11-10 20:42:22.549 10972 11007 I Unity   : [MP] sim ms=1.79 awake=1.00 colliders=12 mode=Formed activity=8.74E-004 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:27.551 10972 11007 I Unity   : [MP] sim ms=1.79 awake=1.00 colliders=12 mode=Formed activity=3.56E-003 moved=False touching=True wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:32.562 10972 11007 I Unity   : [MP] sim ms=1.87 awake=1.00 colliders=12 mode=Formed activity=7.63E-003 moved=False touching=True wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:37.576 10972 11007 I Unity   : [MP] sim ms=1.70 awake=1.00 colliders=12 mode=Formed activity=3.08E-003 moved=False touching=True wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:42.577 10972 11007 I Unity   : [MP] sim ms=1.72 awake=1.00 colliders=12 mode=Formed activity=6.38E-003 moved=False touching=True wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:47.590 10972 11007 I Unity   : [MP] sim ms=1.74 awake=1.00 colliders=12 mode=Formed activity=2.87E-004 moved=False touching=True wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:52.592 10972 11007 I Unity   : [MP] sim ms=1.56 awake=1.00 colliders=6 mode=Formed activity=4.19E-007 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:42:57.602 10972 11007 I Unity   : [MP] sim ms=0.00 awake=0.00 colliders=0 mode=Formed activity=8.60E-009 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:02.617 10972 11007 I Unity   : [MP] sim ms=0.00 awake=0.00 colliders=1 mode=Formed activity=8.60E-009 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:07.617 10972 11007 I Unity   : [MP] sim ms=0.00 awake=0.00 colliders=6 mode=Formed activity=8.60E-009 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:12.620 10972 11007 I Unity   : [MP] sim ms=0.00 awake=0.00 colliders=0 mode=Formed activity=8.60E-009 moved=False touching=False wakes=6 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:17.633 10972 11007 I Unity   : [MP] sim ms=1.83 awake=1.00 colliders=12 mode=Formed activity=8.15E-003 moved=False touching=True wakes=7 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:22.646 10972 11007 I Unity   : [MP] sim ms=1.83 awake=1.00 colliders=12 mode=Formed activity=5.51E-003 moved=False touching=True wakes=7 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:27.658 10972 11007 I Unity   : [MP] sim ms=1.58 awake=1.00 colliders=0 mode=Formed activity=2.68E-005 moved=True touching=False wakes=7 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:32.659 10972 11007 I Unity   : [MP] sim ms=1.45 awake=1.00 colliders=0 mode=Formed activity=5.27E-005 moved=True touching=False wakes=7 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:36.953 10972 11007 I Unity   : [MP] toggle from=Formed to=Dissolving
+11-10 20:43:37.658 10972 11007 I Unity   : [MP] sim ms=1.87 awake=1.00 colliders=12 mode=Dissolving activity=1.00E-001 moved=False touching=True wakes=8 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:38.485 10972 11007 I Unity   : [MP] toggle from=Dissolving to=Summoning
+11-10 20:43:42.661 10972 11007 I Unity   : [MP] sim ms=1.77 awake=1.00 colliders=12 mode=Formed activity=3.17E-003 moved=False touching=True wakes=9 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:47.673 10972 11007 I Unity   : [MP] sim ms=1.77 awake=1.00 colliders=12 mode=Formed activity=9.06E-003 moved=False touching=True wakes=9 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:52.673 10972 11007 I Unity   : [MP] sim ms=1.81 awake=1.00 colliders=12 mode=Formed activity=3.73E-003 moved=False touching=True wakes=9 damping=5.00 cohesion=0.70 stride=1
+11-10 20:43:57.674 10972 11007 I Unity   : [MP] sim ms=1.92 awake=1.00 colliders=12 mode=Formed activity=3.34E-003 moved=False touching=True wakes=9 damping=5.00 cohesion=0.70 stride=1

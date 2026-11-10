@@ -25,3 +25,9 @@
 - 확인법: 빌드 전 `df -h /` 여유가 20GB 안팎인지, 빌드 뒤 `grep -n "No space\|Disk full" <build.log>`
 - 적용 범위: Unity 전체
 
+## Immersive Debugger 를 켜면 오버레이 셰이더가 빌드에서 빠져 매 프레임 예외 (2026-11-10, build-4a39)
+- 증상: 기기 logcat 에 `ArgumentNullException: Parameter name: shader ... OVROverlayCanvas.InitializeRenderTexture` 와 `NullReferenceException ... OVROverlayCanvas.LateUpdate` 가 프레임마다 찍히고 패널이 안 뜸. 에디터에서는 안 드러남
+- 원인: `Assets/Resources/OVROverlayCanvasSettings.asset` 이 없으면 기기에서 기본 인스턴스가 `Shader.Find("URP/UI/Prerendered")` 를 하는데, 아무도 참조하지 않아 빌드에서 빠져 있음. 설정 에셋은 에디터에서 `OVROverlayCanvasSettings.Instance` 를 한 번 읽어야 생김 (배치 빌드만 돌리면 안 생김)
+- 확인법: `ls Assets/Resources/OVROverlayCanvasSettings.asset` 와 그 안의 `_transparentImposterShader` guid, 기기에서 `adb logcat -d -s Unity | grep -c Exception`
+- 적용 범위: Unity 전체 (Meta XR Core + Immersive Debugger 또는 OVROverlayCanvas 를 배치 빌드로 쓸 때) promote?
+
