@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Splatter.Sim",
+    "rootNamespace": "MoodPicker.Splatter.Sim",
+    "references": ["Unity.Mathematics"],
+    "autoReferenced": true,
+    "noEngineReferences": true
+}
