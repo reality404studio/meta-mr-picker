@@ -61,8 +61,11 @@ runtime_refs = refs + [pigment_dll, splatter_dll, sim_dll] + sim_refs + [
     assemblies / "Unity.Burst.dll", assemblies / "Unity.Collections.dll", assemblies / "Meta.XR.ImmersiveDebugger.Interface.dll"]
 runtime_sources = sorted((root / "Assets/Scripts/Splatter/Runtime").glob("*.cs"))
 runtime_dll = compile_assembly("MoodPicker.Splatter.Runtime", runtime_sources, runtime_refs)
+hands_dll = compile_assembly("MoodPicker.Hands", sorted((root / "Assets/Scripts/Hands/Core").glob("*.cs")), refs)
+hands_ovr_dll = compile_assembly("MoodPicker.Hands.Ovr", sorted((root / "Assets/Scripts/Hands/Ovr").glob("*.cs")),
+                                 refs + [hands_dll, assemblies / "Oculus.VR.dll", assemblies / "Reality404.BuildGate.dll"])
 compile_assembly("MoodPicker.Splatter.Ovr", sorted((root / "Assets/Scripts/Splatter/Ovr").glob("*.cs")),
-                 runtime_refs + [runtime_dll, assemblies / "Oculus.VR.dll", assemblies / "meta.xr.mrutilitykit.dll", assemblies / "MoodPicker.Hands.dll"])
+                 runtime_refs + [runtime_dll, assemblies / "Oculus.VR.dll", assemblies / "meta.xr.mrutilitykit.dll", hands_dll])
 
 shader_path = root / "Assets/Shaders/Splatter/LetterSplatURP.shader"
 if shader_path.exists():

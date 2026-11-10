@@ -90,6 +90,39 @@ public static class SplatterSceneSetup
         catchSo.FindProperty("cameraAccess").objectReferenceValue = pca;
         catchSo.ApplyModifiedPropertiesWithoutUndo();
 
+        var micro = upperAWord.AddComponent<MoodPicker.Hands.Ovr.OvrMicrogestureInput>();
+        var mso = new SerializedObject(micro);
+        mso.FindProperty("leftHand").objectReferenceValue = leftSkel.GetComponent<OVRHand>();
+        mso.FindProperty("rightHand").objectReferenceValue = rightSkel.GetComponent<OVRHand>();
+        mso.ApplyModifiedPropertiesWithoutUndo();
+
+        var dialGo = new GameObject("FeelDial");
+        SceneManager.MoveGameObjectToScene(dialGo, scene);
+        var dialFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        if (dialFont == null) throw new InvalidOperationException("LegacyRuntime.ttf 내장 폰트 없음");
+        var dialText = dialGo.AddComponent<TextMesh>();
+        dialText.font = dialFont;
+        dialText.fontSize = 60;
+        dialText.characterSize = 0.0016f;
+        dialText.richText = true;
+        dialText.anchor = TextAnchor.MiddleRight;
+        dialText.alignment = TextAlignment.Left;
+        dialText.color = new Color(0.94f, 0.93f, 0.90f, 1f);
+        dialText.text = "dial";
+        var dialRenderer = dialGo.GetComponent<MeshRenderer>();
+        dialRenderer.sharedMaterial = dialFont.material;
+        dialRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        dialRenderer.receiveShadows = false;
+
+        var dial = upperAWord.AddComponent<SplatFeelDial>();
+        var dso = new SerializedObject(dial);
+        dso.FindProperty("tuning").objectReferenceValue = tuning;
+        dso.FindProperty("microgestureSource").objectReferenceValue = micro;
+        dso.FindProperty("label").objectReferenceValue = dialText;
+        dso.FindProperty("anchor").objectReferenceValue = upperAWord.transform;
+        dso.FindProperty("head").objectReferenceValue = centerEye;
+        dso.ApplyModifiedPropertiesWithoutUndo();
+
         OVROverlayCanvasSettings overlaySettings = OVROverlayCanvasSettings.Instance;
         if (overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Transparent) == null || overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Opaque) == null)
             throw new InvalidOperationException("OVROverlayCanvasSettings 에 조율 패널용 셰이더가 없음");
@@ -100,7 +133,7 @@ public static class SplatterSceneSetup
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
         AssetDatabase.SaveAssets();
-        Debug.Log("[MP] splatter scene setup done (uppercase A, particle sim, tuning panel): " + ScenePath);
+        Debug.Log("[MP] splatter scene setup done (uppercase A, particle sim, microgesture dial): " + ScenePath);
     }
 
     public static SplatPigmentSlotAsset[] EnsureRealVideoSlotAssets()
