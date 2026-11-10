@@ -75,6 +75,13 @@ namespace MoodPicker.Splatter
             }
         }
 
+        public void SetLetterDirect(int letterIndex, int slotIndex, SplatShaderMode mode)
+        {
+            if (letterIndex < 0 || letterIndex >= LetterCount) return;
+            _assignedSlots[letterIndex] = Math.Clamp(slotIndex, -1, MaxSlots - 1);
+            _assignedModes[letterIndex] = mode;
+        }
+
         public void SetSharedParameters(float triplanarScale, float intensity, bool outlineEnabled)
         {
             TriplanarScale = Math.Clamp(triplanarScale, 0.2f, 3.0f);

@@ -47,7 +47,7 @@ namespace MoodPicker.Splatter
                 ? ComputeWeldedSmoothNormals(positionsXYZ, triangles, 1e-4f)
                 : null;
 
-            float baseSpacing = (float)Math.Sqrt(totalArea / surfaceCount) * 1.25f;
+            float baseSpacing = (float)Math.Sqrt(totalArea / surfaceCount) * 1.55f;
             float minSpacing = Math.Max(1e-4f, letterSize * 0.002f);
             float tangentScale = Math.Max(minSpacing, baseSpacing);
             float normalScale = tangentScale * LetterPoseMath.NormalThicknessRatio;

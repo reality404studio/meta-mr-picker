@@ -28,14 +28,28 @@ namespace Pigment
             var luma = new float[count];
             var order = new int[count];
             int idx = 0;
-            for (int p = 0; p < totalPixels && idx < count; p += step, idx++)
+            for (int p = 0; p < totalPixels && idx < count; p += step)
             {
+                if (rgba[p * 4 + 3] == 0) continue;
                 float r = rgba[p * 4] / 255f;
                 float g = rgba[p * 4 + 1] / 255f;
                 float b = rgba[p * 4 + 2] / 255f;
                 sr[idx] = r; sg[idx] = g; sb[idx] = b;
                 luma[idx] = LumaSrgb(r, g, b);
                 order[idx] = idx;
+                idx++;
+            }
+            if (idx == 0)
+            {
+                for (int p = 0; p < totalPixels && idx < count; p += step, idx++)
+                {
+                    float r = rgba[p * 4] / 255f;
+                    float g = rgba[p * 4 + 1] / 255f;
+                    float b = rgba[p * 4 + 2] / 255f;
+                    sr[idx] = r; sg[idx] = g; sb[idx] = b;
+                    luma[idx] = LumaSrgb(r, g, b);
+                    order[idx] = idx;
+                }
             }
             Array.Sort(luma, order, 0, idx);
             int iShadow = order[Math.Min(idx - 1, (int)(idx * 0.2f))];

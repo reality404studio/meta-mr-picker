@@ -1,0 +1,15 @@
+{
+    "name": "MoodPicker.Splatter.Ovr",
+    "rootNamespace": "MoodPicker.Splatter",
+    "references": [
+        "MoodPicker.Pigment",
+        "MoodPicker.Splatter",
+        "MoodPicker.Splatter.Runtime",
+        "Oculus.VR"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

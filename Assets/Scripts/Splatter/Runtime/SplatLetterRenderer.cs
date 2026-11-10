@@ -19,6 +19,16 @@ namespace MoodPicker.Splatter
         public static readonly int PropShadowTone = Shader.PropertyToID("_ShadowTone");
         public static readonly int PropThreshold = Shader.PropertyToID("_Threshold");
         public static readonly int PropOutline = Shader.PropertyToID("_Outline");
+        public static readonly int PropHandLeftWS = Shader.PropertyToID("_HandLeftWS");
+        public static readonly int PropHandRightWS = Shader.PropertyToID("_HandRightWS");
+        public static readonly int PropHandLeftVelWS = Shader.PropertyToID("_HandLeftVelWS");
+        public static readonly int PropHandRightVelWS = Shader.PropertyToID("_HandRightVelWS");
+        public static readonly int PropRipple0 = Shader.PropertyToID("_Ripple0");
+        public static readonly int PropRipple1 = Shader.PropertyToID("_Ripple1");
+        public static readonly int PropRipple2 = Shader.PropertyToID("_Ripple2");
+        public static readonly int PropRipple3 = Shader.PropertyToID("_Ripple3");
+        public static readonly int PropMagicParams = Shader.PropertyToID("_MagicParams");
+        public static readonly int PropSummonOriginWS = Shader.PropertyToID("_SummonOriginWS");
 
         [SerializeField] Mesh sourceMesh;
         [SerializeField] Material splatMaterial;
@@ -33,10 +43,35 @@ namespace MoodPicker.Splatter
         MeshRenderer _renderer;
         MaterialPropertyBlock _block;
         int _splatCount;
+        Vector4 _handLeftWS;
+        Vector4 _handRightWS;
+        Vector4 _handLeftVelWS = new Vector4(0f, 0f, 0f, 0.095f);
+        Vector4 _handRightVelWS = new Vector4(0f, 0f, 0f, 0.095f);
+        Vector4 _ripple0 = new Vector4(0f, 0f, 0f, -1f);
+        Vector4 _ripple1 = new Vector4(0f, 0f, 0f, -1f);
+        Vector4 _ripple2 = new Vector4(0f, 0f, 0f, -1f);
+        Vector4 _ripple3 = new Vector4(0f, 0f, 0f, -1f);
+        Vector4 _magicParams = new Vector4(1f, 0f, 0f, 0f);
+        Vector4 _summonOriginWS = Vector4.zero;
 
         public int SplatCount => _splatCount;
         public SplatShaderMode Mode { get => shaderMode; set => shaderMode = value; }
         public int AssignedSlot { get => assignedSlot; set => assignedSlot = value; }
+
+        public void SetMagicState(Vector4 magicParams)
+        {
+            _magicParams = magicParams;
+        }
+
+        public void SetSummonOrigin(Vector3 originWS)
+        {
+            _summonOriginWS = new Vector4(originWS.x, originWS.y, originWS.z, 1f);
+        }
+
+        void Awake()
+        {
+            if (_cloudMesh == null && sourceMesh != null) Rebuild();
+        }
 
         public void RebuildFromMesh(Mesh source, Material material, int surfaceSplatCount, float sizeMeters, bool withOutline, int seed = 1337)
         {
@@ -115,10 +150,30 @@ namespace MoodPicker.Splatter
             if (splatMaterial != null) _renderer.sharedMaterial = splatMaterial;
         }
 
+        public void SetHandWaterState(
+            Vector4 handLeftWS,
+            Vector4 handRightWS,
+            Vector4 handLeftVelWS,
+            Vector4 handRightVelWS,
+            Vector4 ripple0,
+            Vector4 ripple1,
+            Vector4 ripple2,
+            Vector4 ripple3)
+        {
+            _handLeftWS = handLeftWS;
+            _handRightWS = handRightWS;
+            _handLeftVelWS = handLeftVelWS;
+            _handRightVelWS = handRightVelWS;
+            _ripple0 = ripple0;
+            _ripple1 = ripple1;
+            _ripple2 = ripple2;
+            _ripple3 = ripple3;
+        }
+
         public void ApplyPigmentState(
             Texture2D atlas,
             FlipbookLayout layout,
-            int currentFrame,
+            float currentFrame,
             bool hasSlot,
             TwoTonePalette palette,
             float scale,
@@ -126,25 +181,32 @@ namespace MoodPicker.Splatter
             bool outlineEnabled)
         {
             EnsureComponents();
+            if (_cloudMesh == null && sourceMesh != null) Rebuild();
             _block.Clear();
             if (atlas != null) _block.SetTexture(PropAtlas, atlas);
             float halfTexel = layout.Tile > 0 ? 0.5f / layout.Tile : 0.5f / 256f;
+            float spatialScale = scale / Mathf.Max(0.01f, letterSize);
             _block.SetVector(PropLayout, new Vector4(Mathf.Max(1, layout.Cols), Mathf.Max(1, layout.Rows), halfTexel, Mathf.Max(1, layout.Frames)));
             _block.SetFloat(PropFrame, currentFrame);
             _block.SetFloat(PropHasSlot, hasSlot && atlas != null ? 1f : 0f);
             _block.SetFloat(PropMode, (float)shaderMode);
-            _block.SetFloat(PropScale, scale);
+            _block.SetFloat(PropScale, spatialScale);
             _block.SetFloat(PropIntensity, intensity);
-            _block.SetColor(PropLightTone, SrgbToLinear(palette.LightR, palette.LightG, palette.LightB));
-            _block.SetColor(PropShadowTone, SrgbToLinear(palette.ShadowR, palette.ShadowG, palette.ShadowB));
+            _block.SetColor(PropLightTone, new Color(palette.LightR, palette.LightG, palette.LightB, 1f));
+            _block.SetColor(PropShadowTone, new Color(palette.ShadowR, palette.ShadowG, palette.ShadowB, 1f));
             _block.SetFloat(PropThreshold, palette.Threshold);
             _block.SetFloat(PropOutline, outlineEnabled ? 1f : 0f);
+            _block.SetVector(PropHandLeftWS, _handLeftWS);
+            _block.SetVector(PropHandRightWS, _handRightWS);
+            _block.SetVector(PropHandLeftVelWS, _handLeftVelWS);
+            _block.SetVector(PropHandRightVelWS, _handRightVelWS);
+            _block.SetVector(PropRipple0, _ripple0);
+            _block.SetVector(PropRipple1, _ripple1);
+            _block.SetVector(PropRipple2, _ripple2);
+            _block.SetVector(PropRipple3, _ripple3);
+            _block.SetVector(PropMagicParams, _magicParams);
+            _block.SetVector(PropSummonOriginWS, _summonOriginWS);
             _renderer.SetPropertyBlock(_block);
-        }
-
-        static Color SrgbToLinear(float r, float g, float b)
-        {
-            return new Color(Mathf.Pow(Mathf.Max(0f, r), 2.2f), Mathf.Pow(Mathf.Max(0f, g), 2.2f), Mathf.Pow(Mathf.Max(0f, b), 2.2f), 1f);
         }
 
         void EnsureComponents()

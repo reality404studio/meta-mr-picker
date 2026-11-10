@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef1535d87611142cb89f7955640f7f81, type: 3}
+  m_Name: Slot1_IMG4398
+  m_EditorClassIdentifier: MoodPicker.Splatter.Runtime::MoodPicker.Splatter.SplatPigmentSlotAsset
+  sourceName: Slot1_IMG4398
+  atlasTexture: {fileID: 2800000, guid: 5d1197655835d438593e2c9bd0404467, type: 3}
+  frames: 48
+  cols: 7
+  rows: 7
+  tile: 256
+  fps: 25.263159
+  loopStart: 46
+  loopEnd: 103
+  loopScore: 4.4002223
+  seamErrorBefore: 12.805275
+  seamErrorAfter: 0.90454155
+  lightTone: {r: 0.61464363, g: 0.6255085, b: 0.6263098, a: 1}
+  shadowTone: {r: 0.4748808, g: 0.4741942, b: 0.47667205, a: 1}
+  threshold: 0.5488878

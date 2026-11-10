@@ -16,7 +16,14 @@ float2 FlipbookUV(float2 tileUV, float frame, float cols, float rows, float half
 
 float3 SampleFlipbook(TEXTURE2D_PARAM(atlas, smp), float2 tileUV, float frame, float4 layout)
 {
-    return SAMPLE_TEXTURE2D_LOD(atlas, smp, FlipbookUV(tileUV, frame, layout.x, layout.y, layout.z), 0).rgb;
+    float totalFrames = max(1.0, layout.w);
+    float f = PigmentMod(max(0.0, frame), totalFrames);
+    float f0 = floor(f);
+    float f1 = PigmentMod(f0 + 1.0, totalFrames);
+    float blend = frac(f);
+    float3 c0 = SAMPLE_TEXTURE2D_LOD(atlas, smp, FlipbookUV(tileUV, f0, layout.x, layout.y, layout.z), 0).rgb;
+    float3 c1 = SAMPLE_TEXTURE2D_LOD(atlas, smp, FlipbookUV(tileUV, f1, layout.x, layout.y, layout.z), 0).rgb;
+    return lerp(c0, c1, blend);
 }
 
 float3 TriplanarWeights(float3 n, float sharpness)
@@ -28,9 +35,24 @@ float3 TriplanarWeights(float3 n, float sharpness)
 float3 SampleFlipbookTriplanar(TEXTURE2D_PARAM(atlas, smp), float3 p, float3 n, float scale, float frame, float4 layout)
 {
     float3 w = TriplanarWeights(n, 4.0);
-    return SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.zy * scale + 0.13, frame, layout) * w.x
-         + SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.xz * scale + 0.37, frame, layout) * w.y
-         + SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.xy * scale + 0.71, frame, layout) * w.z;
+    float3 col = float3(0.0, 0.0, 0.0);
+    float wSum = 0.0;
+    if (w.x > 0.05)
+    {
+        col += SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.zy * scale + 0.13, frame, layout) * w.x;
+        wSum += w.x;
+    }
+    if (w.y > 0.05)
+    {
+        col += SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.xz * scale + 0.37, frame, layout) * w.y;
+        wSum += w.y;
+    }
+    if (w.z > 0.05)
+    {
+        col += SampleFlipbook(TEXTURE2D_ARGS(atlas, smp), p.xy * scale + 0.71, frame, layout) * w.z;
+        wSum += w.z;
+    }
+    return col / max(wSum, 1e-5);
 }
 
 float3 PerturbNormalFromHeightFiniteDiff(

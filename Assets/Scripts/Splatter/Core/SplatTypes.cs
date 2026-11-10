@@ -48,5 +48,14 @@ namespace MoodPicker.Splatter
             int mod = raw % frameCount;
             return mod < 0 ? mod + frameCount : mod;
         }
+
+        public static float SlotFrameContinuous(float timeSeconds, float fps, int frameCount)
+        {
+            if (frameCount <= 0 || fps <= 0f) return 0f;
+            double raw = timeSeconds * (double)fps;
+            double mod = raw % frameCount;
+            if (mod < 0.0) mod += frameCount;
+            return (float)mod;
+        }
     }
 }

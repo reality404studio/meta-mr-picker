@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/FirstLight.unity
-    guid: 611fb0635184442649ddb30422cfaca4
+    path: Assets/Scenes/Splatter.unity
+    guid: fa97ce77385ce4882ab19710371d1639
   m_configObjects:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 33e098465aab0417da4a3bca623bce23, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 3ddd76d2b9e784802bb3b873280b061c, type: 2}
