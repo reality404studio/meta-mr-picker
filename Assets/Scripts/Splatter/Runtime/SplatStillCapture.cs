@@ -155,6 +155,13 @@ namespace MoodPicker.Splatter
             toast.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(view.sqrMagnitude > 1e-6f ? view.normalized : Vector3.forward, Vector3.up));
         }
 
+        public void ShowToast(string text, Transform anchor, Transform head)
+        {
+            _toastAnchor = anchor;
+            _head = head;
+            ShowToast(text);
+        }
+
         void ShowToast(string text)
         {
             if (toast == null) return;

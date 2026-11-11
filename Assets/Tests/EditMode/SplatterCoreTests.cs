@@ -299,5 +299,23 @@ namespace MoodPicker.Tests
             Assert.That(r.CalmRgba[(16 * 32 + 16) * 4 + 2], Is.LessThan(80));
             Assert.That(r.SparkCover, Is.GreaterThan(0f).And.LessThan(0.02f));
         }
+    
+        [Test]
+        public void ForwardFreezesThenSavesAndBackwardOnlyResumes()
+        {
+            Assert.That(SplatFreezeFlow.Forward(false), Is.EqualTo(SplatStepAction.Freeze));
+            Assert.That(SplatFreezeFlow.Forward(true), Is.EqualTo(SplatStepAction.Save));
+            Assert.That(SplatFreezeFlow.Backward(true), Is.EqualTo(SplatStepAction.Resume));
+            Assert.That(SplatFreezeFlow.Backward(false), Is.EqualTo(SplatStepAction.None));
+        }
+
+        [Test]
+        public void LeftGesturesAreIgnoredWhilePinchingHoldingOrJustAfterPinch()
+        {
+            Assert.That(SplatFreezeFlow.LeftGestureAllowed(10f, 5f, false, false, 0.35f), Is.True);
+            Assert.That(SplatFreezeFlow.LeftGestureAllowed(10f, 9.8f, false, false, 0.35f), Is.False);
+            Assert.That(SplatFreezeFlow.LeftGestureAllowed(10f, 5f, true, false, 0.35f), Is.False);
+            Assert.That(SplatFreezeFlow.LeftGestureAllowed(10f, 5f, false, true, 0.35f), Is.False);
+        }
     }
 }

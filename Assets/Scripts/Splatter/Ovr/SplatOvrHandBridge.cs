@@ -16,6 +16,7 @@ namespace MoodPicker.Splatter
         [SerializeField] MonoBehaviour microgestureSource;
         [SerializeField] Transform trackingSpace;
         [SerializeField] float microRepeatGuardSeconds = 0.22f;
+        [SerializeField] float afterPinchQuietSeconds = 0.35f;
 
         readonly PinchDetector _pinch = new PinchDetector();
         readonly bool[] _was = new bool[2];
@@ -23,6 +24,7 @@ namespace MoodPicker.Splatter
         readonly bool[] _consumed = new bool[2];
         readonly bool[] _otherDuring = new bool[2];
         readonly float[] _pinchStart = new float[2];
+        readonly float[] _pinchChange = { -10f, -10f };
         IHandInput _input;
         IMicrogestureInput _micro;
         Microgesture _lastMicro;
@@ -60,6 +62,7 @@ namespace MoodPicker.Splatter
 
         void HandlePinch(int h, bool now, bool other, in SplatHandPoints p)
         {
+            if (now != _was[h]) _pinchChange[h] = Time.time;
             if (now && !_was[h])
             {
                 _pinchStart[h] = Time.time;
@@ -75,9 +78,6 @@ namespace MoodPicker.Splatter
             else if (_was[h])
             {
                 if (_holding[h]) shelf.Release(h);
-                float tapSeconds = tuning != null ? tuning.pinchTapSeconds : 0.45f;
-                if (h == 0 && SplatPinchTap.IsTap(Time.time - _pinchStart[h], _otherDuring[h], _consumed[h], tapSeconds))
-                    wordController.ToggleFreeze();
                 _holding[h] = false;
                 _consumed[h] = false;
             }
@@ -92,6 +92,9 @@ namespace MoodPicker.Splatter
             _lastMicro = g;
             if (!fresh) return;
             _lastMicroTime = Time.unscaledTime;
+            bool allowed = SplatFreezeFlow.LeftGestureAllowed(Time.time, _pinchChange[0], _was[0], _holding[0], afterPinchQuietSeconds);
+            Debug.Log($"{Tag} left micro {g} allowed={allowed}");
+            if (!allowed) return;
             switch (g)
             {
                 case Microgesture.SwipeLeft:
@@ -100,11 +103,13 @@ namespace MoodPicker.Splatter
                 case Microgesture.SwipeRight:
                     wordController.CycleShape(1);
                     break;
-                case Microgesture.ThumbTap:
-                    wordController.SaveStill();
+                case Microgesture.SwipeForward:
+                    wordController.StepForward();
+                    break;
+                case Microgesture.SwipeBackward:
+                    wordController.StepBackward();
                     break;
             }
-            Debug.Log($"{Tag} left micro {g}");
         }
 
         SplatHandPoints ToWorld(in HandPose pose)

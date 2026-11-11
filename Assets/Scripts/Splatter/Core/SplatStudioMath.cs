@@ -53,6 +53,32 @@ namespace MoodPicker.Splatter
         }
     }
 
+    public enum SplatStepAction
+    {
+        None = 0,
+        Freeze = 1,
+        Save = 2,
+        Resume = 3
+    }
+
+    public static class SplatFreezeFlow
+    {
+        public static SplatStepAction Forward(bool frozen)
+        {
+            return frozen ? SplatStepAction.Save : SplatStepAction.Freeze;
+        }
+
+        public static SplatStepAction Backward(bool frozen)
+        {
+            return frozen ? SplatStepAction.Resume : SplatStepAction.None;
+        }
+
+        public static bool LeftGestureAllowed(float now, float lastPinchChange, bool pinching, bool holding, float quietSeconds)
+        {
+            return !pinching && !holding && now - lastPinchChange >= quietSeconds;
+        }
+    }
+
     public static class SplatStillNames
     {
         public static string File(DateTime t)

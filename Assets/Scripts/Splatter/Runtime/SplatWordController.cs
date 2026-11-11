@@ -260,8 +260,33 @@ namespace MoodPicker.Splatter
 
         public void ToggleFreeze()
         {
-            _frozen = !_frozen;
+            SetFrozen(!_frozen);
+        }
+
+        public void SetFrozen(bool frozen)
+        {
+            if (_frozen == frozen) return;
+            _frozen = frozen;
+            if (stillCapture != null && Body != null) stillCapture.ShowToast(frozen ? "freeze" : "resume", Body.transform, head);
             UnityEngine.Debug.Log($"{Tag} freeze={_frozen}");
+        }
+
+        public void StepForward()
+        {
+            switch (SplatFreezeFlow.Forward(_frozen))
+            {
+                case SplatStepAction.Freeze:
+                    SetFrozen(true);
+                    break;
+                case SplatStepAction.Save:
+                    SaveStill();
+                    break;
+            }
+        }
+
+        public void StepBackward()
+        {
+            if (SplatFreezeFlow.Backward(_frozen) == SplatStepAction.Resume) SetFrozen(false);
         }
 
         public void SaveStill()
@@ -279,6 +304,7 @@ namespace MoodPicker.Splatter
         public void CycleShape(int direction)
         {
             if (shapes == null || shapes.Length == 0 || _pendingShape >= 0 || Body == null) return;
+            SetFrozen(false);
             int next = SplatShapeCycle.Step(_shapeIndex, direction, shapes.Length);
             if (next == _shapeIndex || shapes[next] == null) return;
             _pendingShape = next;
