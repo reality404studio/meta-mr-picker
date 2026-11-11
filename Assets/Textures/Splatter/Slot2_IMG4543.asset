@@ -15,13 +15,6 @@ MonoBehaviour:
   sourceName: Slot2_IMG4543
   capturedAt: 11.10  13:30
   shaderMode: 5
-  hasFeel: 1
-  feel:
-    weight: 0.3
-    cohesion: 0.25
-    viscosity: 0.55
-    bounce: 0.35
-    grain: 0.65
   calmTexture: {fileID: 2800000, guid: e6ad3c9ca68f4434d97831451716f58a, type: 3}
   sparkTexture: {fileID: 2800000, guid: 3a93c634d53b34e9383d420058b17b5c, type: 3}
   atlasTexture: {fileID: 2800000, guid: 2d8c6a0c317294d399622c1b4a4b36a8, type: 3}

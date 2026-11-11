@@ -11,11 +11,13 @@ namespace MoodPicker.Splatter.Sim
         public float viscosity;
         public float bounce;
         public float grain;
+        public float fluff;
 
         public static SplatFeel Water => new SplatFeel { weight = 0.2f, cohesion = 0.2f, viscosity = 0.1f, bounce = 0.2f, grain = 1f };
-        public static SplatFeel Sand => new SplatFeel { weight = 0.85f, cohesion = 0.12f, viscosity = 0.75f, bounce = 0.1f, grain = 0.85f };
+        public static SplatFeel Sand => new SplatFeel { weight = 0.7f, cohesion = 0.3f, viscosity = 0.7f, bounce = 0.8f, grain = 1f };
         public static SplatFeel Leaf => new SplatFeel { weight = 0.3f, cohesion = 0.25f, viscosity = 0.55f, bounce = 0.35f, grain = 0.65f };
         public static SplatFeel Jelly => new SplatFeel { weight = 0.4f, cohesion = 1f, viscosity = 0.45f, bounce = 0.95f, grain = 0f };
+        public static SplatFeel Fur => new SplatFeel { weight = 0.1f, cohesion = 0.7f, viscosity = 0.2f, bounce = 0.7f, grain = 1f, fluff = 1f };
 
         public SplatFeel Clamped => new SplatFeel
         {
@@ -23,7 +25,8 @@ namespace MoodPicker.Splatter.Sim
             cohesion = math.saturate(cohesion),
             viscosity = math.saturate(viscosity),
             bounce = math.saturate(bounce),
-            grain = math.saturate(grain)
+            grain = math.saturate(grain),
+            fluff = math.saturate(fluff)
         };
     }
 
@@ -32,6 +35,7 @@ namespace MoodPicker.Splatter.Sim
         public float grain;
         public float stretchMax;
         public float stretchSeconds;
+        public float fluff;
     }
 
     public struct SplatTransitionShape
@@ -74,7 +78,8 @@ namespace MoodPicker.Splatter.Sim
             {
                 grain = math.lerp(1f, 0.45f, f.grain),
                 stretchMax = math.lerp(4f, 0f, f.grain),
-                stretchSeconds = math.lerp(0.012f, 0f, f.grain)
+                stretchSeconds = math.lerp(0.012f, 0f, f.grain),
+                fluff = f.fluff
             };
         }
 

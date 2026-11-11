@@ -308,6 +308,26 @@ namespace MoodPicker.Splatter
             Wake();
         }
 
+        public void Poke(Matrix4x4 bodyToWorld, Vector3 worldPoint, float radius, float speed)
+        {
+            float3 p = worldPoint;
+            float r = math.max(radius, 1e-3f);
+            for (int i = 0; i < _count; i++)
+            {
+                float3 home = bodyToWorld.MultiplyPoint3x4(_homesManaged[i]);
+                float4 a = _texels[i * 2];
+                float3 offset = home + a.xyz - p;
+                float d = math.length(offset);
+                if (d >= r) continue;
+                float w = 1f - d / r;
+                float3 dir = math.normalizesafe(offset, SplatSimKernel.HashDirection(_hashManaged[i]));
+                float4 b = _texels[i * 2 + 1];
+                _texels[i * 2 + 1] = new float4(b.xyz + dir * (speed * w * (0.6f + 0.8f * _hashManaged[i])), math.max(b.w, w));
+            }
+            _keepPose = true;
+            Wake();
+        }
+
         public void CopyWorldState(Matrix4x4 bodyToWorld, out float3[] positions, out float3[] velocities)
         {
             positions = new float3[_count];

@@ -33,6 +33,7 @@ Shader "MoodPicker/LetterSplatURP"
         _FlowParams ("Flow (amplitude m, speed, contrast, crop gamma)", Vector) = (0.0008, 1.6, 1, 1)
         _DropParams ("Drop (detach m, stretch s, stretch max, grain)", Vector) = (0.012, 0.008, 2.5, 0.85)
         _GlowParams ("Glow (gain, sparkle, painted overlay, -)", Vector) = (0.35, 0.6, 1, 0)
+        _FurParams ("Fur (fluff 0..1, hair length x radius, sway, -)", Vector) = (0, 3, 0.35, 0)
         _GlintParams ("Glint module, off at 0 (amount, speed, wave scale 1/m, roughness)", Vector) = (0, 1.2, 120, 0.45)
         _GlintShape ("Glint (sharpness, size, material gate, -)", Vector) = (160, 0.15, 0.6, 0)
     }
@@ -70,6 +71,7 @@ Shader "MoodPicker/LetterSplatURP"
             float4 _GlowParams;
             float4 _GlintParams;
             float4 _GlintShape;
+            float4 _FurParams;
             float4 _Layout2;
             float4 _Slot2;
             float4 _AtlasCrop2;
@@ -195,6 +197,11 @@ Shader "MoodPicker/LetterSplatURP"
                 + (float3(0.48, 0.86, 1.0) * causticCrest + float3(0.88, 0.96, 1.0) * spec) * _GlowParams.z;
         }
 
+        float3 randDir3(float3 seed)
+        {
+            return normalize(seed * 2.0 - 1.0 + 1e-4);
+        }
+
         float ApplyFront(float3 centerOS)
         {
             float x = (distance(centerOS, _Apply.xyz) - _Apply.w) / max(_ApplyShape.x, 1e-4);
@@ -301,12 +308,28 @@ Shader "MoodPicker/LetterSplatURP"
                 ? SplatGlint(o.centerOS, seed3, normalWS, V, _GlintParams, _GlintShape.x, simGlow, detach) * simScale
                 : 0.0;
 
-            float billboardBlend = max(max(detach, saturate(stretch * 2.0)), saturate(glint * 2.0));
+            float fluff = _FurParams.x * (1.0 - detach);
+            float3 furOffsetWS = float3(0.0, 0.0, 0.0);
+            if (fluff > 0.001)
+            {
+                float sway = sin(_SplatTime * 1.7 + splatHash * 6.28318) * _FurParams.z;
+                float3 hairWS = normalize(normalWS + (randDir3(seed3) * 0.55 + flowTangent * sway) * fluff + simVel * 0.15);
+                float hairLen = 1.0 + (_FurParams.y - 1.0) * fluff * (0.6 + 0.8 * frac(splatHash * 23.0));
+                float3 hairView = hairWS - V * dot(hairWS, V);
+                float hairViewLen = length(hairView);
+                float3 ax = hairViewLen > 1e-3 ? hairView / hairViewLen : billUpWS;
+                float3 ay = cross(V, ax);
+                float3 furCorner = (ax * v.quadUV.y * hairLen + ay * v.quadUV.x * lerp(1.0, 0.45, fluff)) * splatRadiusWS;
+                billboardCornerWS = lerp(billboardCornerWS, furCorner, fluff);
+                furOffsetWS = hairWS * (splatRadiusWS * hairLen * fluff);
+            }
+
+            float billboardBlend = max(max(max(detach, saturate(stretch * 2.0)), saturate(glint * 2.0)), fluff);
             float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach) * (1.0 + glint * _GlintShape.y);
             float3 morphedCornerWS = lerp(cornerOffsetWS, billboardCornerWS, billboardBlend) * (grain * simScale);
 
             float3 applyWS = normalWS * (_ApplyShape.y * ApplyFront(o.centerOS));
-            float3 finalPosWS = centerWSActual + simDisp + flowWS + applyWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
+            float3 finalPosWS = centerWSActual + simDisp + flowWS + applyWS + furOffsetWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
             float3 finalNormalWS = normalize(lerp(normalWS, V, detach * 0.6));
 
             o.positionCS = TransformWorldToHClip(finalPosWS);

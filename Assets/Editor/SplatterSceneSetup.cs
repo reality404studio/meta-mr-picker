@@ -130,6 +130,15 @@ public static class SplatterSceneSetup
         shelfSo.FindProperty("splatMaterial").objectReferenceValue = splatMat;
         shelfSo.FindProperty("blobMesh").objectReferenceValue = blobMesh;
         shelfSo.FindProperty("labelFont").objectReferenceValue = dialFont;
+        SplatFeelAsset[] feels =
+        {
+            EnsureFeel("Drop", "drop", MoodPicker.Splatter.Sim.SplatFeel.Water),
+            EnsureFeel("Sand", "sand", MoodPicker.Splatter.Sim.SplatFeel.Sand),
+            EnsureFeel("Fur", "fur", MoodPicker.Splatter.Sim.SplatFeel.Fur)
+        };
+        var feelsProp = shelfSo.FindProperty("feels");
+        feelsProp.arraySize = feels.Length;
+        for (int i = 0; i < feels.Length; i++) feelsProp.GetArrayElementAtIndex(i).objectReferenceValue = feels[i];
         var presetsProp = shelfSo.FindProperty("presets");
         presetsProp.arraySize = presets.Length;
         for (int i = 0; i < presets.Length; i++) presetsProp.GetArrayElementAtIndex(i).objectReferenceValue = presets[i];
@@ -146,6 +155,7 @@ public static class SplatterSceneSetup
         var ctrlSo = new SerializedObject(controller);
         ctrlSo.FindProperty("shelf").objectReferenceValue = shelf;
         ctrlSo.FindProperty("stillCapture").objectReferenceValue = still;
+        ctrlSo.FindProperty("startFeel").objectReferenceValue = feels[0];
         var shapesProp = ctrlSo.FindProperty("shapes");
         var namesProp = ctrlSo.FindProperty("shapeNames");
         shapesProp.arraySize = shapeMeshes.Length;
@@ -274,22 +284,35 @@ public static class SplatterSceneSetup
             list.Add(slot2);
         }
 
-        DefaultMaterial(slot0, "11.03  15:21", SplatShaderMode.Raw, MoodPicker.Splatter.Sim.SplatFeel.Water);
-        DefaultMaterial(slot1, "IMG 4398", SplatShaderMode.Raw, MoodPicker.Splatter.Sim.SplatFeel.Water);
-        DefaultMaterial(slot2, "11.10  13:30", SplatShaderMode.Light, MoodPicker.Splatter.Sim.SplatFeel.Leaf);
+        DefaultMaterial(slot0, "11.03  15:21", SplatShaderMode.Raw);
+        DefaultMaterial(slot1, "IMG 4398", SplatShaderMode.Raw);
+        DefaultMaterial(slot2, "11.10  13:30", SplatShaderMode.Light);
         return list.ToArray();
     }
 
     public static string GinkgoFramesDir => Environment.GetEnvironmentVariable("GINKGO_FRAMES_DIR") ?? "/tmp/vidref_frames/4543";
 
-    static void DefaultMaterial(SplatPigmentSlotAsset slot, string capturedAt, SplatShaderMode mode, MoodPicker.Splatter.Sim.SplatFeel feel)
+    static void DefaultMaterial(SplatPigmentSlotAsset slot, string capturedAt, SplatShaderMode mode)
     {
-        if (slot == null || slot.hasFeel) return;
+        if (slot == null) return;
         if (string.IsNullOrEmpty(slot.capturedAt)) slot.capturedAt = capturedAt;
         slot.shaderMode = (int)mode;
-        slot.feel = feel;
-        slot.hasFeel = true;
         EditorUtility.SetDirty(slot);
+    }
+
+    public const string FeelDir = "Assets/Feels";
+
+    public static SplatFeelAsset EnsureFeel(string name, string label, MoodPicker.Splatter.Sim.SplatFeel feel)
+    {
+        Directory.CreateDirectory(FeelDir);
+        string path = FeelDir + "/" + name + ".asset";
+        var asset = AssetDatabase.LoadAssetAtPath<SplatFeelAsset>(path);
+        if (asset != null) return asset;
+        asset = ScriptableObject.CreateInstance<SplatFeelAsset>();
+        asset.label = label;
+        asset.feel = feel;
+        AssetDatabase.CreateAsset(asset, path);
+        return asset;
     }
 
     static SplatPigmentSlotAsset BuildOrLoadVideoSlot(string assetBaseName, string framesDir, int tileSize, float fps)

@@ -49,6 +49,9 @@ namespace MoodPicker.Splatter
         [SerializeField] SplatTuning tuning;
         [SerializeField] SplatShelf shelf;
         [SerializeField] SplatStillCapture stillCapture;
+        [SerializeField] SplatFeelAsset startFeel;
+        [SerializeField] float pokeRadius = 0.07f;
+        [SerializeField] float pokeSpeed = 0.35f;
         [SerializeField] Mesh[] shapes;
         [SerializeField] string[] shapeNames;
         [SerializeField] int startShape;
@@ -178,7 +181,7 @@ namespace MoodPicker.Splatter
             }
             if (_current == null && autoFillSampleSlot0)
                 _current = SplatSurfaceMaterial.FromBuilt(PigmentAtlasBuilder.BuildSampleWaterWaveSlot(64, 24, 15f), "sample");
-            if (tuning != null && _current != null && _current.hasFeel) tuning.SetFeel(_current.feel);
+            if (tuning != null) tuning.SetFeel(startFeel != null ? startFeel.feel : SplatFeel.Water);
         }
 
         public void SetPreview(SplatSurfaceMaterial preview)
@@ -193,7 +196,17 @@ namespace MoodPicker.Splatter
 
         int ClusterSize => tuning != null ? Mathf.Max(8, tuning.particlesPerCluster) : 300;
 
-        public SplatFeel CurrentFeel => tuning != null ? tuning.CurrentFeel : (_current != null && _current.hasFeel ? _current.feel : SplatFeel.Water);
+        public SplatFeel CurrentFeel => tuning != null ? tuning.CurrentFeel : SplatFeel.Water;
+
+        public void ApplyFeel(SplatFeel feel, string label, Vector3 contactWorld)
+        {
+            if (tuning != null) tuning.SetFeel(feel);
+            SplatLetterRenderer body = Body;
+            SplatSimRunner sim = body != null ? body.EnsureSim(ClusterSize) : null;
+            if (sim != null && sim.Mode == SplatSimMode.Formed)
+                sim.Poke(body.transform.localToWorldMatrix, contactWorld, pokeRadius * body.transform.lossyScale.x, pokeSpeed);
+            UnityEngine.Debug.Log($"{Tag} apply feel={label} w={feel.weight:0.##} c={feel.cohesion:0.##} v={feel.viscosity:0.##} b={feel.bounce:0.##} g={feel.grain:0.##} f={feel.fluff:0.##}");
+        }
 
         public float FloorY => transform.position.y - (tuning != null ? tuning.floorBelow : 0.45f);
 
@@ -340,7 +353,6 @@ namespace MoodPicker.Splatter
             if (sim != null) sim.NearestHome(local, out local);
             _previous = _current;
             _current = material;
-            if (tuning != null && material.hasFeel) tuning.SetFeel(material.feel);
             _applyOriginOS = local;
             _applyRadius = 0f;
             _applyMax = sim != null ? sim.MaxHomeDistance(local) : 0.3f;

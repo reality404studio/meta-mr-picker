@@ -1,5 +1,5 @@
 # HANDOFF — 물성 채집 MR 도구 (gather 브랜치, 보드 splatter)
-updated: 2026-11-11 10:45 KST · by: claude-code
+updated: 2026-11-11 15:20 KST · by: claude-code
 
 ## 목표 (한 줄)
 현실의 물성을 채집해서 손안에 갖고 형태에 입혀 쓰는 Quest MR 창작 도구. 손안의 느낌과 아름다움 > 한 바퀴가 걸림 없이 도는 것 > 기능 수. 마감 2026-11-19 05:00 KST. 원문: `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/1110HANDOFF_claude_code.md`
@@ -7,16 +7,19 @@ updated: 2026-11-11 10:45 KST · by: claude-code
 ## 지금 카드
 - id: `build-8ac0` (한 바퀴: 진열대 → 집기 → 형태에 대면 번짐 → 형태 바꾸기 → 고정 → 저장) · 상태: 증명 대기 · 필요한 증거: L3 + L4
 - 성공 조건(사람 합격 문장): 설명 없이 혼자 3분 안에 진열대의 재료를 집어 형태에 대고, 형태를 바꾸고, 고정하고, 저장할 수 있다 (1110 인계 문서 6번)
+- 진행: 제자리 변형·물방울 물성은 사람 확인 끝, 커밋 `8ea1792`. 진열대·대면 번짐·고정·저장·은행나무 빛 모드는 헤드셋 판정 전
 - 조작: 핀치로 덩어리 집기 · 왼손 짧은 핀치 = 고정 · 왼손 엄지 쓸기 = 형태(A~Z·구·도넛) · 왼손 엄지 톡 = 저장 · 오른손 엄지 = 조율 다이얼 · 양손 핀치 = 옮기기·키우기
 - stop: 실기 판정(`-verify-e2c3`)은 사람 몫
 - 앞 카드 `build-4a39` (입자 모델·다이얼·Overlay) 는 사람 확인 끝, 커밋됨
 
 ## 다음 할 일 (최대 3)
-1. 사람이 헤드셋에서 한 바퀴 판정 (빌드 `9d9e0b0-dirty-1111-103533` 설치됨, 실행 미확인). 저장한 PNG 는 `sh scripts/pull-stills.sh`
+1. 사람이 헤드셋에서 한 바퀴 판정 (빌드 `9d9e0b0-dirty-1111-151006` 설치됨). 저장한 PNG 는 `sh scripts/pull-stills.sh`. 은행나무(잎) 물성도 다이얼로 찾으면 물처럼 굳힌다
 2. 판정 뒤 남은 일정 항목: 사용자용 패널(물성 다섯 값), 소리, 재료별 물성 프리셋, 채집 제스처
 3. 윤슬 실사감: 해상도 올리기는 사람이 거절함. 다른 방법은 사람과 정함
 
 ## 정본 / 건드리지 말 것
+- 물방울 물성 = 무게 0.2·뭉침 0.2·끈기 0.1·탄성 0.2·알갱이 1.0 (사람이 찾음, `SplatFeel.Water`, 테스트 고정). 움직임은 형태 변화 × 물성 두 층 (`docs/DECIDED.md` 2026-11-11)
+- 은행나무 재료를 다시 구우려면 `GINKGO_FRAMES_DIR` 에 `videref/IMG_4543.mov` 를 256px 로 뽑은 프레임 (`../shared/VideoSplat/extract_video_frames.sh`)
 - 되돌릴 기준점: 커밋 `65af4f8` (수식 소환·소멸이 든 옛 방식)과 그 APK. 지우지 않는다
 - 눈별 반짝임은 윤슬에 쓰지 않는다. 모듈 `Assets/Shaders/Splatter/SplatGlint.hlsl` 은 다른 재료용 보류 (서랍 h2), 기본 0
 - 입자 힘 계산 정본 = `Assets/Scripts/Splatter/Sim/SplatSimKernel.cs`. 값 정본 = `SplatTuning` (전부 베이스라인). 셰이더에 수치를 새로 박지 않는다

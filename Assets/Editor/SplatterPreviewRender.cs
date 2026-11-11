@@ -113,50 +113,42 @@ public static class SplatterPreviewRender
 
         Run(4.2f);
         Put("formed + shelf");
-        int pick = shelf.Count - 1;
-        Vector3 slot = shelf.SlotWorld(pick);
-        Vector3 target = controller.transform.position + new Vector3(0.03f, -0.04f, -0.03f);
-        bool held = shelf.TryGrab(1, slot);
-        Debug.Log($"[MP] loop grab={held} slot={slot}");
-        Vector3 palmOffset = new Vector3(0.03f, -0.05f, -0.06f);
-        for (int i = 0; i <= 36 && held; i++)
+        void Carry(int index, string what)
         {
-            Vector3 p = Vector3.Lerp(slot, target, i / 36f);
-            held = shelf.UpdateHeld(1, p, p + palmOffset);
-            Run(dt);
-            if (i == 18) Put("carrying");
+            Vector3 from = shelf.SlotWorld(index);
+            Vector3 to = controller.transform.position + new Vector3(0.03f, -0.04f, -0.03f);
+            bool held = shelf.TryGrab(1, from);
+            for (int i = 0; i <= 36 && held; i++)
+            {
+                Vector3 p = Vector3.Lerp(from, to, i / 36f);
+                held = shelf.UpdateHeld(1, p, p + new Vector3(0.03f, -0.05f, -0.06f));
+                Run(dt);
+                if (i == 18) Put("carrying " + what);
+            }
         }
-        Put("touch -> spread starts");
+        Carry(shelf.IndexOf(SplatShelf.BeadKind.Look, 2), "ginkgo colour");
+        Run(0.3f);
+        Put("ginkgo spreading");
+        Run(1.0f);
+        Put("ginkgo drop");
+        Carry(shelf.IndexOf(SplatShelf.BeadKind.Feel, 1), "sand bead");
         Run(0.25f);
-        Put("spread 0.25s");
-        Run(0.35f);
-        Put("spread 0.6s");
-        Run(0.9f);
-        Put("spread done, blob regrows");
-
+        Put("ginkgo sand poke 0.25s");
+        Run(1.0f);
+        Put("ginkgo sand");
         controller.CycleShape(1);
-        Run(0.12f);
-        Put("burst 0.12s");
         Run(0.2f);
-        Put("burst 0.32s");
+        Put("sand burst");
         for (int i = 0; i < 2000 && controller.ShapeChanging; i++)
         {
             System.Threading.Thread.Sleep(2);
             Run(dt);
         }
-        Put("gather starts");
-        Run(0.45f);
-        Put("gather 0.45s");
-        Run(2.0f);
-        Put("B formed");
-        controller.CycleShape(-2);
-        for (int i = 0; i < 2000 && controller.ShapeChanging; i++)
-        {
-            System.Threading.Thread.Sleep(2);
-            Run(dt);
-        }
-        Run(3.2f);
-        Put("donut");
+        Run(2.4f);
+        Put("ginkgo sand B");
+        Carry(shelf.IndexOf(SplatShelf.BeadKind.Feel, 2), "fur bead");
+        Run(1.5f);
+        Put("ginkgo fur B");
         controller.ToggleFreeze();
         Run(1.0f);
         Put("frozen 1s");

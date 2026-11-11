@@ -17,6 +17,7 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelViscosity = 0.1f;
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelBounce = 0.2f;
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelGrain = 1f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelFluff = 0f;
 
         [DebugMember(Category = "1 Spring", Min = 20f, Max = 600f)] public float homeStiffness = 180f;
         [DebugMember(Category = "1 Spring", Min = 0f, Max = 30f)] public float homeDamping = 5f;
@@ -87,6 +88,8 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "6 Look", Min = 0f, Max = 2f)] public float glowGain = 0.35f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 3f)] public float sparkle = 0.6f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 1f)] public float overlay = 1f;
+        [DebugMember(Category = "6 Look", Min = 0f, Max = 1f)] public float fluff = 0f;
+        [DebugMember(Category = "6 Look", Min = 0.5f, Max = 8f)] public float fluffLength = 3f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintAmount = 0f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintSpeed = 1.2f;
         [DebugMember(Category = "6 Look", Min = 20f, Max = 400f)] public float glintScale = 120f;
@@ -122,7 +125,7 @@ namespace MoodPicker.Splatter
         public event Action FreezeRequested;
         public event Action StillRequested;
 
-        public SplatFeel CurrentFeel => new SplatFeel { weight = feelWeight, cohesion = feelCohesion, viscosity = feelViscosity, bounce = feelBounce, grain = feelGrain };
+        public SplatFeel CurrentFeel => new SplatFeel { weight = feelWeight, cohesion = feelCohesion, viscosity = feelViscosity, bounce = feelBounce, grain = feelGrain, fluff = feelFluff };
 
         public void SetFeel(SplatFeel feel)
         {
@@ -132,6 +135,7 @@ namespace MoodPicker.Splatter
             feelViscosity = f.viscosity;
             feelBounce = f.bounce;
             feelGrain = f.grain;
+            feelFluff = f.fluff;
             DeriveFromFeel();
         }
 
@@ -161,6 +165,7 @@ namespace MoodPicker.Splatter
             grain = look.grain;
             stretchMax = look.stretchMax;
             stretchSeconds = look.stretchSeconds;
+            fluff = look.fluff;
         }
 
         public SplatLook ToLook()
@@ -177,6 +182,8 @@ namespace MoodPicker.Splatter
                 glowGain = glowGain,
                 sparkle = sparkle,
                 overlay = overlay,
+                fluff = fluff,
+                fluffLength = fluffLength,
                 glintAmount = glintAmount,
                 glintSpeed = glintSpeed,
                 glintScale = glintScale,

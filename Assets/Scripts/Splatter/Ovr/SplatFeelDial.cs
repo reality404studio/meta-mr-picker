@@ -98,6 +98,8 @@ namespace MoodPicker.Splatter
             Row("Viscosity*", () => t.feelViscosity, v => { t.feelViscosity = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Bounce", () => t.feelBounce, v => { t.feelBounce = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Grain*", () => t.feelGrain, v => { t.feelGrain = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Fluff", () => t.feelFluff, v => { t.feelFluff = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Fluff length", () => t.fluffLength, v => t.fluffLength = v, 0.5f, 8f, false, 15);
             Row("Spring", () => t.homeStiffness, v => t.homeStiffness = v, 20f, 600f, true);
             Row("Damping", () => t.homeDamping, v => t.homeDamping = v, 0.5f, 30f, true);
             Row("Return limit", () => t.maxSpringAccel, v => t.maxSpringAccel = v, 2f, 80f, true);

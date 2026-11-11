@@ -1,4 +1,3 @@
-using MoodPicker.Splatter.Sim;
 using Pigment;
 using UnityEngine;
 
@@ -9,8 +8,6 @@ namespace MoodPicker.Splatter
         public string sourceName;
         public string capturedAt;
         public int shaderMode;
-        public bool hasFeel;
-        public SplatFeel feel;
         public Texture2D calmTexture;
         public Texture2D sparkTexture;
         public Texture2D atlasTexture;

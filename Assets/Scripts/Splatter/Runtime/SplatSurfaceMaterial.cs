@@ -1,4 +1,3 @@
-using MoodPicker.Splatter.Sim;
 using Pigment;
 using UnityEngine;
 
@@ -19,8 +18,6 @@ namespace MoodPicker.Splatter
         public int mode = -1;
         public Texture calm;
         public Texture spark;
-        public bool hasFeel;
-        public SplatFeel feel;
 
         public int ResolveMode(int overrideMode)
         {
@@ -45,10 +42,23 @@ namespace MoodPicker.Splatter
                 palette = asset.ToPalette(),
                 mode = asset.shaderMode,
                 calm = asset.calmTexture,
-                spark = asset.sparkTexture,
-                hasFeel = asset.hasFeel,
-                feel = asset.feel
+                spark = asset.sparkTexture
             };
+        }
+
+        static Texture2D _clay;
+
+        public static SplatSurfaceMaterial Clay(string label)
+        {
+            if (_clay == null)
+            {
+                _clay = new Texture2D(4, 4, TextureFormat.RGBA32, false, false) { name = "Clay", hideFlags = HideFlags.HideAndDontSave };
+                var px = new Color32[16];
+                for (int i = 0; i < px.Length; i++) px[i] = new Color32(0xE7, 0xE7, 0xE7, 0xFF);
+                _clay.SetPixels32(px);
+                _clay.Apply(false, false);
+            }
+            return new SplatSurfaceMaterial { label = label, texture = _clay, mirrorTiled = true, gamma = 2.2f, mode = 0 };
         }
 
         public static SplatSurfaceMaterial FromBuilt(BuiltPigmentSlot built, string label)

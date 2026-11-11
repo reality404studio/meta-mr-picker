@@ -329,6 +329,20 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void SandIsWhatTheHumanFoundInTheHeadset()
+        {
+            SplatFeel f = SplatFeel.Sand;
+            Assert.That(new[] { f.weight, f.cohesion, f.viscosity, f.bounce, f.grain, f.fluff }, Is.EqualTo(new[] { 0.7f, 0.3f, 0.7f, 0.8f, 1f, 0f }));
+        }
+
+        [Test]
+        public void FurIsWhatTheHumanFoundInTheHeadset()
+        {
+            SplatFeel f = SplatFeel.Fur;
+            Assert.That(new[] { f.weight, f.cohesion, f.viscosity, f.bounce, f.grain, f.fluff }, Is.EqualTo(new[] { 0.1f, 0.7f, 0.2f, 0.7f, 1f, 1f }));
+        }
+
+        [Test]
         public void CohesiveBurstHoldsTogetherInBlobsWhileLooseOneScatters()
         {
             SplatFeel tight = Mid, loose = Mid;
