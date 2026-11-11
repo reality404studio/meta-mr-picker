@@ -72,6 +72,7 @@ if shader_path.exists():
     shader_text = shader_path.read_text()
     required_tokens = [
         "LOAD_TEXTURE2D_LOD(_SimTex",
+        "(0, 1.2, 120, 0.45)",
         "SampleFlipbookTriplanar",
         "PerturbNormalFromHeightFiniteDiff",
         "UNITY_VERTEX_OUTPUT_STEREO",

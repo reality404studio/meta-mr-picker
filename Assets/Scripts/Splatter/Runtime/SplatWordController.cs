@@ -454,6 +454,13 @@ namespace MoodPicker.Splatter
                 look.grain = tuning.grain;
                 look.glowGain = tuning.glowGain;
                 look.sparkle = tuning.sparkle;
+                look.glintAmount = tuning.glintAmount;
+                look.glintSpeed = tuning.glintSpeed;
+                look.glintScale = tuning.glintScale;
+                look.glintRough = tuning.glintRough;
+                look.glintSharpness = tuning.glintSharpness;
+                look.glintSize = tuning.glintSize;
+                look.glintMaterial = tuning.glintMaterial;
             }
 
             for (int s = 0; s < SplatWordState.MaxSlots; s++)

@@ -21,6 +21,8 @@ Shader "MoodPicker/LetterSplatURP"
         _FlowParams ("Flow (amplitude m, speed, contrast, crop gamma)", Vector) = (0.0008, 1.6, 1, 1)
         _DropParams ("Drop (detach m, stretch s, stretch max, grain)", Vector) = (0.012, 0.008, 2.5, 0.85)
         _GlowParams ("Glow (gain, sparkle, -, -)", Vector) = (0.35, 0.6, 0, 0)
+        _GlintParams ("Glint module, off at 0 (amount, speed, wave scale 1/m, roughness)", Vector) = (0, 1.2, 120, 0.45)
+        _GlintShape ("Glint (sharpness, size, material gate, -)", Vector) = (160, 0.15, 0.6, 0)
     }
     SubShader
     {
@@ -29,6 +31,7 @@ Shader "MoodPicker/LetterSplatURP"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "../Pigment/PigmentCommon.hlsl"
+        #include "SplatGlint.hlsl"
 
         TEXTURE2D(_Atlas);
         SAMPLER(sampler_Atlas);
@@ -43,6 +46,8 @@ Shader "MoodPicker/LetterSplatURP"
             float4 _AtlasCrop;
             float4 _DropParams;
             float4 _GlowParams;
+            float4 _GlintParams;
+            float4 _GlintShape;
             float _SimOn;
             float _CropOn;
             float _Frame;
@@ -74,6 +79,7 @@ Shader "MoodPicker/LetterSplatURP"
             float3 posWS : TEXCOORD4;
             float3 normalWS : TEXCOORD5;
             half4 modeOutlineSplashRadius : TEXCOORD6;
+            half glint : TEXCOORD7;
             UNITY_VERTEX_INPUT_INSTANCE_ID
             UNITY_VERTEX_OUTPUT_STEREO
         };
@@ -128,6 +134,7 @@ Shader "MoodPicker/LetterSplatURP"
 
             int mode = (int)round(_Mode);
             bool isOutline = v.centerAndFlags.w > 0.5;
+            o.glint = 0.0;
 
             o.posOS = v.positionOS.xyz;
             o.centerOS = v.centerAndFlags.xyz;
@@ -214,11 +221,15 @@ Shader "MoodPicker/LetterSplatURP"
                 billboardCornerWS = (ax * v.quadUV.x * (1.0 + stretch) + ay * v.quadUV.y) * splatRadiusWS;
             }
 
-            float billboardBlend = max(detach, saturate(stretch * 2.0));
-            float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach);
+            float glint = _GlintParams.x > 0.001
+                ? SplatGlint(o.centerOS, seed3, normalWS, V, _GlintParams, _GlintShape.x, simGlow, detach) * simScale
+                : 0.0;
+
+            float billboardBlend = max(max(detach, saturate(stretch * 2.0)), saturate(glint * 2.0));
+            float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach) * (1.0 + glint * _GlintShape.y);
             float3 morphedCornerWS = lerp(cornerOffsetWS, billboardCornerWS, billboardBlend) * (grain * simScale);
 
-            float3 finalPosWS = centerWSActual + simDisp + flowWS + morphedCornerWS;
+            float3 finalPosWS = centerWSActual + simDisp + flowWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
             float3 finalNormalWS = normalize(lerp(normalWS, V, detach * 0.6));
 
             o.positionCS = TransformWorldToHClip(finalPosWS);
@@ -226,6 +237,7 @@ Shader "MoodPicker/LetterSplatURP"
             o.posWS = finalPosWS;
             o.normalWS = finalNormalWS;
             o.modeOutlineSplashRadius = half4((half)mode, 0.0, (half)detach, (half)simGlow);
+            o.glint = (half)glint;
             return o;
         }
 
@@ -328,6 +340,8 @@ Shader "MoodPicker/LetterSplatURP"
             col += min(tint, 3.0) * (sparkleSpec * detach * _GlowParams.y);
             col *= 1.0 + glow * _GlowParams.x;
 
+            col += SplatGlintColor((float)i.glint, _GlintParams.x, _GlintShape.z, h, tint, r2);
+
             return half4(col, opacity);
         }
         ENDHLSL
@@ -374,6 +388,7 @@ Shader "MoodPicker/LetterSplatURP"
                 }
                 float detach = saturate((float)i.modeOutlineSplashRadius.z);
                 float dropletEdge = lerp(1.0, saturate((1.0 - r2) * 3.5), detach);
+                dropletEdge = lerp(dropletEdge, saturate((1.0 - r2) * 1.6), saturate((float)i.glint * 3.0));
                 return half4(shaded.rgb, dropletEdge);
             }
             ENDHLSL

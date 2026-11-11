@@ -1,4 +1,4 @@
-// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>   (시간 흐름 시트는 RenderSequenceBatch)
+// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>   (시간 흐름 시트는 RenderSequenceBatch, 두 눈 비교는 RenderStereoBatch)
 using System;
 using System.IO;
 using MoodPicker.Splatter;
@@ -30,7 +30,7 @@ public static class SplatterPreviewRender
         try
         {
             SplatterSceneSetup.Run();
-            code = (_sequence ? RunSequence(Arg("-splatOut")) : Run(Arg("-splatOut"))) ? 0 : 1;
+            code = (_stereo ? RunStereo(Arg("-splatOut")) : _sequence ? RunSequence(Arg("-splatOut")) : Run(Arg("-splatOut"))) ? 0 : 1;
         }
         catch (Exception e)
         {
@@ -49,6 +49,73 @@ public static class SplatterPreviewRender
     }
 
     static bool _sequence;
+
+    static bool _stereo;
+
+    public static void RenderStereoBatch()
+    {
+        _stereo = true;
+        RenderBatch();
+    }
+
+    public static bool RunStereo(string outPng)
+    {
+        const int cell = 720;
+        MoodPickerUrpSetup.Ensure();
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        Material splatMat = SplatterSceneSetup.EnsureSplatMaterial();
+        SplatPigmentSlotAsset[] presets = SplatterSceneSetup.EnsureRealVideoSlotAssets();
+        GameObject word = SplatterSceneSetup.CreateLetterUpperASplat("Stereo_UpperA", splatMat, presets, 30000, SplatShaderMode.Raw, 0);
+        word.transform.position = Vector3.zero;
+        word.GetComponent<SplatWordController>().StepAnimationAndMaterials(0.35f);
+
+        var camGo = new GameObject("StereoCam");
+        var cam = camGo.AddComponent<Camera>();
+        cam.fieldOfView = 26f;
+        cam.nearClipPlane = 0.05f;
+        cam.farClipPlane = 5f;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.08f, 0.09f, 0.13f, 1f);
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
+        var rt = new RenderTexture(cell, cell, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
+        rt.Create();
+        cam.targetTexture = rt;
+        cam.aspect = 1f;
+
+        var eyes = new Texture2D[2];
+        for (int e = 0; e < 2; e++)
+        {
+            cam.transform.position = new Vector3(e == 0 ? -0.0315f : 0.0315f, 0.02f, -0.40f);
+            cam.transform.rotation = Quaternion.LookRotation(new Vector3(0f, 0.02f, 0f) - cam.transform.position, Vector3.up);
+            eyes[e] = Shoot(cam, rt);
+        }
+
+        Color[] l = eyes[0].GetPixels();
+        Color[] r = eyes[1].GetPixels();
+        var diff = new Color[l.Length];
+        int brightL = 0, brightR = 0, both = 0;
+        for (int i = 0; i < l.Length; i++)
+        {
+            bool bl = l[i].grayscale > 0.92f;
+            bool br = r[i].grayscale > 0.92f;
+            if (bl) brightL++;
+            if (br) brightR++;
+            if (bl && br) both++;
+            float d = Mathf.Abs(l[i].grayscale - r[i].grayscale) * 3f;
+            diff[i] = new Color(d, d, d, 1f);
+        }
+        var sheet = new Texture2D(cell * 3, cell, TextureFormat.RGBA32, false, false);
+        sheet.SetPixels(0, 0, cell, cell, l);
+        sheet.SetPixels(cell, 0, cell, cell, r);
+        sheet.SetPixels(cell * 2, 0, cell, cell, diff);
+        sheet.Apply();
+        string fullOut = Path.GetFullPath(outPng);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOut));
+        File.WriteAllBytes(fullOut, sheet.EncodeToPNG());
+        EditorSceneManager.OpenScene(SplatterSceneSetup.ScenePath, OpenSceneMode.Single);
+        Debug.Log($"[MP] splatter-stereo brightLeft={brightL} brightRight={brightR} brightBoth={both} out={fullOut}");
+        return brightL > 0 && brightR > 0;
+    }
 
     public static void RenderSequenceBatch()
     {

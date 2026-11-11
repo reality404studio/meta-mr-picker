@@ -17,6 +17,13 @@ namespace MoodPicker.Splatter
         public float grain;
         public float glowGain;
         public float sparkle;
+        public float glintAmount;
+        public float glintSpeed;
+        public float glintScale;
+        public float glintRough;
+        public float glintSharpness;
+        public float glintSize;
+        public float glintMaterial;
 
         public static SplatLook Default => new SplatLook
         {
@@ -28,7 +35,14 @@ namespace MoodPicker.Splatter
             stretchMax = 2.5f,
             grain = 0.6f,
             glowGain = 0.35f,
-            sparkle = 0.6f
+            sparkle = 0.6f,
+            glintAmount = 0f,
+            glintSpeed = 1.2f,
+            glintScale = 120f,
+            glintRough = 0.45f,
+            glintSharpness = 160f,
+            glintSize = 0.15f,
+            glintMaterial = 0.6f
         };
     }
 
@@ -53,6 +67,8 @@ namespace MoodPicker.Splatter
         public static readonly int PropFlowParams = Shader.PropertyToID("_FlowParams");
         public static readonly int PropDropParams = Shader.PropertyToID("_DropParams");
         public static readonly int PropGlowParams = Shader.PropertyToID("_GlowParams");
+        public static readonly int PropGlintParams = Shader.PropertyToID("_GlintParams");
+        public static readonly int PropGlintShape = Shader.PropertyToID("_GlintShape");
 
         [SerializeField] Mesh sourceMesh;
         [SerializeField] Material splatMaterial;
@@ -235,6 +251,8 @@ namespace MoodPicker.Splatter
             _block.SetFloat(PropCropOn, _cropOn ? 1f : 0f);
             _block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, _look.detachDistance), _look.stretchSeconds, _look.stretchMax, _look.grain));
             _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, 0f, 0f));
+            _block.SetVector(PropGlintParams, new Vector4(_look.glintAmount, _look.glintSpeed, _look.glintScale, _look.glintRough));
+            _block.SetVector(PropGlintShape, new Vector4(Mathf.Max(1f, _look.glintSharpness), _look.glintSize, _look.glintMaterial, 0f));
             _renderer.SetPropertyBlock(_block);
             bool hidden = _sim != null && _sim.Mode == SplatSimMode.Hidden;
             if (_renderer.enabled == hidden) _renderer.enabled = !hidden;

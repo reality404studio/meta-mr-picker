@@ -68,6 +68,13 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "6 Look", Min = 0.3f, Max = 2f)] public float grain = 0.6f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 2f)] public float glowGain = 0.35f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 3f)] public float sparkle = 0.6f;
+        [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintAmount = 0f;
+        [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintSpeed = 1.2f;
+        [DebugMember(Category = "6 Look", Min = 20f, Max = 400f)] public float glintScale = 120f;
+        [DebugMember(Category = "6 Look", Min = 0.05f, Max = 1.5f)] public float glintRough = 0.45f;
+        [DebugMember(Category = "6 Look", Min = 50f, Max = 3000f)] public float glintSharpness = 160f;
+        [DebugMember(Category = "6 Look", Min = -0.6f, Max = 1f)] public float glintSize = 0.15f;
+        [DebugMember(Category = "6 Look", Min = 0f, Max = 1f)] public float glintMaterial = 0.6f;
         [DebugMember(Category = "6 Look", Min = -1f, Max = 0f)] public float passthroughBrightness = 0f;
         [DebugMember(Category = "6 Look", Min = -1f, Max = 1f)] public float passthroughContrast = 0f;
         [DebugMember(Category = "6 Look", Min = -1f, Max = 1f)] public float passthroughSaturation = 0f;

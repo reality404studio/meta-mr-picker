@@ -46,6 +46,8 @@ Material:
     - _AtlasCrop: {r: 1, g: 1, b: 0, a: 0}
     - _DropParams: {r: 0.012, g: 0.008, b: 2.5, a: 0.85}
     - _FlowParams: {r: 0.0008, g: 1.6, b: 1, a: 0}
+    - _GlintParams: {r: 1.6, g: 1.2, b: 120, a: 0.5}
+    - _GlintShape: {r: 500, g: 0.8, b: 0.6, a: 0}
     - _GlowParams: {r: 0.35, g: 0.6, b: 0, a: 0}
     - _HandLeftVelWS: {r: 0, g: 0, b: 0, a: 0.095}
     - _HandLeftWS: {r: 0, g: 0, b: 0, a: 0}
