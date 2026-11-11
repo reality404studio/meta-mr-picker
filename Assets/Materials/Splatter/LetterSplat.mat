@@ -27,7 +27,27 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _Atlas2:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Calm:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Calm2:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _SimTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Spark:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Spark2:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
@@ -41,9 +61,13 @@ Material:
     - _Outline: 1
     - _Scale: 1.2
     - _SimOn: 0
+    - _SplatTime: 0
     - _Threshold: 0.5
     m_Colors:
+    - _Apply: {r: 0, g: 0, b: 0, a: 1000}
+    - _ApplyShape: {r: 0.03, g: 0.004, b: 0.15, a: 0}
     - _AtlasCrop: {r: 1, g: 1, b: 0, a: 0}
+    - _AtlasCrop2: {r: 1, g: 1, b: 0, a: 0}
     - _DropParams: {r: 0.012, g: 0.008, b: 2.5, a: 0.85}
     - _FlowParams: {r: 0.0008, g: 1.6, b: 1, a: 0}
     - _GlintParams: {r: 1.6, g: 1.2, b: 120, a: 0.5}
@@ -54,6 +78,7 @@ Material:
     - _HandRightVelWS: {r: 0, g: 0, b: 0, a: 0.095}
     - _HandRightWS: {r: 0, g: 0, b: 0, a: 0}
     - _Layout: {r: 1, g: 1, b: 0.001953125, a: 1}
+    - _Layout2: {r: 1, g: 1, b: 0.001953125, a: 1}
     - _LightTone: {r: 0.85, g: 0.9, b: 0.97999996, a: 1}
     - _MagicParams: {r: 1, g: 0, b: 0, a: 0}
     - _OutlineColor: {r: 0.17999998, g: 0.19999996, b: 0.31399998, a: 1}
@@ -62,6 +87,8 @@ Material:
     - _Ripple2: {r: 0, g: 0, b: 0, a: -1}
     - _Ripple3: {r: 0, g: 0, b: 0, a: -1}
     - _ShadowTone: {r: 0.17999998, g: 0.24999997, b: 0.41999996, a: 1}
+    - _Slot2: {r: 0, g: 0, b: 0, a: 1}
+    - _Slot2b: {r: 0, g: 0, b: 0, a: 0}
     - _SummonOriginWS: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

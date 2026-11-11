@@ -209,5 +209,95 @@ namespace MoodPicker.Tests
             Assert.That(state.GetMode(1), Is.EqualTo(SplatShaderMode.Chrome));
             Assert.That(state.GetMode(3), Is.EqualTo(SplatShaderMode.Chrome));
         }
+
+        [Test]
+        public void ApplyWaveLeavesOldAheadNewBehindAndFinishesPastTheFarthestSplat()
+        {
+            Assert.That(SplatApplyWave.Newness(0.10f, 0.05f, 0.02f), Is.EqualTo(0f).Within(1e-5f));
+            Assert.That(SplatApplyWave.Newness(0.01f, 0.05f, 0.02f), Is.EqualTo(1f).Within(1e-5f));
+            float mid = SplatApplyWave.Newness(0.04f, 0.05f, 0.02f);
+            Assert.That(mid, Is.InRange(0.1f, 0.9f));
+            Assert.That(SplatApplyWave.Front(0.05f, 0.05f, 0.02f), Is.EqualTo(1f).Within(1e-5f));
+            Assert.That(SplatApplyWave.Front(0.15f, 0.05f, 0.02f), Is.LessThan(1e-6f));
+            Assert.That(SplatApplyWave.Done(0.20f, 0.20f, 0.02f), Is.False);
+            Assert.That(SplatApplyWave.Done(0.25f, 0.20f, 0.02f), Is.True);
+            Assert.That(SplatApplyWave.Newness(0.20f, 0.25f, 0.02f), Is.EqualTo(1f).Within(1e-5f));
+        }
+
+        [Test]
+        public void ShelfSlotsAreCenteredAndEvenlySpaced()
+        {
+            Assert.That(SplatShelfLayout.SlotX(0, 1, 0.07f), Is.EqualTo(0f).Within(1e-6f));
+            Assert.That(SplatShelfLayout.SlotX(0, 2, 0.07f), Is.EqualTo(-0.035f).Within(1e-6f));
+            Assert.That(SplatShelfLayout.SlotX(1, 2, 0.07f), Is.EqualTo(0.035f).Within(1e-6f));
+            Assert.That(SplatShelfLayout.SlotX(2, 5, 0.07f), Is.EqualTo(0f).Within(1e-6f));
+        }
+
+        [Test]
+        public void ShapeCycleWrapsBothWays()
+        {
+            Assert.That(SplatShapeCycle.Step(0, -1, 28), Is.EqualTo(27));
+            Assert.That(SplatShapeCycle.Step(27, 1, 28), Is.EqualTo(0));
+            Assert.That(SplatShapeCycle.Step(3, 1, 28), Is.EqualTo(4));
+        }
+
+        [Test]
+        public void PinchTapIsShortSoloAndNotUsedForGrabbing()
+        {
+            Assert.That(SplatPinchTap.IsTap(0.2f, false, false, 0.45f), Is.True);
+            Assert.That(SplatPinchTap.IsTap(0.9f, false, false, 0.45f), Is.False);
+            Assert.That(SplatPinchTap.IsTap(0.2f, true, false, 0.45f), Is.False);
+            Assert.That(SplatPinchTap.IsTap(0.2f, false, true, 0.45f), Is.False);
+        }
+
+        [Test]
+        public void StillFileNameSortsByTime()
+        {
+            var t = new DateTime(2026, 11, 11, 9, 5, 7);
+            Assert.That(SplatStillNames.File(t), Is.EqualTo("splat-20261111-090507.png"));
+            Assert.That(SplatStillNames.Label(t), Is.EqualTo("11.11  09:05"));
+        }
+
+        [Test]
+        public void DensityKeepsSplatSpacingCloseAcrossShapes()
+        {
+            float[] quad = { 0f, 0f, 0f, 1f, 0f, 0f, 1f, 1f, 0f, 0f, 1f, 0f };
+            int[] tris = { 0, 1, 2, 0, 2, 3 };
+            Assert.That(SplatDensity.MeshArea(quad, tris), Is.EqualTo(1.0).Within(1e-9));
+            Assert.That(SplatDensity.CountFor(0.03, 1e6, 4000, 32000), Is.EqualTo(30000));
+            Assert.That(SplatDensity.CountFor(0.10, 1e6, 4000, 32000), Is.EqualTo(32000));
+            Assert.That(SplatDensity.CountFor(0.001, 1e6, 4000, 32000), Is.EqualTo(4000));
+        }
+    
+        [Test]
+        public void LightLayersKeepOnlyMomentaryWhiteFlashesAsSparkAndBlurTheRest()
+        {
+            var layout = new FlipbookLayout { Frames = 4, Cols = 2, Rows = 2, Tile = 32, Fps = 10f };
+            var atlas = new byte[layout.Width * layout.Height * 4];
+            for (int k = 0; k < 4; k++)
+            {
+                layout.PixelRectUnity(k, out int ox, out int oy);
+                for (int y = 0; y < 32; y++)
+                    for (int x = 0; x < 32; x++)
+                    {
+                        int o = ((oy + y) * layout.Width + ox + x) * 4;
+                        bool flash = k == 2 && x >= 14 && x < 18 && y >= 14 && y < 18;
+                        atlas[o] = flash ? (byte)250 : (byte)200;
+                        atlas[o + 1] = flash ? (byte)250 : (byte)150;
+                        atlas[o + 2] = flash ? (byte)245 : (byte)30;
+                        atlas[o + 3] = 255;
+                    }
+            }
+            LightLayersResult r = LightLayers.Build(atlas, layout);
+            layout.PixelRectUnity(2, out int fx, out int fy);
+            int center = ((fy + 16) * layout.Width + fx + 16) * 4;
+            layout.PixelRectUnity(1, out int qx, out int qy);
+            int other = ((qy + 16) * layout.Width + qx + 16) * 4;
+            Assert.That(r.SparkRgba[center], Is.GreaterThan(150));
+            Assert.That(r.SparkRgba[other], Is.EqualTo(0));
+            Assert.That(r.SparkRgba[center + 1], Is.GreaterThan(r.SparkRgba[other + 1]));
+            Assert.That(r.CalmRgba[(16 * 32 + 16) * 4 + 2], Is.LessThan(80));
+            Assert.That(r.SparkCover, Is.GreaterThan(0f).And.LessThan(0.02f));
+        }
     }
 }

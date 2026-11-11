@@ -6,19 +6,33 @@ namespace MoodPicker.Splatter
     [DefaultExecutionOrder(-10)]
     public sealed class SplatOvrHandBridge : MonoBehaviour
     {
+        const string Tag = "[MP]";
+
         [SerializeField] SplatWordController wordController;
+        [SerializeField] SplatShelf shelf;
         [SerializeField] SplatTuning tuning;
         [SerializeField] OVRPassthroughLayer passthroughLayer;
         [SerializeField] MonoBehaviour handInputSource;
+        [SerializeField] MonoBehaviour microgestureSource;
         [SerializeField] Transform trackingSpace;
+        [SerializeField] float microRepeatGuardSeconds = 0.22f;
 
         readonly PinchDetector _pinch = new PinchDetector();
+        readonly bool[] _was = new bool[2];
+        readonly bool[] _holding = new bool[2];
+        readonly bool[] _consumed = new bool[2];
+        readonly bool[] _otherDuring = new bool[2];
+        readonly float[] _pinchStart = new float[2];
         IHandInput _input;
+        IMicrogestureInput _micro;
+        Microgesture _lastMicro;
+        float _lastMicroTime = -10f;
         Vector3 _appliedPassthrough = new Vector3(float.NaN, 0f, 0f);
 
         void Awake()
         {
             _input = handInputSource as IHandInput;
+            _micro = microgestureSource as IMicrogestureInput;
         }
 
         void Update()
@@ -32,17 +46,72 @@ namespace MoodPicker.Splatter
                 _pinch.endDistance = tuning.pinchEnd;
             }
             _pinch.Update(frame);
-            SplatHandPoints left = ToWorld(frame.left, _pinch.IsPinching(Handedness.Left));
-            SplatHandPoints right = ToWorld(frame.right, _pinch.IsPinching(Handedness.Right));
+            SplatHandPoints left = ToWorld(frame.left);
+            SplatHandPoints right = ToWorld(frame.right);
+            bool lp = left.tracked && _pinch.IsPinching(Handedness.Left);
+            bool rp = right.tracked && _pinch.IsPinching(Handedness.Right);
+            HandlePinch(0, lp, rp, left);
+            HandlePinch(1, rp, lp, right);
+            left.pinching = lp && !_consumed[0];
+            right.pinching = rp && !_consumed[1];
             wordController.UpdateHands(left, right, Time.time, Time.deltaTime);
+            HandleMicrogestures();
         }
 
-        SplatHandPoints ToWorld(in HandPose pose, bool pinching)
+        void HandlePinch(int h, bool now, bool other, in SplatHandPoints p)
+        {
+            if (now && !_was[h])
+            {
+                _pinchStart[h] = Time.time;
+                _otherDuring[h] = other;
+                _holding[h] = shelf != null && shelf.TryGrab(h, p.Pinch);
+                _consumed[h] = _holding[h];
+            }
+            else if (now)
+            {
+                _otherDuring[h] |= other;
+                if (_holding[h]) _holding[h] = shelf.UpdateHeld(h, p.Pinch, p.palm);
+            }
+            else if (_was[h])
+            {
+                if (_holding[h]) shelf.Release(h);
+                float tapSeconds = tuning != null ? tuning.pinchTapSeconds : 0.45f;
+                if (h == 0 && SplatPinchTap.IsTap(Time.time - _pinchStart[h], _otherDuring[h], _consumed[h], tapSeconds))
+                    wordController.ToggleFreeze();
+                _holding[h] = false;
+                _consumed[h] = false;
+            }
+            _was[h] = now;
+        }
+
+        void HandleMicrogestures()
+        {
+            if (_micro == null) return;
+            Microgesture g = _micro.Current(Handedness.Left);
+            bool fresh = g != Microgesture.None && (g != _lastMicro || Time.unscaledTime - _lastMicroTime >= microRepeatGuardSeconds);
+            _lastMicro = g;
+            if (!fresh) return;
+            _lastMicroTime = Time.unscaledTime;
+            switch (g)
+            {
+                case Microgesture.SwipeLeft:
+                    wordController.CycleShape(-1);
+                    break;
+                case Microgesture.SwipeRight:
+                    wordController.CycleShape(1);
+                    break;
+                case Microgesture.ThumbTap:
+                    wordController.SaveStill();
+                    break;
+            }
+            Debug.Log($"{Tag} left micro {g}");
+        }
+
+        SplatHandPoints ToWorld(in HandPose pose)
         {
             var points = new SplatHandPoints();
             if (!pose.tracked) return points;
             points.tracked = true;
-            points.pinching = pinching;
             points.thumb = trackingSpace.TransformPoint(pose.thumbTip);
             points.index = trackingSpace.TransformPoint(pose.indexTip);
             points.middle = trackingSpace.TransformPoint(pose.middleTip);

@@ -1,0 +1,19 @@
+{
+    "name": "MoodPicker.Splatter.Patisserie.Runtime",
+    "rootNamespace": "MoodPicker.Splatter.Patisserie",
+    "references": [
+        "MoodPicker.Splatter.Patisserie.Core",
+        "MoodPicker.Splatter",
+        "MoodPicker.Splatter.Sim",
+        "MoodPicker.Splatter.Runtime",
+        "MoodPicker.Hands",
+        "MoodPicker.Pigment",
+        "Unity.Mathematics",
+        "Unity.Burst",
+        "Unity.Collections",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

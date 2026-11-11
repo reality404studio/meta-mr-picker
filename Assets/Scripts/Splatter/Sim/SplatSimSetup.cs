@@ -128,6 +128,76 @@ namespace MoodPicker.Splatter.Sim
             return last;
         }
 
+        public static void Bounds(float3[] points, out float3 center, out float3 extent)
+        {
+            float3 lo = new float3(float.MaxValue), hi = new float3(float.MinValue);
+            for (int i = 0; i < points.Length; i++)
+            {
+                lo = math.min(lo, points[i]);
+                hi = math.max(hi, points[i]);
+            }
+            center = (lo + hi) * 0.5f;
+            extent = math.max((hi - lo) * 0.5f, new float3(1e-4f));
+        }
+
+        public static float3[] BurstVelocities(float3[] homes, float[] hash, float speed)
+        {
+            Bounds(homes, out float3 center, out float3 extent);
+            var v = new float3[homes.Length];
+            for (int i = 0; i < homes.Length; i++)
+            {
+                float3 radial = (homes[i] - center) / extent;
+                float3 dir = math.normalizesafe(radial * 0.8f + SplatSimKernel.HashDirection(hash[i]) * 0.6f, SplatSimKernel.HashDirection(hash[i]));
+                v[i] = dir * (speed * (0.6f + 0.8f * math.frac(hash[i] * 5.31f)));
+            }
+            return v;
+        }
+
+        public static float GatherArrivals(float3[] homes, float[] hash, float[] arrival, float spreadSeconds)
+        {
+            Bounds(homes, out float3 center, out float3 extent);
+            float last = 0f;
+            for (int i = 0; i < homes.Length; i++)
+            {
+                float d = math.saturate(math.length((homes[i] - center) / extent) / 1.732f);
+                arrival[i] = (0.55f * math.frac(hash[i] * 3.17f) + 0.45f * d) * spreadSeconds;
+                last = math.max(last, arrival[i]);
+            }
+            return last;
+        }
+
+        public static int[] MapByShape(float3[] fromHomes, float3[] toHomes, float[] toHash, int cells = 12)
+        {
+            Bounds(fromHomes, out float3 fc, out float3 fe);
+            Bounds(toHomes, out float3 tc, out float3 te);
+            int Cell(float3 n)
+            {
+                int3 c = math.clamp((int3)math.floor((n * 0.5f + 0.5f) * cells), 0, cells - 1);
+                return (c.z * cells + c.y) * cells + c.x;
+            }
+            var bucketStart = new int[cells * cells * cells + 1];
+            var cellOf = new int[fromHomes.Length];
+            for (int i = 0; i < fromHomes.Length; i++)
+            {
+                cellOf[i] = Cell((fromHomes[i] - fc) / fe);
+                bucketStart[cellOf[i] + 1]++;
+            }
+            for (int c = 0; c < cells * cells * cells; c++) bucketStart[c + 1] += bucketStart[c];
+            var fill = new int[cells * cells * cells];
+            var sorted = new int[fromHomes.Length];
+            for (int i = 0; i < fromHomes.Length; i++) sorted[bucketStart[cellOf[i]] + fill[cellOf[i]]++] = i;
+
+            var map = new int[toHomes.Length];
+            for (int i = 0; i < toHomes.Length; i++)
+            {
+                int c = Cell((toHomes[i] - tc) / te);
+                int count = bucketStart[c + 1] - bucketStart[c];
+                int pick = (int)(math.frac(toHash[i] * 7.77f) * 65535f);
+                map[i] = count > 0 ? sorted[bucketStart[c] + pick % count] : pick % fromHomes.Length;
+            }
+            return map;
+        }
+
         public static float[] Hashes(float3[] homes)
         {
             var h = new float[homes.Length];
@@ -149,6 +219,27 @@ namespace MoodPicker.Splatter.Sim
         public readonly SplatParticle[] Particles;
         public readonly SplatClusterNode[] Nodes;
         public float Activity;
+
+        public void BeginBurst(float speed)
+        {
+            float3[] v = SplatSimSetup.BurstVelocities(Homes, Hash, speed);
+            for (int i = 0; i < Particles.Length; i++) Particles[i].velocity = v[i];
+            SplatSimSetup.Bounds(Homes, out float3 center, out float3 extent);
+            for (int c = 0; c < Nodes.Length; c++)
+                Nodes[c].velocity = math.normalizesafe((Clusters.Home[c] - center) / extent, new float3(0f, 1f, 0f)) * speed;
+        }
+
+        public void SeedFrom(float3[] worldPositions, float3[] worldVelocities, int[] map)
+        {
+            for (int i = 0; i < Particles.Length; i++)
+            {
+                int j = map[i];
+                Particles[i].displacement = worldPositions[j] - Homes[i];
+                Particles[i].velocity = worldVelocities[j];
+                Particles[i].scale = 1f;
+            }
+            for (int c = 0; c < Nodes.Length; c++) Nodes[c] = default;
+        }
 
         public SplatSimReference(float3[] homes, int clusterCount)
         {

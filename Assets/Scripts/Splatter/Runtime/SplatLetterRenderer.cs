@@ -1,4 +1,4 @@
-using System;
+using System.Threading.Tasks;
 using MoodPicker.Splatter.Sim;
 using Pigment;
 using UnityEngine;
@@ -48,6 +48,36 @@ namespace MoodPicker.Splatter
         };
     }
 
+    public struct SplatSurfaceState
+    {
+        public SplatSurfaceMaterial current;
+        public float currentFrame;
+        public SplatSurfaceMaterial previous;
+        public float previousFrame;
+        public Vector4 apply;
+        public Vector4 applyShape;
+        public float time;
+        public float triplanarScale;
+        public float intensity;
+        public bool outline;
+
+        public static Vector4 NoApply => new Vector4(0f, 0f, 0f, 1000f);
+    }
+
+    public sealed class SplatBodyBuild
+    {
+        public Mesh source;
+        public int splatCount;
+        public Vector3[] vertices;
+        public Vector3[] normals;
+        public Vector2[] quadUV;
+        public Vector4[] centers;
+        public Vector2[] simUV;
+        public int[] indices;
+        public Vector3[] homes;
+        public SplatSimPlan plan;
+    }
+
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class SplatLetterRenderer : MonoBehaviour
     {
@@ -55,6 +85,18 @@ namespace MoodPicker.Splatter
         public static readonly int PropLayout = Shader.PropertyToID("_Layout");
         public static readonly int PropFrame = Shader.PropertyToID("_Frame");
         public static readonly int PropHasSlot = Shader.PropertyToID("_HasSlot");
+        public static readonly int PropAtlas2 = Shader.PropertyToID("_Atlas2");
+        public static readonly int PropLayout2 = Shader.PropertyToID("_Layout2");
+        public static readonly int PropSlot2 = Shader.PropertyToID("_Slot2");
+        public static readonly int PropCrop2 = Shader.PropertyToID("_AtlasCrop2");
+        public static readonly int PropCalm = Shader.PropertyToID("_Calm");
+        public static readonly int PropSpark = Shader.PropertyToID("_Spark");
+        public static readonly int PropCalm2 = Shader.PropertyToID("_Calm2");
+        public static readonly int PropSpark2 = Shader.PropertyToID("_Spark2");
+        public static readonly int PropSlot2b = Shader.PropertyToID("_Slot2b");
+        public static readonly int PropApply = Shader.PropertyToID("_Apply");
+        public static readonly int PropApplyShape = Shader.PropertyToID("_ApplyShape");
+        public static readonly int PropSplatTime = Shader.PropertyToID("_SplatTime");
         public static readonly int PropMode = Shader.PropertyToID("_Mode");
         public static readonly int PropScale = Shader.PropertyToID("_Scale");
         public static readonly int PropIntensity = Shader.PropertyToID("_Intensity");
@@ -89,15 +131,13 @@ namespace MoodPicker.Splatter
         SplatSimRunner _sim;
         int _simClusterSize;
         SplatLook _look = SplatLook.Default;
-        Vector4 _crop = new Vector4(1f, 1f, 0f, 0f);
-        bool _cropOn;
-        float _cropGamma = 1f;
 
         public int SplatCount => _splatCount;
         public SplatShaderMode Mode { get => shaderMode; set => shaderMode = value; }
         public int AssignedSlot { get => assignedSlot; set => assignedSlot = value; }
         public SplatSimRunner Sim => _sim;
         public float LetterSize => letterSize;
+        public Mesh SourceMesh => sourceMesh;
 
         public SplatSimRunner EnsureSim(int particlesPerCluster)
         {
@@ -115,13 +155,6 @@ namespace MoodPicker.Splatter
         public void SetLook(SplatLook look)
         {
             _look = look;
-        }
-
-        public void SetCrop(bool on, Vector4 crop, float gamma)
-        {
-            _cropOn = on;
-            _crop = crop;
-            _cropGamma = gamma;
         }
 
         void Awake()
@@ -142,115 +175,164 @@ namespace MoodPicker.Splatter
         public void Rebuild(int seed = 1337)
         {
             if (sourceMesh == null) return;
-            EnsureComponents();
+            ReadMesh(sourceMesh, out float[] pos, out float[] nrm, out int[] tris);
+            SplatBodyBuild build = Compute(sourceMesh, pos, nrm, tris, splatsPerLetter, letterSize, includeOutline, seed, 0);
+            ApplyBuild(build, false);
+        }
 
-            Vector3[] v3 = sourceMesh.vertices;
-            Vector3[] n3 = sourceMesh.normals;
-            int[] tris = sourceMesh.triangles;
-
-            var posXYZ = new float[v3.Length * 3];
+        static void ReadMesh(Mesh mesh, out float[] positions, out float[] normals, out int[] triangles)
+        {
+            Vector3[] v3 = mesh.vertices;
+            Vector3[] n3 = mesh.normals;
+            triangles = mesh.triangles;
+            positions = new float[v3.Length * 3];
             for (int i = 0; i < v3.Length; i++)
             {
-                posXYZ[i * 3] = v3[i].x;
-                posXYZ[i * 3 + 1] = v3[i].y;
-                posXYZ[i * 3 + 2] = v3[i].z;
+                positions[i * 3] = v3[i].x;
+                positions[i * 3 + 1] = v3[i].y;
+                positions[i * 3 + 2] = v3[i].z;
             }
-
-            float[] nrmXYZ = null;
+            normals = null;
             if (n3 != null && n3.Length == v3.Length)
             {
-                nrmXYZ = new float[n3.Length * 3];
+                normals = new float[n3.Length * 3];
                 for (int i = 0; i < n3.Length; i++)
                 {
-                    nrmXYZ[i * 3] = n3[i].x;
-                    nrmXYZ[i * 3 + 1] = n3[i].y;
-                    nrmXYZ[i * 3 + 2] = n3[i].z;
+                    normals[i * 3] = n3[i].x;
+                    normals[i * 3 + 1] = n3[i].y;
+                    normals[i * 3 + 2] = n3[i].z;
                 }
             }
+        }
 
-            SplatSample[] samples = MeshSplatSampler.SampleMesh(posXYZ, nrmXYZ, tris, splatsPerLetter, letterSize, includeOutline, seed);
-            SplatCloudMeshData data = SplatCloudMeshBuilder.Build(samples);
-            _splatCount = data.SplatCount;
-
-            if (_cloudMesh == null)
+        public static Task<SplatBodyBuild> BuildAsync(Mesh source, double splatsPerSquareMeter, int minCount, int maxCount, float sizeMeters, int seed, int particlesPerCluster)
+        {
+            ReadMesh(source, out float[] pos, out float[] nrm, out int[] tris);
+            return Task.Run(() =>
             {
-                _cloudMesh = new Mesh { name = gameObject.name + "_SplatCloud", indexFormat = IndexFormat.UInt32 };
+                int count = SplatDensity.CountFor(SplatDensity.MeshArea(pos, tris), splatsPerSquareMeter, minCount, maxCount);
+                return Compute(source, pos, nrm, tris, count, sizeMeters, false, seed, particlesPerCluster);
+            });
+        }
+
+        static SplatBodyBuild Compute(Mesh source, float[] pos, float[] nrm, int[] tris, int count, float size, bool outline, int seed, int particlesPerCluster)
+        {
+            SplatSample[] samples = MeshSplatSampler.SampleMesh(pos, nrm, tris, count, size, outline, seed);
+            SplatCloudMeshData data = SplatCloudMeshBuilder.Build(samples);
+            int vCount = data.VerticesXYZ.Length / 3;
+            var b = new SplatBodyBuild
+            {
+                source = source,
+                splatCount = data.SplatCount,
+                vertices = new Vector3[vCount],
+                normals = new Vector3[vCount],
+                quadUV = new Vector2[vCount],
+                centers = new Vector4[vCount],
+                simUV = new Vector2[vCount],
+                indices = data.Indices,
+                homes = new Vector3[samples.Length]
+            };
+            for (int i = 0; i < vCount; i++)
+            {
+                b.vertices[i] = new Vector3(data.VerticesXYZ[i * 3], data.VerticesXYZ[i * 3 + 1], data.VerticesXYZ[i * 3 + 2]);
+                b.normals[i] = new Vector3(data.NormalsXYZ[i * 3], data.NormalsXYZ[i * 3 + 1], data.NormalsXYZ[i * 3 + 2]);
+                b.quadUV[i] = new Vector2(data.QuadUV[i * 2], data.QuadUV[i * 2 + 1]);
+                b.centers[i] = new Vector4(data.CenterAndFlagsXYZW[i * 4], data.CenterAndFlagsXYZW[i * 4 + 1], data.CenterAndFlagsXYZW[i * 4 + 2], data.CenterAndFlagsXYZW[i * 4 + 3]);
             }
+            for (int i = 0; i < samples.Length; i++)
+            {
+                b.homes[i] = new Vector3(samples[i].CenterX, samples[i].CenterY, samples[i].CenterZ);
+                Vector2 texel = SplatSimRunner.TexelFor(i);
+                for (int c = 0; c < 4; c++) b.simUV[i * 4 + c] = texel;
+            }
+            if (particlesPerCluster > 0) b.plan = SplatSimRunner.Plan(b.homes, particlesPerCluster);
+            return b;
+        }
+
+        public void ApplyBuild(SplatBodyBuild b, bool startHidden)
+        {
+            EnsureComponents();
+            sourceMesh = b.source;
+            _splatCount = b.splatCount;
+            if (_cloudMesh == null)
+                _cloudMesh = new Mesh { name = gameObject.name + "_SplatCloud", indexFormat = IndexFormat.UInt32 };
             else
             {
                 _cloudMesh.Clear();
                 _cloudMesh.indexFormat = IndexFormat.UInt32;
             }
-
-            int vCount = data.VerticesXYZ.Length / 3;
-            var verts = new Vector3[vCount];
-            var norms = new Vector3[vCount];
-            var uvs = new Vector2[vCount];
-            var centers = new Vector4[vCount];
-
-            for (int i = 0; i < vCount; i++)
-            {
-                verts[i] = new Vector3(data.VerticesXYZ[i * 3], data.VerticesXYZ[i * 3 + 1], data.VerticesXYZ[i * 3 + 2]);
-                norms[i] = new Vector3(data.NormalsXYZ[i * 3], data.NormalsXYZ[i * 3 + 1], data.NormalsXYZ[i * 3 + 2]);
-                uvs[i] = new Vector2(data.QuadUV[i * 2], data.QuadUV[i * 2 + 1]);
-                centers[i] = new Vector4(data.CenterAndFlagsXYZW[i * 4], data.CenterAndFlagsXYZW[i * 4 + 1], data.CenterAndFlagsXYZW[i * 4 + 2], data.CenterAndFlagsXYZW[i * 4 + 3]);
-            }
-
-            _cloudMesh.vertices = verts;
-            _cloudMesh.normals = norms;
-            _cloudMesh.uv = uvs;
-            _cloudMesh.SetUVs(1, centers);
-
-            _homes = new Vector3[samples.Length];
-            var simUV = new Vector2[vCount];
-            for (int i = 0; i < samples.Length; i++)
-            {
-                _homes[i] = new Vector3(samples[i].CenterX, samples[i].CenterY, samples[i].CenterZ);
-                Vector2 texel = SplatSimRunner.TexelFor(i);
-                for (int c = 0; c < 4; c++) simUV[i * 4 + c] = texel;
-            }
-            _cloudMesh.SetUVs(2, simUV);
+            _cloudMesh.SetVertices(b.vertices);
+            _cloudMesh.SetNormals(b.normals);
+            _cloudMesh.SetUVs(0, b.quadUV);
+            _cloudMesh.SetUVs(1, b.centers);
+            _cloudMesh.SetUVs(2, b.simUV);
+            _cloudMesh.SetTriangles(b.indices, 0, true);
+            _cloudMesh.bounds = new Bounds(_cloudMesh.bounds.center, _cloudMesh.bounds.size + Vector3.one * 4f);
+            _homes = b.homes;
             _sim?.Dispose();
             _sim = null;
-            _cloudMesh.SetTriangles(data.Indices, 0, true);
-            _cloudMesh.bounds = new Bounds(_cloudMesh.bounds.center, _cloudMesh.bounds.size + Vector3.one * 4f);
-
+            if (b.plan != null)
+            {
+                _sim = new SplatSimRunner(b.plan);
+                _simClusterSize = b.plan.perCluster;
+                if (startHidden) _sim.Hide();
+            }
             _filter.sharedMesh = _cloudMesh;
             if (splatMaterial != null) _renderer.sharedMaterial = splatMaterial;
         }
 
-        public void ApplyPigmentState(
-            Texture atlas,
-            FlipbookLayout layout,
-            float currentFrame,
-            bool hasSlot,
-            TwoTonePalette palette,
-            float scale,
-            float intensity,
-            bool outlineEnabled)
+        static Vector4 LayoutVector(FlipbookLayout layout)
+        {
+            float halfTexel = layout.Tile > 0 ? 0.5f / layout.Tile : 0.5f / 256f;
+            return new Vector4(Mathf.Max(1, layout.Cols), Mathf.Max(1, layout.Rows), halfTexel, Mathf.Max(1, layout.Frames));
+        }
+
+        public void ApplyState(in SplatSurfaceState s)
         {
             EnsureComponents();
             if (_cloudMesh == null && sourceMesh != null) Rebuild();
             _block.Clear();
-            if (atlas != null) _block.SetTexture(PropAtlas, atlas);
-            float halfTexel = layout.Tile > 0 ? 0.5f / layout.Tile : 0.5f / 256f;
-            float spatialScale = scale / Mathf.Max(0.01f, letterSize);
-            _block.SetVector(PropLayout, new Vector4(Mathf.Max(1, layout.Cols), Mathf.Max(1, layout.Rows), halfTexel, Mathf.Max(1, layout.Frames)));
-            _block.SetFloat(PropFrame, currentFrame);
-            _block.SetFloat(PropHasSlot, hasSlot && atlas != null ? 1f : 0f);
+            SplatSurfaceMaterial cur = s.current;
+            bool hasCur = cur != null && cur.texture != null;
+            if (hasCur)
+            {
+                _block.SetTexture(PropAtlas, cur.texture);
+                _block.SetVector(PropLayout, LayoutVector(cur.layout));
+                _block.SetVector(PropAtlasCrop, cur.crop);
+                _block.SetColor(PropLightTone, new Color(cur.palette.LightR, cur.palette.LightG, cur.palette.LightB, 1f));
+                _block.SetColor(PropShadowTone, new Color(cur.palette.ShadowR, cur.palette.ShadowG, cur.palette.ShadowB, 1f));
+                _block.SetFloat(PropThreshold, cur.palette.Threshold);
+                if (cur.calm != null) _block.SetTexture(PropCalm, cur.calm);
+                if (cur.spark != null) _block.SetTexture(PropSpark, cur.spark);
+            }
+            _block.SetFloat(PropFrame, s.currentFrame);
+            _block.SetFloat(PropHasSlot, hasCur ? 1f : 0f);
+            _block.SetFloat(PropCropOn, hasCur && cur.mirrorTiled ? 1f : 0f);
+
+            SplatSurfaceMaterial prev = s.previous;
+            bool hasPrev = prev != null && prev.texture != null;
+            if (hasPrev)
+            {
+                _block.SetTexture(PropAtlas2, prev.texture);
+                _block.SetVector(PropLayout2, LayoutVector(prev.layout));
+                _block.SetVector(PropCrop2, prev.crop);
+                if (prev.calm != null) _block.SetTexture(PropCalm2, prev.calm);
+                if (prev.spark != null) _block.SetTexture(PropSpark2, prev.spark);
+            }
+            _block.SetVector(PropSlot2b, new Vector4(hasPrev ? prev.ResolveMode(-1) : 0f, 0f, 0f, 0f));
+            _block.SetVector(PropSlot2, new Vector4(s.previousFrame, hasPrev ? 1f : 0f, hasPrev && prev.mirrorTiled ? 1f : 0f, hasPrev ? prev.gamma : 1f));
+            _block.SetVector(PropApply, hasPrev ? s.apply : SplatSurfaceState.NoApply);
+            _block.SetVector(PropApplyShape, s.applyShape);
+            _block.SetFloat(PropSplatTime, s.time);
+
             _block.SetFloat(PropMode, (float)shaderMode);
-            _block.SetFloat(PropScale, spatialScale);
-            _block.SetFloat(PropIntensity, intensity);
-            _block.SetColor(PropLightTone, new Color(palette.LightR, palette.LightG, palette.LightB, 1f));
-            _block.SetColor(PropShadowTone, new Color(palette.ShadowR, palette.ShadowG, palette.ShadowB, 1f));
-            _block.SetFloat(PropThreshold, palette.Threshold);
-            _block.SetFloat(PropOutline, outlineEnabled ? 1f : 0f);
+            _block.SetFloat(PropScale, s.triplanarScale / Mathf.Max(0.01f, letterSize));
+            _block.SetFloat(PropIntensity, s.intensity);
+            _block.SetFloat(PropOutline, s.outline ? 1f : 0f);
             bool simOn = _sim != null && _sim.DrivesShader;
             if (simOn) _block.SetTexture(PropSimTex, _sim.Texture);
             _block.SetFloat(PropSimOn, simOn ? 1f : 0f);
-            _block.SetVector(PropFlowParams, new Vector4(_look.flowAmplitude, _look.flowSpeed, _look.contrast, _cropGamma));
-            _block.SetVector(PropAtlasCrop, _crop);
-            _block.SetFloat(PropCropOn, _cropOn ? 1f : 0f);
+            _block.SetVector(PropFlowParams, new Vector4(_look.flowAmplitude, _look.flowSpeed, _look.contrast, hasCur ? cur.gamma : 1f));
             _block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, _look.detachDistance), _look.stretchSeconds, _look.stretchMax, _look.grain));
             _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, _look.overlay, 0f));
             _block.SetVector(PropGlintParams, new Vector4(_look.glintAmount, _look.glintSpeed, _look.glintScale, _look.glintRough));

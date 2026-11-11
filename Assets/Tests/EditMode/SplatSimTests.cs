@@ -277,5 +277,116 @@ namespace MoodPicker.Tests
             foreach (int n in count) Assert.That(n, Is.GreaterThan(0));
             foreach (float r in cl.Radius) Assert.That(r, Is.LessThan(0.04f));
         }
+    
+        static void Burst(SplatSimReference sim, SplatSimParams p, float speed, float seconds)
+        {
+            sim.BeginBurst(speed);
+            var none = new SplatCollider[0];
+            int steps = (int)math.round(seconds / Dt);
+            for (int i = 0; i < steps; i++) sim.Step(Frame(SplatSimMode.Bursting, i * Dt), p, none, 0);
+        }
+
+        static float MeanDisplacement(SplatSimReference sim)
+        {
+            float sum = 0f;
+            foreach (SplatParticle s in sim.Particles) sum += math.length(s.displacement);
+            return sum / sim.Particles.Length;
+        }
+
+        static SplatFeel Mid => new SplatFeel { weight = 0.5f, cohesion = 0.5f, viscosity = 0.5f, bounce = 0.5f, grain = 0.5f };
+
+        static SplatSimParams With(SplatFeel f)
+        {
+            SplatSimParams p = SplatSimParams.WaterDroplet;
+            SplatFeelMap.Apply(f, ref p);
+            return p;
+        }
+
+        [Test]
+        public void EachFeelValuePushesItsOwnDirection()
+        {
+            SplatFeel lo = Mid, hi = Mid;
+            lo.weight = 0.1f; hi.weight = 0.9f;
+            Assert.That(With(hi).fallGravity, Is.GreaterThan(With(lo).fallGravity));
+            Assert.That(With(hi).burstGravity, Is.GreaterThan(With(lo).burstGravity));
+            lo = Mid; hi = Mid; lo.cohesion = 0.1f; hi.cohesion = 0.9f;
+            Assert.That(With(hi).cohesion, Is.GreaterThan(With(lo).cohesion));
+            Assert.That(With(hi).clusterViscosity, Is.GreaterThan(With(lo).clusterViscosity));
+            lo = Mid; hi = Mid; lo.viscosity = 0.1f; hi.viscosity = 0.9f;
+            Assert.That(With(hi).homeDamping, Is.GreaterThan(With(lo).homeDamping));
+            lo = Mid; hi = Mid; lo.bounce = 0.1f; hi.bounce = 0.9f;
+            Assert.That(With(hi).homeStiffness, Is.GreaterThan(With(lo).homeStiffness));
+            lo = Mid; hi = Mid; lo.grain = 0.1f; hi.grain = 0.9f;
+            Assert.That(SplatFeelMap.Look(hi).grain, Is.LessThan(SplatFeelMap.Look(lo).grain));
+            Assert.That(SplatFeelMap.Look(hi).stretchMax, Is.LessThan(SplatFeelMap.Look(lo).stretchMax));
+        }
+
+        [Test]
+        public void WaterIsWhatTheHumanFoundInTheHeadset()
+        {
+            SplatFeel w = SplatFeel.Water;
+            Assert.That(new[] { w.weight, w.cohesion, w.viscosity, w.bounce, w.grain }, Is.EqualTo(new[] { 0.2f, 0.2f, 0.1f, 0.2f, 1f }));
+        }
+
+        [Test]
+        public void CohesiveBurstHoldsTogetherInBlobsWhileLooseOneScatters()
+        {
+            SplatFeel tight = Mid, loose = Mid;
+            tight.cohesion = 1f;
+            loose.cohesion = 0f;
+            var w = new SplatSimReference(Sheet(30, 0.003f), 9);
+            var g = new SplatSimReference(Sheet(30, 0.003f), 9);
+            Burst(w, With(tight), 0.6f, 0.4f);
+            Burst(g, With(loose), 0.6f, 0.4f);
+            Assert.That(MeanDisplacement(w), Is.GreaterThan(0.02f));
+            Assert.That(MeanClusterSpread(w), Is.LessThan(MeanClusterSpread(g) * 0.8f));
+        }
+
+        [Test]
+        public void ShapeMappingKeepsRelativePlacement()
+        {
+            float3[] from = Sheet(20, 0.004f);
+            var to = new float3[from.Length];
+            for (int i = 0; i < to.Length; i++) to[i] = from[i] * 1.5f + new float3(0.3f, 0f, 0f);
+            int[] map = SplatSimSetup.MapByShape(from, to, SplatSimSetup.Hashes(to));
+            float err = 0f;
+            for (int i = 0; i < to.Length; i++) err += math.length((to[i] - new float3(0.3f, 0f, 0f)) / 1.5f - from[map[i]]);
+            Assert.That(err / to.Length, Is.LessThan(0.006f));
+        }
+
+        [Test]
+        public void MorphBurstsInPlaceThenGathersIntoTheNewShape()
+        {
+            SplatSimParams p = SplatSimParams.WaterDroplet;
+            SplatFeelMap.Apply(SplatFeel.Water, ref p);
+            p.weight = 0f;
+            var oldSim = new SplatSimReference(Sheet(24, 0.004f), 8);
+            Burst(oldSim, p, 0.6f, 0.35f);
+            Assert.That(MeanDisplacement(oldSim), Is.GreaterThan(0.03f));
+
+            var worldPos = new float3[oldSim.Particles.Length];
+            var worldVel = new float3[oldSim.Particles.Length];
+            for (int i = 0; i < worldPos.Length; i++)
+            {
+                worldPos[i] = oldSim.Homes[i] + oldSim.Particles[i].displacement;
+                worldVel[i] = oldSim.Particles[i].velocity;
+            }
+            var ring = new float3[700];
+            for (int i = 0; i < ring.Length; i++)
+            {
+                float a = i * 6.2831853f / ring.Length;
+                ring[i] = new float3(math.cos(a), math.sin(a), 0f) * (0.04f + 0.006f * (i % 3));
+            }
+            var newSim = new SplatSimReference(ring, 6);
+            newSim.SeedFrom(worldPos, worldVel, SplatSimSetup.MapByShape(oldSim.Homes, ring, newSim.Hash));
+            float last = SplatSimSetup.GatherArrivals(newSim.Homes, newSim.Hash, newSim.Arrival, 0.6f);
+            Assert.That(MeanDisplacement(newSim), Is.GreaterThan(0.02f));
+
+            var none = new SplatCollider[0];
+            int steps = (int)((last + 3f) / Dt);
+            for (int i = 0; i < steps; i++) newSim.Step(Frame(SplatSimMode.Gathering, i * Dt), p, none, 0);
+            Assert.That(MeanDisplacement(newSim), Is.LessThan(0.002f));
+            foreach (SplatParticle s in newSim.Particles) Assert.That(math.all(math.isfinite(s.displacement)), Is.True);
+        }
     }
 }

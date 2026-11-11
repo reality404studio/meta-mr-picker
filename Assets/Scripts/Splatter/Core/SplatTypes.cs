@@ -8,7 +8,8 @@ namespace MoodPicker.Splatter
         TwoToneCel = 1,
         Glint = 2,
         Chrome = 3,
-        Caustic = 4
+        Caustic = 4,
+        Light = 5
     }
 
     public struct SplatSample

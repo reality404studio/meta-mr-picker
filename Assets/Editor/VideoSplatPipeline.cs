@@ -47,6 +47,54 @@ public static class VideoSplatPipeline
         EditorApplication.Exit(code);
     }
 
+    public static void BuildLightLayers(SplatPigmentSlotAsset slot, string outputDir = DefaultSlotDir)
+    {
+        string atlasPath = AssetDatabase.GetAssetPath(slot.atlasTexture);
+        var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
+        ImageConversion.LoadImage(tex, File.ReadAllBytes(atlasPath), false);
+        Color32[] px = tex.GetPixels32();
+        var rgba = new byte[px.Length * 4];
+        for (int i = 0; i < px.Length; i++)
+        {
+            rgba[i * 4] = px[i].r;
+            rgba[i * 4 + 1] = px[i].g;
+            rgba[i * 4 + 2] = px[i].b;
+            rgba[i * 4 + 3] = 255;
+        }
+        FlipbookLayout layout = slot.ToLayout();
+        LightLayersResult result = LightLayers.Build(rgba, layout);
+        UnityEngine.Object.DestroyImmediate(tex);
+
+        string calmPath = $"{outputDir}/{slot.sourceName}_Calm.png";
+        string sparkPath = $"{outputDir}/{slot.sourceName}_Spark.png";
+        WritePng(calmPath, result.CalmRgba, layout.Tile, layout.Tile, TextureWrapMode.Repeat);
+        WritePng(sparkPath, result.SparkRgba, layout.Width, layout.Height, TextureWrapMode.Clamp);
+        slot.calmTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(calmPath);
+        slot.sparkTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(sparkPath);
+        EditorUtility.SetDirty(slot);
+        Debug.Log($"[VideoSplat] {slot.sourceName}: light layers calm={layout.Tile}px spark={layout.Width}x{layout.Height} cover={result.SparkCover:P2}");
+    }
+
+    static void WritePng(string path, byte[] rgba, int w, int h, TextureWrapMode wrap)
+    {
+        var t = new Texture2D(w, h, TextureFormat.RGBA32, false, true);
+        t.SetPixelData(rgba, 0);
+        t.Apply(false, false);
+        File.WriteAllBytes(path, t.EncodeToPNG());
+        UnityEngine.Object.DestroyImmediate(t);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        if (AssetImporter.GetAtPath(path) is TextureImporter importer)
+        {
+            importer.sRGBTexture = false;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = wrap;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.maxTextureSize = 2048;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.SaveAndReimport();
+        }
+    }
+
     public static SplatPigmentSlotAsset BuildSlotAssetFromFrames(
         string assetBaseName,
         string framesDir,

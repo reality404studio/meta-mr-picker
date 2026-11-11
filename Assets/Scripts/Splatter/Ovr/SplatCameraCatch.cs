@@ -1,3 +1,4 @@
+using System;
 using Meta.XR;
 using UnityEngine;
 
@@ -9,13 +10,11 @@ namespace MoodPicker.Splatter
         const int CaughtSize = 512;
 
         [SerializeField] SplatWordController wordController;
+        [SerializeField] SplatShelf shelf;
         [SerializeField] SplatTuning tuning;
         [SerializeField] PassthroughCameraAccess cameraAccess;
 
-        static readonly Vector4 WholeTexture = new Vector4(1f, 1f, 0f, 0f);
-
-        RenderTexture _caught;
-        bool _showingCaught;
+        readonly SplatSurfaceMaterial _live = new SplatSurfaceMaterial { label = "live", mirrorTiled = true };
         bool _catchRequested;
         bool _loggedLive;
 
@@ -33,7 +32,7 @@ namespace MoodPicker.Splatter
             tuning.ReleaseCatchRequested -= ReleaseCatch;
         }
 
-        void RequestCatch()
+        public void RequestCatch()
         {
             _catchRequested = true;
             if (tuning != null) tuning.liveCamera = true;
@@ -41,7 +40,6 @@ namespace MoodPicker.Splatter
 
         void ReleaseCatch()
         {
-            _showingCaught = false;
             _catchRequested = false;
             if (tuning != null) tuning.liveCamera = false;
         }
@@ -54,12 +52,6 @@ namespace MoodPicker.Splatter
             return new Vector4(sx, sy, (1f - sx) * 0.5f, (1f - sy) * 0.5f);
         }
 
-        void ShowIdle()
-        {
-            if (_showingCaught && _caught != null) wordController.SetOverrideTexture(_caught, WholeTexture, tuning.cameraGamma);
-            else wordController.ClearOverrideTexture();
-        }
-
         void Update()
         {
             if (tuning == null || cameraAccess == null || wordController == null) return;
@@ -70,20 +62,15 @@ namespace MoodPicker.Splatter
                 _loggedLive = false;
                 Debug.Log($"{Tag} camera live={live}");
             }
-            if (!live)
+            if (!live || !cameraAccess.IsPlaying)
             {
-                ShowIdle();
-                return;
-            }
-            if (!cameraAccess.IsPlaying)
-            {
-                ShowIdle();
+                wordController.ClearPreview();
                 return;
             }
             Texture texture = cameraAccess.GetTexture();
             if (texture == null)
             {
-                ShowIdle();
+                wordController.ClearPreview();
                 return;
             }
 
@@ -96,27 +83,24 @@ namespace MoodPicker.Splatter
             if (_catchRequested)
             {
                 _catchRequested = false;
-                if (_caught == null)
+                var caught = new RenderTexture(CaughtSize, CaughtSize, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
                 {
-                    _caught = new RenderTexture(CaughtSize, CaughtSize, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
-                    {
-                        name = "SplatCaught",
-                        wrapMode = TextureWrapMode.Clamp,
-                        filterMode = FilterMode.Bilinear
-                    };
-                }
-                Graphics.Blit(texture, _caught, new Vector2(crop.x, crop.y), new Vector2(crop.z, crop.w));
-                _showingCaught = true;
+                    name = "SplatCaught",
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear
+                };
+                Graphics.Blit(texture, caught, new Vector2(crop.x, crop.y), new Vector2(crop.z, crop.w));
+                string label = SplatStillNames.Label(DateTime.Now);
+                if (shelf != null) shelf.Add(SplatSurfaceMaterial.FromStill(caught, label, SplatSurfaceMaterial.WholeTexture, tuning.cameraGamma, true));
                 tuning.liveCamera = false;
-                Debug.Log($"{Tag} catch still {CaughtSize}px from {texture.width}x{texture.height} crop={crop}");
+                wordController.ClearPreview();
+                Debug.Log($"{Tag} catch still {CaughtSize}px from {texture.width}x{texture.height} crop={crop} -> shelf {label}");
                 return;
             }
-            wordController.SetOverrideTexture(texture, crop, tuning.cameraGamma);
-        }
-
-        void OnDestroy()
-        {
-            if (_caught != null) Destroy(_caught);
+            _live.texture = texture;
+            _live.crop = crop;
+            _live.gamma = tuning.cameraGamma;
+            wordController.SetPreview(_live);
         }
     }
 }

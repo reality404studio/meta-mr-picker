@@ -82,17 +82,20 @@ namespace MoodPicker.Splatter.Sim
             in SplatSimFrame f,
             in SplatSimParams p)
         {
-            if (f.mode != (int)SplatSimMode.Formed)
+            bool bursting = f.mode == (int)SplatSimMode.Bursting;
+            bool springing = f.mode == (int)SplatSimMode.Formed || f.mode == (int)SplatSimMode.Gathering;
+            if (!bursting && !springing)
             {
                 node.displacement = float3.zero;
                 node.velocity = float3.zero;
                 return;
             }
 
-            float3 a = ClampLength(-node.displacement * p.clusterStiffness, p.maxSpringAccel) + hand.accel;
-            a.y -= p.weight;
+            float3 a = hand.accel;
+            if (springing) a += ClampLength(-node.displacement * p.clusterStiffness, p.maxSpringAccel);
+            a.y -= bursting ? p.burstGravity : p.weight;
             node.velocity += a * f.dt;
-            node.velocity *= math.exp(-p.clusterDamping * f.dt);
+            node.velocity *= math.exp(-(bursting ? p.burstDamping : p.clusterDamping) * f.dt);
             node.velocity = ClampLength(node.velocity, p.maxSpeed);
             node.displacement += node.velocity * f.dt;
         }
@@ -144,10 +147,21 @@ namespace MoodPicker.Splatter.Sim
             }
 
             bool released = f.mode == (int)SplatSimMode.Dissolving && f.modeTime >= arrival;
+            bool bursting = f.mode == (int)SplatSimMode.Bursting;
             float3 accel = hand.accel;
             float damping;
 
-            if (released)
+            if (bursting)
+            {
+                float3 rel = homeWorld - clusterHomeWorld;
+                float3 cohesive = clusterHomeWorld + cluster.displacement + rel * p.clusterGather;
+                accel += ClampLength((cohesive - pos) * (p.clusterStiffness * p.cohesion), p.maxSpringAccel * 2f);
+                accel += (cluster.velocity - s.velocity) * (p.clusterViscosity * p.cohesion);
+                accel.y -= p.burstGravity;
+                damping = p.burstDamping;
+                s.stick = 0f;
+            }
+            else if (released)
             {
                 float3 drift = HashDirection(hash);
                 accel += new float3(drift.x, -1f, drift.z * 0.6f) * new float3(p.fallGravity * 0.12f, p.fallGravity, p.fallGravity * 0.12f);
@@ -161,6 +175,8 @@ namespace MoodPicker.Splatter.Sim
                 float3 cohesive = clusterHomeWorld + cluster.displacement + rel * gather;
                 float3 target = math.lerp(homeWorld, cohesive, p.cohesion);
                 float k = p.homeStiffness * (1f + p.stiffnessJitter * (hash * 2f - 1f));
+                if (f.mode == (int)SplatSimMode.Gathering)
+                    k *= math.saturate((f.modeTime - arrival) / math.max(p.gatherRamp, 1e-3f));
                 float3 spring = ClampLength((target - pos) * k, p.maxSpringAccel);
 
                 if (IsSticky(hash, p.stickFraction))

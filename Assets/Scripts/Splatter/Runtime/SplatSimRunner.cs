@@ -81,25 +81,38 @@ namespace MoodPicker.Splatter
 
         public void Execute()
         {
-            float activity = 0f;
+            float offset = 0f;
+            float speed = 0f;
             float visible = 0f;
             for (int i = 0; i < count; i++)
             {
                 float4 a = texels[i * 2];
                 float4 b = texels[i * 2 + 1];
-                activity = math.max(activity, math.max(math.lengthsq(a.xyz), math.lengthsq(b.xyz) * 0.01f));
+                offset = math.max(offset, math.lengthsq(a.xyz));
+                speed = math.max(speed, math.lengthsq(b.xyz));
                 visible = math.max(visible, a.w);
             }
-            result[0] = activity;
+            result[0] = math.max(offset, speed * 0.01f);
             result[1] = visible;
+            result[2] = speed;
+            result[3] = offset;
         }
+    }
+
+    public sealed class SplatSimPlan
+    {
+        public float3[] homes;
+        public float[] hash;
+        public SplatClusters clusters;
+        public int perCluster;
     }
 
     public sealed class SplatSimRunner : IDisposable
     {
         public const int TextureWidth = 256;
         public const int MaxColliders = 16;
-        const float SleepActivity = 1e-8f;
+        const float SleepSpeedSq = 4e-6f;
+        const float RestOffsetSq = 1e-8f;
         const int SleepFrames = 12;
 
         readonly int _count;
@@ -125,6 +138,7 @@ namespace MoodPicker.Splatter
         Texture2D _texture;
         float3x4 _prevBody;
         bool _hasPrevBody;
+        bool _keepPose;
         bool _asleep = true;
         bool _dirty;
         int _quietFrames;
@@ -134,7 +148,7 @@ namespace MoodPicker.Splatter
         public SplatSimMode Mode { get; private set; } = SplatSimMode.Formed;
         public bool Frozen { get; set; }
         public bool Asleep => _asleep;
-        public bool DrivesShader => !_asleep || Mode != SplatSimMode.Formed;
+        public bool DrivesShader => !_asleep || Mode != SplatSimMode.Formed || _keepPose;
         public Texture2D Texture => _texture;
         public int Count => _count;
         public int ClusterCount => _nodes.Length;
@@ -144,29 +158,74 @@ namespace MoodPicker.Splatter
         public bool LastTouching { get; private set; }
         public int WakeCount { get; private set; }
 
+        public Vector3 HomeCenter => _boundsCenter;
+        public float HomeRadius => _boundsRadius;
+
+        public float NearestHome(Vector3 bodyPoint, out Vector3 nearest)
+        {
+            float3 p = bodyPoint;
+            float best = float.MaxValue;
+            int index = -1;
+            for (int i = 0; i < _count; i++)
+            {
+                float d = math.lengthsq(_homesManaged[i] - p);
+                if (d < best)
+                {
+                    best = d;
+                    index = i;
+                }
+            }
+            nearest = index >= 0 ? (Vector3)_homesManaged[index] : bodyPoint;
+            return index >= 0 ? math.sqrt(best) : float.MaxValue;
+        }
+
+        public float MaxHomeDistance(Vector3 bodyPoint)
+        {
+            float3 p = bodyPoint;
+            float best = 0f;
+            for (int i = 0; i < _count; i++) best = math.max(best, math.lengthsq(_homesManaged[i] - p));
+            return math.sqrt(best);
+        }
+
         public static Vector2 TexelFor(int particle)
         {
             int t = particle * 2;
             return new Vector2(t % TextureWidth, t / TextureWidth);
         }
 
-        public SplatSimRunner(Vector3[] homesBody, int particlesPerCluster)
+        public static SplatSimPlan Plan(Vector3[] homesBody, int particlesPerCluster)
         {
-            _count = homesBody.Length;
-            _homesManaged = new float3[_count];
+            var homes = new float3[homesBody.Length];
+            for (int i = 0; i < homes.Length; i++) homes[i] = homesBody[i];
+            return new SplatSimPlan
+            {
+                homes = homes,
+                hash = SplatSimSetup.Hashes(homes),
+                clusters = SplatSimSetup.BuildClusters(homes, SplatSimSetup.ClusterCountFor(homes.Length, particlesPerCluster)),
+                perCluster = particlesPerCluster
+            };
+        }
+
+        public SplatSimRunner(Vector3[] homesBody, int particlesPerCluster) : this(Plan(homesBody, particlesPerCluster))
+        {
+        }
+
+        public SplatSimRunner(SplatSimPlan plan)
+        {
+            _count = plan.homes.Length;
+            _homesManaged = plan.homes;
             float3 lo = new float3(float.MaxValue);
             float3 hi = new float3(float.MinValue);
             for (int i = 0; i < _count; i++)
             {
-                _homesManaged[i] = homesBody[i];
                 lo = math.min(lo, _homesManaged[i]);
                 hi = math.max(hi, _homesManaged[i]);
             }
             _boundsCenter = (lo + hi) * 0.5f;
             _boundsRadius = math.length(hi - lo) * 0.5f;
-            _hashManaged = SplatSimSetup.Hashes(_homesManaged);
+            _hashManaged = plan.hash;
             _arrivalManaged = new float[_count];
-            SplatClusters clusters = SplatSimSetup.BuildClusters(_homesManaged, SplatSimSetup.ClusterCountFor(_count, particlesPerCluster));
+            SplatClusters clusters = plan.clusters;
 
             _home = new NativeArray<float3>(_homesManaged, Allocator.Persistent);
             _hash = new NativeArray<float>(_hashManaged, Allocator.Persistent);
@@ -178,7 +237,7 @@ namespace MoodPicker.Splatter
             _clusterRadius = new NativeArray<float>(clusters.Radius, Allocator.Persistent);
             _nodes = new NativeArray<SplatClusterNode>(clusters.Count, Allocator.Persistent);
             _colliders = new NativeArray<SplatCollider>(MaxColliders, Allocator.Persistent);
-            _result = new NativeArray<float>(2, Allocator.Persistent);
+            _result = new NativeArray<float>(4, Allocator.Persistent);
             for (int c = 0; c < clusters.Count; c++) _maxClusterRadius = math.max(_maxClusterRadius, clusters.Radius[c]);
 
             int height = math.max(1, (_count * 2 + TextureWidth - 1) / TextureWidth);
@@ -196,6 +255,7 @@ namespace MoodPicker.Splatter
 
         void ResetState(float scale)
         {
+            _keepPose = false;
             for (int i = 0; i < _count; i++)
             {
                 _texels[i * 2] = new float4(0f, 0f, 0f, scale);
@@ -221,6 +281,66 @@ namespace MoodPicker.Splatter
             _modeTime = 0f;
             _modeEnd = last + settleSeconds;
             Wake();
+        }
+
+        public float3[] HomesBody => _homesManaged;
+        public float ModeTime => _modeTime;
+
+        public void BeginBurst(Matrix4x4 bodyToWorld, float speed)
+        {
+            float3[] v = SplatSimSetup.BurstVelocities(_homesManaged, _hashManaged, speed);
+            for (int i = 0; i < _count; i++)
+            {
+                Vector3 w = bodyToWorld.MultiplyVector(v[i]);
+                float4 a = _texels[i * 2];
+                _texels[i * 2] = new float4(a.xyz, math.max(a.w, 1f));
+                _texels[i * 2 + 1] = new float4(w.x, w.y, w.z, 0f);
+            }
+            float3 center = _boundsCenter;
+            for (int c = 0; c < _nodes.Length; c++)
+            {
+                Vector3 dir = bodyToWorld.MultiplyVector(math.normalizesafe(_clusterHome[c] - center, new float3(0f, 1f, 0f)));
+                _nodes[c] = new SplatClusterNode { displacement = _nodes[c].displacement, velocity = (float3)(Vector3)dir * speed };
+            }
+            Mode = SplatSimMode.Bursting;
+            _modeTime = 0f;
+            _modeEnd = float.MaxValue;
+            Wake();
+        }
+
+        public void CopyWorldState(Matrix4x4 bodyToWorld, out float3[] positions, out float3[] velocities)
+        {
+            positions = new float3[_count];
+            velocities = new float3[_count];
+            for (int i = 0; i < _count; i++)
+            {
+                float4 a = _texels[i * 2];
+                positions[i] = (float3)bodyToWorld.MultiplyPoint3x4(_homesManaged[i]) + a.xyz;
+                velocities[i] = _texels[i * 2 + 1].xyz;
+            }
+        }
+
+        public void SeedFrom(Matrix4x4 bodyToWorld, float3[] fromHomesBody, float3[] worldPositions, float3[] worldVelocities, float spreadSeconds, float settleSeconds, float ramp)
+        {
+            int[] map = SplatSimSetup.MapByShape(fromHomesBody, _homesManaged, _hashManaged);
+            for (int i = 0; i < _count; i++)
+            {
+                int j = map[i];
+                float3 home = bodyToWorld.MultiplyPoint3x4(_homesManaged[i]);
+                _texels[i * 2] = new float4(worldPositions[j] - home, 1f);
+                _texels[i * 2 + 1] = new float4(worldVelocities[j], 0f);
+                _stick[i] = 0f;
+            }
+            for (int c = 0; c < _nodes.Length; c++) _nodes[c] = default;
+            float last = SplatSimSetup.GatherArrivals(_homesManaged, _hashManaged, _arrivalManaged, spreadSeconds);
+            _arrival.CopyFrom(_arrivalManaged);
+            _prevBody = ToBody(bodyToWorld);
+            _hasPrevBody = true;
+            Mode = SplatSimMode.Gathering;
+            _modeTime = 0f;
+            _modeEnd = last + ramp + settleSeconds;
+            Wake();
+            Upload();
         }
 
         public void BeginDissolve(float sagSeconds, float spreadSeconds, float fallSeconds)
@@ -283,6 +403,7 @@ namespace MoodPicker.Splatter
             for (int j = 0; j < sourceCount && n < MaxColliders; j++)
             {
                 SplatCollider c = source[j];
+                if (c.strength <= 0f) continue;
                 float dist = math.distance(c.position, center);
                 float reach = (c.radius + _maxClusterRadius * scale * p.clusterReach) * p.attractShell;
                 if (dist < bounds + reach) touching = true;
@@ -364,7 +485,7 @@ namespace MoodPicker.Splatter
             Activity = _result[0];
             _dirty = true;
 
-            if (Mode == SplatSimMode.Summoning && _modeTime >= _modeEnd)
+            if ((Mode == SplatSimMode.Summoning || Mode == SplatSimMode.Gathering) && _modeTime >= _modeEnd)
             {
                 Mode = SplatSimMode.Formed;
             }
@@ -375,10 +496,11 @@ namespace MoodPicker.Splatter
             }
             else if (Mode == SplatSimMode.Formed)
             {
-                _quietFrames = !touching && Activity < SleepActivity ? _quietFrames + 1 : 0;
+                _quietFrames = !touching && _result[2] < SleepSpeedSq ? _quietFrames + 1 : 0;
                 if (_quietFrames >= SleepFrames)
                 {
-                    ResetState(1f);
+                    if (_result[3] < RestOffsetSq) ResetState(1f);
+                    else _keepPose = true;
                     _asleep = true;
                 }
             }

@@ -7,7 +7,9 @@ namespace MoodPicker.Splatter.Sim
         Formed = 0,
         Summoning = 1,
         Dissolving = 2,
-        Hidden = 3
+        Hidden = 3,
+        Bursting = 4,
+        Gathering = 5
     }
 
     public struct SplatSimParams
@@ -46,6 +48,9 @@ namespace MoodPicker.Splatter.Sim
         public float summonSwirl;
         public float appearSeconds;
         public float fadeDistance;
+        public float burstDamping;
+        public float burstGravity;
+        public float gatherRamp;
 
         public static SplatSimParams WaterDroplet => new SplatSimParams
         {
@@ -82,7 +87,10 @@ namespace MoodPicker.Splatter.Sim
             summonResponse = 30f,
             summonSwirl = 0.6f,
             appearSeconds = 0.12f,
-            fadeDistance = 0.5f
+            fadeDistance = 0.5f,
+            burstDamping = 2.2f,
+            burstGravity = 0.4f,
+            gatherRamp = 0.35f
         };
     }
 

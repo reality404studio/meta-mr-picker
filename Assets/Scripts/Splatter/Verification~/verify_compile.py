@@ -58,7 +58,8 @@ assemblies = root / "Library/ScriptAssemblies"
 sim_refs = [assemblies / "Unity.Mathematics.dll"]
 sim_dll = compile_assembly("MoodPicker.Splatter.Sim", sorted((root / "Assets/Scripts/Splatter/Sim").glob("*.cs")), pure_refs + sim_refs)
 runtime_refs = refs + [pigment_dll, splatter_dll, sim_dll] + sim_refs + [
-    assemblies / "Unity.Burst.dll", assemblies / "Unity.Collections.dll", assemblies / "Meta.XR.ImmersiveDebugger.Interface.dll"]
+    assemblies / "Unity.Burst.dll", assemblies / "Unity.Collections.dll", assemblies / "Meta.XR.ImmersiveDebugger.Interface.dll",
+    assemblies / "Unity.RenderPipelines.Universal.Runtime.dll", assemblies / "Unity.RenderPipelines.Core.Runtime.dll"]
 runtime_sources = sorted((root / "Assets/Scripts/Splatter/Runtime").glob("*.cs"))
 runtime_dll = compile_assembly("MoodPicker.Splatter.Runtime", runtime_sources, runtime_refs)
 hands_dll = compile_assembly("MoodPicker.Hands", sorted((root / "Assets/Scripts/Hands/Core").glob("*.cs")), refs)
@@ -73,6 +74,8 @@ if shader_path.exists():
     required_tokens = [
         "LOAD_TEXTURE2D_LOD(_SimTex",
         "(0, 1.2, 120, 0.45)",
+        "smoothstep(_Apply.w - _ApplyShape.x, _Apply.w",
+        "_SplatTime * _FlowParams.y",
         "SampleFlipbookTriplanar",
         "PerturbNormalFromHeightFiniteDiff",
         "UNITY_VERTEX_OUTPUT_STEREO",
@@ -80,6 +83,8 @@ if shader_path.exists():
         "mode == 1",
         "mode == 2",
         "mode == 3",
+        "mode == 5",
+        "ShadeLight(",
     ]
     missing = [tok for tok in required_tokens if tok not in shader_text]
     if missing:

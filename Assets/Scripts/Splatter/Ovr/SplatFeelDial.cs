@@ -93,6 +93,11 @@ namespace MoodPicker.Splatter
             _rows.Clear();
             if (tuning == null) return;
             SplatTuning t = tuning;
+            Row("Weight", () => t.feelWeight, v => { t.feelWeight = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Cohesion*", () => t.feelCohesion, v => { t.feelCohesion = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Viscosity*", () => t.feelViscosity, v => { t.feelViscosity = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Bounce", () => t.feelBounce, v => { t.feelBounce = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Row("Grain*", () => t.feelGrain, v => { t.feelGrain = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Spring", () => t.homeStiffness, v => t.homeStiffness = v, 20f, 600f, true);
             Row("Damping", () => t.homeDamping, v => t.homeDamping = v, 0.5f, 30f, true);
             Row("Return limit", () => t.maxSpringAccel, v => t.maxSpringAccel = v, 2f, 80f, true);
@@ -110,11 +115,15 @@ namespace MoodPicker.Splatter
             Row("Grain", () => t.grain, v => t.grain = v, 0.3f, 2f);
             Row("Stretch", () => t.stretchMax, v => t.stretchMax = v, 0f, 6f);
             Row("Overlay", () => t.overlay, v => t.overlay = v, 0f, 1f, false, 4);
+            Row("Spread speed", () => t.applySpeed, v => t.applySpeed = v, 0.05f, 1.5f, true);
             Row("Room dim", () => -t.passthroughBrightness, v => t.passthroughBrightness = -v, 0f, 1f);
-            Row("Look mode", () => t.shaderMode, v => t.shaderMode = Mathf.RoundToInt(v), 0f, 4f, false, 4);
+            Row("Look mode", () => t.shaderMode, v => t.shaderMode = Mathf.RoundToInt(v), -1f, 5f, false, 6);
             Toggle("Live camera", () => t.liveCamera, v => t.liveCamera = v);
             Command("Catch", t.Catch);
             Command("Release catch", t.ReleaseCatch);
+            Command("Next shape", t.NextShape);
+            Command("Freeze", t.Freeze);
+            Command("Save still", t.SaveStill);
             Command("Summon / dissolve", t.ToggleSummon);
             Command("Recenter", t.Recenter);
             _selected = Mathf.Clamp(_selected, 0, _rows.Count - 1);

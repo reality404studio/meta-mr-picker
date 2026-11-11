@@ -13,6 +13,17 @@ MonoBehaviour:
   m_Name: Slot0_IMG4392
   m_EditorClassIdentifier: MoodPicker.Splatter.Runtime::MoodPicker.Splatter.SplatPigmentSlotAsset
   sourceName: Slot0_IMG4392
+  capturedAt: 11.03  15:21
+  shaderMode: 0
+  hasFeel: 1
+  feel:
+    weight: 0.2
+    cohesion: 0.2
+    viscosity: 0.1
+    bounce: 0.2
+    grain: 1
+  calmTexture: {fileID: 0}
+  sparkTexture: {fileID: 0}
   atlasTexture: {fileID: 2800000, guid: 2fe61c11da5804f11b6e897e879a6a0e, type: 3}
   frames: 30
   cols: 6

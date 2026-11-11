@@ -12,6 +12,12 @@ namespace MoodPicker.Splatter
         public const string SavedFile = "tuning-saved.json";
         const string Tag = "[MP]";
 
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelWeight = 0.2f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelCohesion = 0.2f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelViscosity = 0.1f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelBounce = 0.2f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelGrain = 1f;
+
         [DebugMember(Category = "1 Spring", Min = 20f, Max = 600f)] public float homeStiffness = 180f;
         [DebugMember(Category = "1 Spring", Min = 0f, Max = 30f)] public float homeDamping = 5f;
         [DebugMember(Category = "1 Spring", Min = 0f, Max = 0.9f)] public float stiffnessJitter = 0.35f;
@@ -47,6 +53,9 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float bounce = 0.3f;
         [DebugMember(Category = "4 Weight", Min = 0.1f, Max = 1.5f)] public float floorBelow = 0.45f;
         [DebugMember(Category = "4 Weight", Min = 0.1f, Max = 1.5f)] public float fadeDistance = 0.5f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 10f)] public float burstDamping = 2.2f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 9.8f)] public float burstGravity = 0.4f;
+        [DebugMember(Category = "4 Weight", Min = 0.05f, Max = 1.5f)] public float gatherRamp = 0.35f;
 
         [DebugMember(Category = "5 Summon", Min = 0.2f, Max = 3f)] public float summonSpeed = 0.9f;
         [DebugMember(Category = "5 Summon", Min = 1f, Max = 20f)] public float summonEase = 6f;
@@ -56,7 +65,16 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "5 Summon", Min = 0f, Max = 1f)] public float dissolveSag = 0.2f;
         [DebugMember(Category = "5 Summon", Min = 0.05f, Max = 2f)] public float dissolveSpread = 0.4f;
 
-        [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public int shaderMode = 0;
+        [DebugMember(Category = "5 Summon", Min = 0.05f, Max = 1.5f)] public float applySpeed = 0.32f;
+        [DebugMember(Category = "5 Summon", Min = 0.005f, Max = 0.1f)] public float applyBand = 0.03f;
+        [DebugMember(Category = "5 Summon", Min = 0f, Max = 0.015f)] public float applyBulge = 0.004f;
+        [DebugMember(Category = "5 Summon", Min = 0f, Max = 1f)] public float applyLift = 0.15f;
+        [DebugMember(Category = "5 Summon", Min = 0.01f, Max = 0.08f)] public float grabReach = 0.035f;
+        [DebugMember(Category = "5 Summon", Min = 0.2f, Max = 1.2f)] public float contactFraction = 0.8f;
+        [DebugMember(Category = "5 Summon", Min = 0.1f, Max = 3f)] public float regrowSeconds = 0.9f;
+        [DebugMember(Category = "5 Summon", Min = 0.1f, Max = 1f)] public float pinchTapSeconds = 0.45f;
+
+        [DebugMember(Category = "6 Look", Min = -1f, Max = 5f)] public int shaderMode = -1;
         [DebugMember(Category = "6 Look", Min = 0.2f, Max = 4f)] public float triplanarScale = 1.15f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 2.5f)] public float intensity = 1.15f;
         [DebugMember(Category = "6 Look", Min = 0.5f, Max = 2.5f)] public float contrast = 1f;
@@ -100,6 +118,76 @@ namespace MoodPicker.Splatter
         public event Action ToggleRequested;
         public event Action CatchRequested;
         public event Action ReleaseCatchRequested;
+        public event Action ShapeRequested;
+        public event Action FreezeRequested;
+        public event Action StillRequested;
+
+        public SplatFeel CurrentFeel => new SplatFeel { weight = feelWeight, cohesion = feelCohesion, viscosity = feelViscosity, bounce = feelBounce, grain = feelGrain };
+
+        public void SetFeel(SplatFeel feel)
+        {
+            SplatFeel f = feel.Clamped;
+            feelWeight = f.weight;
+            feelCohesion = f.cohesion;
+            feelViscosity = f.viscosity;
+            feelBounce = f.bounce;
+            feelGrain = f.grain;
+            DeriveFromFeel();
+        }
+
+        public void DeriveFromFeel()
+        {
+            SplatSimParams p = ToSimParams(0f);
+            SplatFeelMap.Apply(CurrentFeel, ref p);
+            homeStiffness = p.homeStiffness;
+            homeDamping = p.homeDamping;
+            maxSpringAccel = p.maxSpringAccel;
+            cohesion = p.cohesion;
+            clusterStiffness = p.clusterStiffness;
+            clusterDamping = p.clusterDamping;
+            clusterViscosity = p.clusterViscosity;
+            clusterGather = p.clusterGather;
+            handPush = p.handPush;
+            handDrag = p.handDrag;
+            stickFraction = p.stickFraction;
+            weight = p.weight;
+            fallGravity = p.fallGravity;
+            fallDamping = p.fallDamping;
+            bounce = p.bounce;
+            burstDamping = p.burstDamping;
+            burstGravity = p.burstGravity;
+            gatherRamp = p.gatherRamp;
+            SplatFeelLook look = SplatFeelMap.Look(CurrentFeel);
+            grain = look.grain;
+            stretchMax = look.stretchMax;
+            stretchSeconds = look.stretchSeconds;
+        }
+
+        public SplatLook ToLook()
+        {
+            return new SplatLook
+            {
+                flowAmplitude = flowAmplitude,
+                flowSpeed = flowSpeed,
+                contrast = contrast,
+                detachDistance = detachDistance,
+                stretchSeconds = stretchSeconds,
+                stretchMax = stretchMax,
+                grain = grain,
+                glowGain = glowGain,
+                sparkle = sparkle,
+                overlay = overlay,
+                glintAmount = glintAmount,
+                glintSpeed = glintSpeed,
+                glintScale = glintScale,
+                glintRough = glintRough,
+                glintSharpness = glintSharpness,
+                glintSize = glintSize,
+                glintMaterial = glintMaterial
+            };
+        }
+
+        public Vector4 ApplyShape => new Vector4(applyBand, applyBulge, applyLift, 0f);
 
         public SplatSimParams ToSimParams(float floorWorldY)
         {
@@ -138,7 +226,10 @@ namespace MoodPicker.Splatter
                 summonResponse = 30f,
                 summonSwirl = summonSwirl,
                 appearSeconds = appearSeconds,
-                fadeDistance = fadeDistance
+                fadeDistance = fadeDistance,
+                burstDamping = burstDamping,
+                burstGravity = burstGravity,
+                gatherRamp = gatherRamp
             };
         }
 
@@ -152,6 +243,24 @@ namespace MoodPicker.Splatter
         public void ToggleSummon()
         {
             ToggleRequested?.Invoke();
+        }
+
+        [DebugMember(Category = "7 Run")]
+        public void NextShape()
+        {
+            ShapeRequested?.Invoke();
+        }
+
+        [DebugMember(Category = "7 Run")]
+        public void Freeze()
+        {
+            FreezeRequested?.Invoke();
+        }
+
+        [DebugMember(Category = "7 Run")]
+        public void SaveStill()
+        {
+            StillRequested?.Invoke();
         }
 
         [DebugMember(Category = "8 Catch")]

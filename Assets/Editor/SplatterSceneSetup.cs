@@ -21,6 +21,9 @@ public static class SplatterSceneSetup
     public const string LetterAGlbPath = "Assets/Models/LETTER_A.glb";
     public const string LetterUpperAGlbPath = "Assets/Models/LETTER_UPPER_A.glb";
     public const string ThreadsGlbPath = "Assets/Models/THREADS.glb";
+    public const string GlyphDir = "Assets/Models/Glyphs";
+    public const string ShapeDir = "Assets/Models/Shapes";
+    public const int ShapeLayer = 25;
 
     [MenuItem("Mood Picker/Setup Splatter Scene")]
     public static void Run()
@@ -96,23 +99,10 @@ public static class SplatterSceneSetup
         mso.FindProperty("rightHand").objectReferenceValue = rightSkel.GetComponent<OVRHand>();
         mso.ApplyModifiedPropertiesWithoutUndo();
 
-        var dialGo = new GameObject("FeelDial");
-        SceneManager.MoveGameObjectToScene(dialGo, scene);
         var dialFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         if (dialFont == null) throw new InvalidOperationException("LegacyRuntime.ttf 내장 폰트 없음");
-        var dialText = dialGo.AddComponent<TextMesh>();
-        dialText.font = dialFont;
-        dialText.fontSize = 60;
-        dialText.characterSize = 0.0016f;
+        TextMesh dialText = MakeText(scene, "FeelDial", dialFont, 0.0016f, TextAnchor.MiddleRight, "dial");
         dialText.richText = true;
-        dialText.anchor = TextAnchor.MiddleRight;
-        dialText.alignment = TextAlignment.Left;
-        dialText.color = new Color(0.94f, 0.93f, 0.90f, 1f);
-        dialText.text = "dial";
-        var dialRenderer = dialGo.GetComponent<MeshRenderer>();
-        dialRenderer.sharedMaterial = dialFont.material;
-        dialRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        dialRenderer.receiveShadows = false;
 
         var dial = upperAWord.AddComponent<SplatFeelDial>();
         var dso = new SerializedObject(dial);
@@ -122,6 +112,59 @@ public static class SplatterSceneSetup
         dso.FindProperty("anchor").objectReferenceValue = upperAWord.transform;
         dso.FindProperty("head").objectReferenceValue = centerEye;
         dso.ApplyModifiedPropertiesWithoutUndo();
+
+        var controller = upperAWord.GetComponent<SplatWordController>();
+        Mesh[] shapeMeshes = EnsureShapeCatalog(out string[] shapeNames);
+        Mesh blobMesh = EnsureShapeMesh("Blob", SplatShapeMeshes.Sphere("Blob", 0.026f, 40, 30));
+        Transform shapeBody = upperAWord.transform.Find("A");
+        shapeBody.gameObject.layer = ShapeLayer;
+        shapeBody.localRotation = Quaternion.Euler(0f, 180f, 0f);
+
+        var shelfGo = new GameObject("Shelf");
+        SceneManager.MoveGameObjectToScene(shelfGo, scene);
+        var shelf = shelfGo.AddComponent<SplatShelf>();
+        var shelfSo = new SerializedObject(shelf);
+        shelfSo.FindProperty("shape").objectReferenceValue = controller;
+        shelfSo.FindProperty("tuning").objectReferenceValue = tuning;
+        shelfSo.FindProperty("head").objectReferenceValue = centerEye;
+        shelfSo.FindProperty("splatMaterial").objectReferenceValue = splatMat;
+        shelfSo.FindProperty("blobMesh").objectReferenceValue = blobMesh;
+        shelfSo.FindProperty("labelFont").objectReferenceValue = dialFont;
+        var presetsProp = shelfSo.FindProperty("presets");
+        presetsProp.arraySize = presets.Length;
+        for (int i = 0; i < presets.Length; i++) presetsProp.GetArrayElementAtIndex(i).objectReferenceValue = presets[i];
+        shelfSo.ApplyModifiedPropertiesWithoutUndo();
+
+        TextMesh toast = MakeText(scene, "StillToast", dialFont, 0.0012f, TextAnchor.UpperCenter, "saved");
+        toast.gameObject.SetActive(false);
+        var still = upperAWord.AddComponent<SplatStillCapture>();
+        var stillSo = new SerializedObject(still);
+        stillSo.FindProperty("toast").objectReferenceValue = toast;
+        stillSo.FindProperty("layer").intValue = ShapeLayer;
+        stillSo.ApplyModifiedPropertiesWithoutUndo();
+
+        var ctrlSo = new SerializedObject(controller);
+        ctrlSo.FindProperty("shelf").objectReferenceValue = shelf;
+        ctrlSo.FindProperty("stillCapture").objectReferenceValue = still;
+        var shapesProp = ctrlSo.FindProperty("shapes");
+        var namesProp = ctrlSo.FindProperty("shapeNames");
+        shapesProp.arraySize = shapeMeshes.Length;
+        namesProp.arraySize = shapeNames.Length;
+        for (int i = 0; i < shapeMeshes.Length; i++)
+        {
+            shapesProp.GetArrayElementAtIndex(i).objectReferenceValue = shapeMeshes[i];
+            namesProp.GetArrayElementAtIndex(i).stringValue = shapeNames[i];
+        }
+        ctrlSo.FindProperty("startShape").intValue = 0;
+        ctrlSo.ApplyModifiedPropertiesWithoutUndo();
+
+        bso.Update();
+        bso.FindProperty("shelf").objectReferenceValue = shelf;
+        bso.FindProperty("microgestureSource").objectReferenceValue = micro;
+        bso.ApplyModifiedPropertiesWithoutUndo();
+        catchSo.Update();
+        catchSo.FindProperty("shelf").objectReferenceValue = shelf;
+        catchSo.ApplyModifiedPropertiesWithoutUndo();
 
         OVROverlayCanvasSettings overlaySettings = OVROverlayCanvasSettings.Instance;
         if (overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Transparent) == null || overlaySettings.GetShader(OVROverlayCanvas.DrawMode.Opaque) == null)
@@ -133,7 +176,72 @@ public static class SplatterSceneSetup
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
         AssetDatabase.SaveAssets();
-        Debug.Log("[MP] splatter scene setup done (uppercase A, particle sim, microgesture dial): " + ScenePath);
+        Debug.Log($"[MP] splatter scene setup done (shapes={shapeMeshes.Length}, shelf presets={presets.Length}, still layer={ShapeLayer}): " + ScenePath);
+    }
+
+    static TextMesh MakeText(Scene scene, string name, Font font, float characterSize, TextAnchor anchor, string text)
+    {
+        var go = new GameObject(name);
+        SceneManager.MoveGameObjectToScene(go, scene);
+        var tm = go.AddComponent<TextMesh>();
+        tm.font = font;
+        tm.fontSize = 60;
+        tm.characterSize = characterSize;
+        tm.anchor = anchor;
+        tm.alignment = TextAlignment.Left;
+        tm.color = new Color(0.94f, 0.93f, 0.90f, 1f);
+        tm.text = text;
+        var r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = font.material;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        return tm;
+    }
+
+    static Mesh LoadGlbMesh(string path)
+    {
+        if (!File.Exists(path)) return null;
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        return AssetDatabase.LoadAllAssetsAtPath(path).OfType<Mesh>().FirstOrDefault();
+    }
+
+    public static Mesh EnsureShapeMesh(string name, Mesh fresh)
+    {
+        Directory.CreateDirectory(ShapeDir);
+        string path = ShapeDir + "/" + name + ".asset";
+        var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (existing == null)
+        {
+            AssetDatabase.CreateAsset(fresh, path);
+            return fresh;
+        }
+        EditorUtility.CopySerialized(fresh, existing);
+        UnityEngine.Object.DestroyImmediate(fresh);
+        EditorUtility.SetDirty(existing);
+        return existing;
+    }
+
+    public static Mesh[] EnsureShapeCatalog(out string[] names)
+    {
+        var meshes = new List<Mesh>();
+        var labels = new List<string>();
+        Mesh a = LoadGlbMesh(LetterUpperAGlbPath);
+        if (a == null) throw new FileNotFoundException("LETTER_UPPER_A.glb mesh 없음");
+        meshes.Add(a);
+        labels.Add("A");
+        for (char c = 'B'; c <= 'Z'; c++)
+        {
+            Mesh m = LoadGlbMesh(GlyphDir + "/GLYPH_" + c + ".glb");
+            if (m == null) continue;
+            meshes.Add(m);
+            labels.Add(c.ToString());
+        }
+        meshes.Add(EnsureShapeMesh("Sphere", SplatShapeMeshes.Sphere("Sphere", 0.085f, 64, 48)));
+        labels.Add("Sphere");
+        meshes.Add(EnsureShapeMesh("Torus", SplatShapeMeshes.Torus("Torus", 0.068f, 0.032f, 96, 48)));
+        labels.Add("Donut");
+        names = labels.ToArray();
+        return meshes.ToArray();
     }
 
     public static SplatPigmentSlotAsset[] EnsureRealVideoSlotAssets()
@@ -155,7 +263,33 @@ public static class SplatterSceneSetup
             30f);
         if (slot1 != null) list.Add(slot1);
 
+        SplatPigmentSlotAsset slot2 = BuildOrLoadVideoSlot(
+            "Slot2_IMG4543",
+            GinkgoFramesDir,
+            256,
+            30f);
+        if (slot2 != null)
+        {
+            if (slot2.calmTexture == null || slot2.sparkTexture == null) VideoSplatPipeline.BuildLightLayers(slot2, TexDir);
+            list.Add(slot2);
+        }
+
+        DefaultMaterial(slot0, "11.03  15:21", SplatShaderMode.Raw, MoodPicker.Splatter.Sim.SplatFeel.Water);
+        DefaultMaterial(slot1, "IMG 4398", SplatShaderMode.Raw, MoodPicker.Splatter.Sim.SplatFeel.Water);
+        DefaultMaterial(slot2, "11.10  13:30", SplatShaderMode.Light, MoodPicker.Splatter.Sim.SplatFeel.Leaf);
         return list.ToArray();
+    }
+
+    public static string GinkgoFramesDir => Environment.GetEnvironmentVariable("GINKGO_FRAMES_DIR") ?? "/tmp/vidref_frames/4543";
+
+    static void DefaultMaterial(SplatPigmentSlotAsset slot, string capturedAt, SplatShaderMode mode, MoodPicker.Splatter.Sim.SplatFeel feel)
+    {
+        if (slot == null || slot.hasFeel) return;
+        if (string.IsNullOrEmpty(slot.capturedAt)) slot.capturedAt = capturedAt;
+        slot.shaderMode = (int)mode;
+        slot.feel = feel;
+        slot.hasFeel = true;
+        EditorUtility.SetDirty(slot);
     }
 
     static SplatPigmentSlotAsset BuildOrLoadVideoSlot(string assetBaseName, string framesDir, int tileSize, float fps)

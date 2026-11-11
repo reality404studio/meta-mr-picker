@@ -6,7 +6,11 @@ Shader "MoodPicker/LetterSplatURP"
         _Layout ("Layout (cols, rows, halfTexel, frames)", Vector) = (1, 1, 0.001953125, 1)
         _Frame ("Current Frame", Float) = 0
         _HasSlot ("Has Slot", Float) = 0
-        _Mode ("Shader Mode (0..4)", Float) = 1
+        _Mode ("Shader Mode (0..5, 5 = light)", Float) = 1
+        _Calm ("Light mode calm colour tile", 2D) = "grey" {}
+        _Spark ("Light mode spark flipbook (r spark, g halo)", 2D) = "black" {}
+        _Calm2 ("Previous calm", 2D) = "grey" {}
+        _Spark2 ("Previous spark", 2D) = "black" {}
         _Scale ("Triplanar Scale", Float) = 1.2
         _Intensity ("Intensity", Float) = 1.0
         _LightTone ("Light Tone (Linear)", Color) = (0.85, 0.90, 0.98, 1)
@@ -16,6 +20,14 @@ Shader "MoodPicker/LetterSplatURP"
         _OutlineColor ("Outline Color (#2E3350)", Color) = (0.180, 0.200, 0.314, 1)
         _AtlasCrop ("Crop (scale xy, offset zw)", Vector) = (1, 1, 0, 0)
         _CropOn ("Mirror-Tiled Crop Instead Of Flipbook", Float) = 0
+        _Atlas2 ("Previous Atlas (spreading wave)", 2D) = "white" {}
+        _Layout2 ("Previous Layout", Vector) = (1, 1, 0.001953125, 1)
+        _Slot2 ("Previous (frame, has slot, mirror tiled, gamma)", Vector) = (0, 0, 0, 1)
+        _AtlasCrop2 ("Previous Crop", Vector) = (1, 1, 0, 0)
+        _Slot2b ("Previous (mode, -, -, -)", Vector) = (0, 0, 0, 0)
+        _Apply ("Apply wave (origin OS xyz, radius)", Vector) = (0, 0, 0, 1000)
+        _ApplyShape ("Apply wave (band, bulge m, lift, -)", Vector) = (0.03, 0.004, 0.15, 0)
+        _SplatTime ("Splat time, stops when frozen", Float) = 0
         _SimTex ("Sim State (disp+scale, vel+glow)", 2D) = "black" {}
         _SimOn ("Sim Drives Vertices", Float) = 0
         _FlowParams ("Flow (amplitude m, speed, contrast, crop gamma)", Vector) = (0.0008, 1.6, 1, 1)
@@ -35,6 +47,16 @@ Shader "MoodPicker/LetterSplatURP"
 
         TEXTURE2D(_Atlas);
         SAMPLER(sampler_Atlas);
+        TEXTURE2D(_Atlas2);
+        SAMPLER(sampler_Atlas2);
+        TEXTURE2D(_Calm);
+        SAMPLER(sampler_Calm);
+        TEXTURE2D(_Spark);
+        SAMPLER(sampler_Spark);
+        TEXTURE2D(_Calm2);
+        SAMPLER(sampler_Calm2);
+        TEXTURE2D(_Spark2);
+        SAMPLER(sampler_Spark2);
         TEXTURE2D(_SimTex);
 
         CBUFFER_START(UnityPerMaterial)
@@ -48,6 +70,13 @@ Shader "MoodPicker/LetterSplatURP"
             float4 _GlowParams;
             float4 _GlintParams;
             float4 _GlintShape;
+            float4 _Layout2;
+            float4 _Slot2;
+            float4 _AtlasCrop2;
+            float4 _Slot2b;
+            float4 _Apply;
+            float4 _ApplyShape;
+            float _SplatTime;
             float _SimOn;
             float _CropOn;
             float _Frame;
@@ -95,34 +124,81 @@ Shader "MoodPicker/LetterSplatURP"
             return sky + float3(0.75, 0.85, 1.0) * (horizon + stripes + sun);
         }
 
-        float3 SampleCropPlane(float2 tileUV)
+        float3 SampleCropPlane(TEXTURE2D_PARAM(atlas, smp), float4 crop, float2 tileUV)
         {
             float2 t = PigmentMod(tileUV, float2(2.0, 2.0));
             t = 1.0 - abs(1.0 - t);
-            return SAMPLE_TEXTURE2D_LOD(_Atlas, sampler_Atlas, t * _AtlasCrop.xy + _AtlasCrop.zw, 0).rgb;
+            return SAMPLE_TEXTURE2D_LOD(atlas, smp, t * crop.xy + crop.zw, 0).rgb;
         }
 
-        float3 SampleCropTriplanar(float3 p, float3 n, float scale)
+        float3 SampleCropTriplanar(TEXTURE2D_PARAM(atlas, smp), float4 crop, float3 p, float3 n, float scale)
         {
             float3 w = TriplanarWeights(n, 4.0);
             float3 col = float3(0.0, 0.0, 0.0);
             float wSum = 0.0;
             if (w.x > 0.05)
             {
-                col += SampleCropPlane(p.zy * scale + 0.13) * w.x;
+                col += SampleCropPlane(TEXTURE2D_ARGS(atlas, smp), crop, p.zy * scale + 0.13) * w.x;
                 wSum += w.x;
             }
             if (w.y > 0.05)
             {
-                col += SampleCropPlane(p.xz * scale + 0.37) * w.y;
+                col += SampleCropPlane(TEXTURE2D_ARGS(atlas, smp), crop, p.xz * scale + 0.37) * w.y;
                 wSum += w.y;
             }
             if (w.z > 0.05)
             {
-                col += SampleCropPlane(p.xy * scale + 0.71) * w.z;
+                col += SampleCropPlane(TEXTURE2D_ARGS(atlas, smp), crop, p.xy * scale + 0.71) * w.z;
                 wSum += w.z;
             }
             return col / max(wSum, 1e-5);
+        }
+
+        float3 SampleSurfaceSRGB(TEXTURE2D_PARAM(atlas, smp), float4 layout, float frame, float mirror, float4 crop, float3 p, float3 n)
+        {
+            if (mirror > 0.5) return SampleCropTriplanar(TEXTURE2D_ARGS(atlas, smp), crop, p, n, _Scale);
+            return SampleFlipbookTriplanar(TEXTURE2D_ARGS(atlas, smp), p, n, _Scale, frame, layout);
+        }
+
+        float3 SurfaceLinear(float3 srgb, float mirror, float gamma)
+        {
+            return pow(max(srgb, 0.0), (mirror > 0.5 ? gamma : 2.2) * _FlowParams.z);
+        }
+
+        float3 SampleCalmTriplanar(TEXTURE2D_PARAM(calm, smp), float3 p, float3 n)
+        {
+            float3 w = TriplanarWeights(n, 4.0);
+            return SAMPLE_TEXTURE2D_LOD(calm, smp, p.zy * _Scale + 0.13, 0).rgb * w.x
+                 + SAMPLE_TEXTURE2D_LOD(calm, smp, p.xz * _Scale + 0.37, 0).rgb * w.y
+                 + SAMPLE_TEXTURE2D_LOD(calm, smp, p.xy * _Scale + 0.71, 0).rgb * w.z;
+        }
+
+        float3 ShadeLight(TEXTURE2D_PARAM(calmTex, calmSmp), TEXTURE2D_PARAM(sparkTex, sparkSmp), float4 layout, float frame, float3 p, float3 n, float3 N, float3 V)
+        {
+            float3 calm = pow(max(SampleCalmTriplanar(TEXTURE2D_ARGS(calmTex, calmSmp), p, n), 0.0), 2.2);
+            float2 sh = SampleFlipbookTriplanar(TEXTURE2D_ARGS(sparkTex, sparkSmp), p, n, _Scale, frame, layout).rg;
+            float3 Ld = normalize(float3(0.45, 0.8, 0.55));
+            float wrapL = saturate((dot(N, Ld) + 0.35) / 1.35);
+            float3 warm = float3(1.0, 0.72, 0.38);
+            float3 base = calm * (0.25 + 0.85 * wrapL) * (warm + (1.0 - warm) * wrapL);
+            float fres = pow(1.0 - saturate(dot(N, V)), 3.0);
+            float3 c = base + float3(1.0, 0.97, 0.86) * (sh.r * 3.0 + sh.g * 1.4) * _Intensity + calm * fres * 0.6;
+            return c / (1.0 + 0.6 * c) * 1.25;
+        }
+
+        float3 ShadeRaw(float3 texLinear, float3 N, float3 L, float3 V, float h, float d)
+        {
+            float3 R = reflect(-L, N);
+            float spec = pow(max(dot(R, V), 0.0), 38.0) * 0.48;
+            float causticCrest = CausticTerm(h, 2.5) * 0.38;
+            return texLinear * (0.48 + 0.86 * d) * _Intensity
+                + (float3(0.48, 0.86, 1.0) * causticCrest + float3(0.88, 0.96, 1.0) * spec) * _GlowParams.z;
+        }
+
+        float ApplyFront(float3 centerOS)
+        {
+            float x = (distance(centerOS, _Apply.xyz) - _Apply.w) / max(_ApplyShape.x, 1e-4);
+            return exp(-x * x);
         }
 
         Varyings EvaluateSplatVertex(Attributes v, float passKind)
@@ -201,7 +277,7 @@ Shader "MoodPicker/LetterSplatURP"
                 return o;
             }
 
-            float flowPhase = dot(o.centerOS, float3(61.0, 47.0, 53.0)) + splatHash * 6.28318 + _Time.y * _FlowParams.y;
+            float flowPhase = dot(o.centerOS, float3(61.0, 47.0, 53.0)) + splatHash * 6.28318 + _SplatTime * _FlowParams.y;
             float3 flowTangent = normalize(cross(normalWS, float3(0.31, 0.87, 0.38)) + 1e-4);
             float3 flowWS = (normalWS * sin(flowPhase) + flowTangent * (0.6 * cos(flowPhase * 0.73))) * (_FlowParams.x * (1.0 - detach));
 
@@ -229,7 +305,8 @@ Shader "MoodPicker/LetterSplatURP"
             float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach) * (1.0 + glint * _GlintShape.y);
             float3 morphedCornerWS = lerp(cornerOffsetWS, billboardCornerWS, billboardBlend) * (grain * simScale);
 
-            float3 finalPosWS = centerWSActual + simDisp + flowWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
+            float3 applyWS = normalWS * (_ApplyShape.y * ApplyFront(o.centerOS));
+            float3 finalPosWS = centerWSActual + simDisp + flowWS + applyWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
             float3 finalNormalWS = normalize(lerp(normalWS, V, detach * 0.6));
 
             o.positionCS = TransformWorldToHClip(finalPosWS);
@@ -276,16 +353,8 @@ Shader "MoodPicker/LetterSplatURP"
             float3 texLinear = float3(0.42, 0.42, 0.42);
             if (_HasSlot > 0.5)
             {
-                if (_CropOn > 0.5)
-                {
-                    texSRGB = SampleCropTriplanar(samplePos, sampleNrm, _Scale);
-                    texLinear = pow(max(texSRGB, 0.0), _FlowParams.w * _FlowParams.z);
-                }
-                else
-                {
-                    texSRGB = SampleFlipbookTriplanar(TEXTURE2D_ARGS(_Atlas, sampler_Atlas), samplePos, sampleNrm, _Scale, _Frame, _Layout);
-                    texLinear = pow(max(texSRGB, 0.0), 2.2 * _FlowParams.z);
-                }
+                texSRGB = SampleSurfaceSRGB(TEXTURE2D_ARGS(_Atlas, sampler_Atlas), _Layout, _Frame, _CropOn, _AtlasCrop, samplePos, sampleNrm);
+                texLinear = SurfaceLinear(texSRGB, _CropOn, _FlowParams.w);
             }
 
             float h = PigmentLuma(texLinear);
@@ -295,11 +364,11 @@ Shader "MoodPicker/LetterSplatURP"
 
             if (mode == 0)
             {
-                float3 R = reflect(-L, normalWS);
-                float spec = pow(max(dot(R, V), 0.0), 38.0) * 0.48;
-                float causticCrest = CausticTerm(h, 2.5) * 0.38;
-                col = texLinear * (0.48 + 0.86 * d) * _Intensity
-                    + (float3(0.48, 0.86, 1.0) * causticCrest + float3(0.88, 0.96, 1.0) * spec) * _GlowParams.z;
+                col = ShadeRaw(texLinear, normalWS, L, V, h, d);
+            }
+            else if (mode == 5)
+            {
+                col = ShadeLight(TEXTURE2D_ARGS(_Calm, sampler_Calm), TEXTURE2D_ARGS(_Spark, sampler_Spark), _Layout, _Frame, samplePos, sampleNrm, normalWS, V);
             }
             else if (mode == 1)
             {
@@ -334,10 +403,31 @@ Shader "MoodPicker/LetterSplatURP"
                     + float3(0.45, 0.82, 1.0) * (CausticTerm(h, 3.0) * (0.35 + 0.65 * d)) * _Intensity;
             }
 
+            if (_Slot2.y > 0.5)
+            {
+                float newness = 1.0 - smoothstep(_Apply.w - _ApplyShape.x, _Apply.w, distance(i.centerOS, _Apply.xyz));
+                if (newness < 0.999)
+                {
+                    float3 oldCol;
+                    if (_Slot2b.x > 4.5)
+                    {
+                        oldCol = ShadeLight(TEXTURE2D_ARGS(_Calm2, sampler_Calm2), TEXTURE2D_ARGS(_Spark2, sampler_Spark2), _Layout2, _Slot2.x, samplePos, sampleNrm, normalWS, V);
+                    }
+                    else
+                    {
+                        float3 oldSRGB = SampleSurfaceSRGB(TEXTURE2D_ARGS(_Atlas2, sampler_Atlas2), _Layout2, _Slot2.x, _Slot2.z, _AtlasCrop2, samplePos, sampleNrm);
+                        float3 oldLinear = SurfaceLinear(oldSRGB, _Slot2.z, _Slot2.w);
+                        oldCol = ShadeRaw(oldLinear, normalWS, L, V, PigmentLuma(oldLinear), d);
+                    }
+                    col = lerp(oldCol, col, newness);
+                }
+            }
+
             float3 tint = texLinear / max(PigmentLuma(texLinear), 0.04);
             float sparkleSpec = pow(max(dot(reflect(-L, crystalNormalWS), V), 0.0), 45.0);
             col += min(tint, 3.0) * (sparkleSpec * detach * _GlowParams.y);
             col *= 1.0 + glow * _GlowParams.x;
+            if (_Slot2.y > 0.5) col *= 1.0 + _ApplyShape.z * ApplyFront(i.centerOS);
 
             col += SplatGlintColor((float)i.glint, _GlintParams.x, _GlintShape.z, h, tint, r2);
 

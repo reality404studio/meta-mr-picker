@@ -1,4 +1,4 @@
-// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>   (시간 흐름 시트는 RenderSequenceBatch, 두 눈 비교는 RenderStereoBatch)
+// 사용: Unity -batchmode -projectPath <proj> -buildTarget Android -executeMethod SplatterPreviewRender.RenderBatch -splatOut <out.png>   (시간 흐름 시트는 RenderSequenceBatch, 두 눈 비교는 RenderStereoBatch, 한 바퀴는 RenderLoopBatch)
 using System;
 using System.IO;
 using MoodPicker.Splatter;
@@ -30,7 +30,7 @@ public static class SplatterPreviewRender
         try
         {
             SplatterSceneSetup.Run();
-            code = (_stereo ? RunStereo(Arg("-splatOut")) : _sequence ? RunSequence(Arg("-splatOut")) : Run(Arg("-splatOut"))) ? 0 : 1;
+            code = (_loop ? RunLoop(Arg("-splatOut")) : _stereo ? RunStereo(Arg("-splatOut")) : _sequence ? RunSequence(Arg("-splatOut")) : Run(Arg("-splatOut"))) ? 0 : 1;
         }
         catch (Exception e)
         {
@@ -51,6 +51,133 @@ public static class SplatterPreviewRender
     static bool _sequence;
 
     static bool _stereo;
+    static bool _loop;
+
+    public static void RenderLoopBatch()
+    {
+        _loop = true;
+        RenderBatch();
+    }
+
+    public static bool RunLoop(string outPng)
+    {
+        const int cell = 520;
+        const int cols = 5;
+        const int rows = 3;
+        const float dt = 1f / 72f;
+        SplatterSceneSetup.Run();
+        var controller = UnityEngine.Object.FindFirstObjectByType<SplatWordController>();
+        var shelf = UnityEngine.Object.FindFirstObjectByType<SplatShelf>();
+        var still = UnityEngine.Object.FindFirstObjectByType<SplatStillCapture>();
+        if (controller == null || shelf == null) throw new InvalidOperationException("loop scene objects missing");
+        shelf.SeedPresets();
+
+        var camGo = new GameObject("LoopCam");
+        var cam = camGo.AddComponent<Camera>();
+        cam.transform.position = new Vector3(0.02f, 0.03f, -0.02f);
+        cam.transform.rotation = Quaternion.LookRotation(new Vector3(0f, -0.13f, 0.34f) - cam.transform.position, Vector3.up);
+        cam.fieldOfView = 58f;
+        cam.nearClipPlane = 0.02f;
+        cam.farClipPlane = 5f;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.08f, 0.09f, 0.13f, 1f);
+        cam.cullingMask = ~0;
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
+        var rt = new RenderTexture(cell, cell, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
+        rt.Create();
+        cam.targetTexture = rt;
+        cam.aspect = 1f;
+
+        var sheet = new Texture2D(cell * cols, cell * rows, TextureFormat.RGBA32, false, false);
+        int n = 0;
+        float now = 0f;
+        void Run(float seconds)
+        {
+            int steps = Mathf.Max(1, Mathf.RoundToInt(seconds / dt));
+            for (int i = 0; i < steps; i++)
+            {
+                now += dt;
+                controller.Tick(dt);
+                shelf.Tick(now, dt);
+            }
+        }
+        void Put(string note)
+        {
+            Texture2D img = Shoot(cam, rt);
+            int c = n % cols, r = n / cols;
+            if (r < rows) sheet.SetPixels(c * cell, (rows - 1 - r) * cell, cell, cell, img.GetPixels());
+            UnityEngine.Object.DestroyImmediate(img);
+            Debug.Log($"[MP] loop frame {n} t={now:0.00} {note} shape={controller.ShapeName} mode={controller.SimMode} frozen={controller.IsFrozen} pending={controller.PendingStatus}");
+            n++;
+        }
+
+        Run(4.2f);
+        Put("formed + shelf");
+        int pick = shelf.Count - 1;
+        Vector3 slot = shelf.SlotWorld(pick);
+        Vector3 target = controller.transform.position + new Vector3(0.03f, -0.04f, -0.03f);
+        bool held = shelf.TryGrab(1, slot);
+        Debug.Log($"[MP] loop grab={held} slot={slot}");
+        Vector3 palmOffset = new Vector3(0.03f, -0.05f, -0.06f);
+        for (int i = 0; i <= 36 && held; i++)
+        {
+            Vector3 p = Vector3.Lerp(slot, target, i / 36f);
+            held = shelf.UpdateHeld(1, p, p + palmOffset);
+            Run(dt);
+            if (i == 18) Put("carrying");
+        }
+        Put("touch -> spread starts");
+        Run(0.25f);
+        Put("spread 0.25s");
+        Run(0.35f);
+        Put("spread 0.6s");
+        Run(0.9f);
+        Put("spread done, blob regrows");
+
+        controller.CycleShape(1);
+        Run(0.12f);
+        Put("burst 0.12s");
+        Run(0.2f);
+        Put("burst 0.32s");
+        for (int i = 0; i < 2000 && controller.ShapeChanging; i++)
+        {
+            System.Threading.Thread.Sleep(2);
+            Run(dt);
+        }
+        Put("gather starts");
+        Run(0.45f);
+        Put("gather 0.45s");
+        Run(2.0f);
+        Put("B formed");
+        controller.CycleShape(-2);
+        for (int i = 0; i < 2000 && controller.ShapeChanging; i++)
+        {
+            System.Threading.Thread.Sleep(2);
+            Run(dt);
+        }
+        Run(3.2f);
+        Put("donut");
+        controller.ToggleFreeze();
+        Run(1.0f);
+        Put("frozen 1s");
+        bool started = still != null && still.Capture(camGo.transform, controller.GetComponentInChildren<SplatLetterRenderer>());
+        AsyncGPUReadback.WaitAllRequests();
+        for (int i = 0; i < 200 && still != null && still.Busy; i++)
+        {
+            System.Threading.Thread.Sleep(20);
+            still.Poll();
+        }
+        Debug.Log($"[MP] loop still started={started} path={(still != null ? still.LastPath : "-")}");
+        Put("after save");
+
+        sheet.Apply();
+        string fullOut = Path.GetFullPath(outPng);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOut));
+        File.WriteAllBytes(fullOut, sheet.EncodeToPNG());
+        Debug.Log("[MP] splatter-loop out=" + fullOut);
+        EditorSceneManager.OpenScene(SplatterSceneSetup.ScenePath, OpenSceneMode.Single);
+        return started;
+    }
 
     public static void RenderStereoBatch()
     {

@@ -1,0 +1,10 @@
+{
+    "name": "MoodPicker.Splatter.Patisserie.Core",
+    "rootNamespace": "MoodPicker.Splatter.Patisserie",
+    "references": [
+        "MoodPicker.Splatter",
+        "Unity.Mathematics"
+    ],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

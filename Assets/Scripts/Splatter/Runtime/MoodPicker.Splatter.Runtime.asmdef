@@ -8,7 +8,9 @@
         "Unity.Burst",
         "Unity.Collections",
         "Unity.Mathematics",
-        "Meta.XR.ImmersiveDebugger.Interface"
+        "Meta.XR.ImmersiveDebugger.Interface",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
     ],
     "autoReferenced": true,
     "noEngineReferences": false
