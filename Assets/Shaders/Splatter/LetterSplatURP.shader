@@ -20,7 +20,7 @@ Shader "MoodPicker/LetterSplatURP"
         _SimOn ("Sim Drives Vertices", Float) = 0
         _FlowParams ("Flow (amplitude m, speed, contrast, crop gamma)", Vector) = (0.0008, 1.6, 1, 1)
         _DropParams ("Drop (detach m, stretch s, stretch max, grain)", Vector) = (0.012, 0.008, 2.5, 0.85)
-        _GlowParams ("Glow (gain, sparkle, -, -)", Vector) = (0.35, 0.6, 0, 0)
+        _GlowParams ("Glow (gain, sparkle, painted overlay, -)", Vector) = (0.35, 0.6, 1, 0)
         _GlintParams ("Glint module, off at 0 (amount, speed, wave scale 1/m, roughness)", Vector) = (0, 1.2, 120, 0.45)
         _GlintShape ("Glint (sharpness, size, material gate, -)", Vector) = (160, 0.15, 0.6, 0)
     }
@@ -299,8 +299,7 @@ Shader "MoodPicker/LetterSplatURP"
                 float spec = pow(max(dot(R, V), 0.0), 38.0) * 0.48;
                 float causticCrest = CausticTerm(h, 2.5) * 0.38;
                 col = texLinear * (0.48 + 0.86 * d) * _Intensity
-                    + float3(0.48, 0.86, 1.0) * causticCrest
-                    + float3(0.88, 0.96, 1.0) * spec;
+                    + (float3(0.48, 0.86, 1.0) * causticCrest + float3(0.88, 0.96, 1.0) * spec) * _GlowParams.z;
             }
             else if (mode == 1)
             {

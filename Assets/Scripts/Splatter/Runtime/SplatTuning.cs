@@ -68,6 +68,7 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "6 Look", Min = 0.3f, Max = 2f)] public float grain = 0.6f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 2f)] public float glowGain = 0.35f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 3f)] public float sparkle = 0.6f;
+        [DebugMember(Category = "6 Look", Min = 0f, Max = 1f)] public float overlay = 1f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintAmount = 0f;
         [DebugMember(Category = "6 Look", Min = 0f, Max = 4f)] public float glintSpeed = 1.2f;
         [DebugMember(Category = "6 Look", Min = 20f, Max = 400f)] public float glintScale = 120f;

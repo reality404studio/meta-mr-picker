@@ -109,6 +109,7 @@ namespace MoodPicker.Splatter
             Row("Weight", () => t.weight, v => t.weight = v, 0f, 9.8f);
             Row("Grain", () => t.grain, v => t.grain = v, 0.3f, 2f);
             Row("Stretch", () => t.stretchMax, v => t.stretchMax = v, 0f, 6f);
+            Row("Overlay", () => t.overlay, v => t.overlay = v, 0f, 1f, false, 4);
             Row("Room dim", () => -t.passthroughBrightness, v => t.passthroughBrightness = -v, 0f, 1f);
             Row("Look mode", () => t.shaderMode, v => t.shaderMode = Mathf.RoundToInt(v), 0f, 4f, false, 4);
             Toggle("Live camera", () => t.liveCamera, v => t.liveCamera = v);

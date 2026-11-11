@@ -454,6 +454,7 @@ namespace MoodPicker.Splatter
                 look.grain = tuning.grain;
                 look.glowGain = tuning.glowGain;
                 look.sparkle = tuning.sparkle;
+                look.overlay = tuning.overlay;
                 look.glintAmount = tuning.glintAmount;
                 look.glintSpeed = tuning.glintSpeed;
                 look.glintScale = tuning.glintScale;

@@ -17,6 +17,7 @@ namespace MoodPicker.Splatter
         public float grain;
         public float glowGain;
         public float sparkle;
+        public float overlay;
         public float glintAmount;
         public float glintSpeed;
         public float glintScale;
@@ -36,6 +37,7 @@ namespace MoodPicker.Splatter
             grain = 0.6f,
             glowGain = 0.35f,
             sparkle = 0.6f,
+            overlay = 1f,
             glintAmount = 0f,
             glintSpeed = 1.2f,
             glintScale = 120f,
@@ -250,7 +252,7 @@ namespace MoodPicker.Splatter
             _block.SetVector(PropAtlasCrop, _crop);
             _block.SetFloat(PropCropOn, _cropOn ? 1f : 0f);
             _block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, _look.detachDistance), _look.stretchSeconds, _look.stretchMax, _look.grain));
-            _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, 0f, 0f));
+            _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, _look.overlay, 0f));
             _block.SetVector(PropGlintParams, new Vector4(_look.glintAmount, _look.glintSpeed, _look.glintScale, _look.glintRough));
             _block.SetVector(PropGlintShape, new Vector4(Mathf.Max(1f, _look.glintSharpness), _look.glintSize, _look.glintMaterial, 0f));
             _renderer.SetPropertyBlock(_block);
