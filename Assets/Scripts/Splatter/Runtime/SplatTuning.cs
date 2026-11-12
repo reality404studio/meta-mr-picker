@@ -18,6 +18,10 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelBounce = 0.2f;
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelGrain = 1f;
         [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelFluff = 0f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelSquish = 0f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelPlastic = 0f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelTack = 0f;
+        [DebugMember(Category = "0 Feel", Min = 0f, Max = 1f)] public float feelThicken = 0f;
 
         [DebugMember(Category = "1 Spring", Min = 20f, Max = 600f)] public float homeStiffness = 180f;
         [DebugMember(Category = "1 Spring", Min = 0f, Max = 30f)] public float homeDamping = 5f;
@@ -57,6 +61,16 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 10f)] public float burstDamping = 2.2f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 9.8f)] public float burstGravity = 0.4f;
         [DebugMember(Category = "4 Weight", Min = 0.05f, Max = 1.5f)] public float gatherRamp = 0.35f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float field = 0f;
+        [DebugMember(Category = "4 Weight", Min = 20f, Max = 2000f)] public float fieldStiffness = 400f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 100f)] public float fieldAnchor = 10f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 6000f)] public float fieldPin = 3000f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 20f)] public float fieldDamping = 2f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 20f)] public float plastic = 0f;
+        [DebugMember(Category = "4 Weight", Min = 0.001f, Max = 0.05f)] public float plasticYield = 0.02f;
+        [DebugMember(Category = "4 Weight", Min = 0.01f, Max = 0.2f)] public float plasticMax = 0.08f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float thicken = 0f;
+        [DebugMember(Category = "4 Weight", Min = 0.05f, Max = 2f)] public float thickenSpeed = 0.35f;
 
         [DebugMember(Category = "5 Summon", Min = 0.2f, Max = 3f)] public float summonSpeed = 0.9f;
         [DebugMember(Category = "5 Summon", Min = 1f, Max = 20f)] public float summonEase = 6f;
@@ -125,7 +139,7 @@ namespace MoodPicker.Splatter
         public event Action FreezeRequested;
         public event Action StillRequested;
 
-        public SplatFeel CurrentFeel => new SplatFeel { weight = feelWeight, cohesion = feelCohesion, viscosity = feelViscosity, bounce = feelBounce, grain = feelGrain, fluff = feelFluff };
+        public SplatFeel CurrentFeel => new SplatFeel { weight = feelWeight, cohesion = feelCohesion, viscosity = feelViscosity, bounce = feelBounce, grain = feelGrain, fluff = feelFluff, squish = feelSquish, plastic = feelPlastic, tack = feelTack, thicken = feelThicken };
 
         public void SetFeel(SplatFeel feel)
         {
@@ -136,6 +150,10 @@ namespace MoodPicker.Splatter
             feelBounce = f.bounce;
             feelGrain = f.grain;
             feelFluff = f.fluff;
+            feelSquish = f.squish;
+            feelPlastic = f.plastic;
+            feelTack = f.tack;
+            feelThicken = f.thicken;
             DeriveFromFeel();
         }
 
@@ -154,6 +172,18 @@ namespace MoodPicker.Splatter
             handPush = p.handPush;
             handDrag = p.handDrag;
             stickFraction = p.stickFraction;
+            stickDecay = p.stickDecay;
+            stickReach = p.stickReach;
+            field = p.field;
+            fieldStiffness = p.fieldStiffness;
+            fieldAnchor = p.fieldAnchor;
+            fieldPin = p.fieldPin;
+            fieldDamping = p.fieldDamping;
+            plastic = p.plastic;
+            plasticYield = p.plasticYield;
+            plasticMax = p.plasticMax;
+            thicken = p.thicken;
+            thickenSpeed = p.thickenSpeed;
             weight = p.weight;
             fallGravity = p.fallGravity;
             fallDamping = p.fallDamping;
@@ -236,7 +266,17 @@ namespace MoodPicker.Splatter
                 fadeDistance = fadeDistance,
                 burstDamping = burstDamping,
                 burstGravity = burstGravity,
-                gatherRamp = gatherRamp
+                gatherRamp = gatherRamp,
+                field = field,
+                fieldStiffness = fieldStiffness,
+                fieldAnchor = fieldAnchor,
+                fieldPin = fieldPin,
+                fieldDamping = fieldDamping,
+                plastic = plastic,
+                plasticYield = plasticYield,
+                plasticMax = plasticMax,
+                thicken = thicken,
+                thickenSpeed = thickenSpeed
             };
         }
 

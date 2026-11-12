@@ -8,6 +8,10 @@ namespace MoodPicker.Splatter.Sim
         public int[] Assignment;
         public float3[] Home;
         public float[] Radius;
+        public int2[] Edges;
+        public float[] Pin;
+        public int4[] ParticleNodes;
+        public float4[] ParticleWeights;
         public int Count => Home.Length;
     }
 
@@ -82,7 +86,110 @@ namespace MoodPicker.Splatter.Sim
                 radius[c] = math.max(radius[c], math.distance(homes[i], seeds[c]));
             }
 
-            return new SplatClusters { Assignment = assignment, Home = seeds, Radius = radius };
+            var clusters = new SplatClusters { Assignment = assignment, Home = seeds, Radius = radius };
+            BuildField(clusters, homes);
+            return clusters;
+        }
+
+        public const int FieldNeighbors = 6;
+        public const float PinHeight = 0.25f;
+
+        public static void BuildField(SplatClusters clusters, float3[] homes)
+        {
+            int k = clusters.Count;
+            float3[] node = clusters.Home;
+            var neighbors = new int[k * FieldNeighbors];
+            var bestD = new float[FieldNeighbors];
+            for (int i = 0; i < k; i++)
+            {
+                for (int m = 0; m < FieldNeighbors; m++)
+                {
+                    bestD[m] = float.MaxValue;
+                    neighbors[i * FieldNeighbors + m] = i;
+                }
+                for (int j = 0; j < k; j++)
+                {
+                    if (j == i) continue;
+                    float d = math.lengthsq(node[j] - node[i]);
+                    for (int m = 0; m < FieldNeighbors; m++)
+                    {
+                        if (d >= bestD[m]) continue;
+                        for (int q = FieldNeighbors - 1; q > m; q--)
+                        {
+                            bestD[q] = bestD[q - 1];
+                            neighbors[i * FieldNeighbors + q] = neighbors[i * FieldNeighbors + q - 1];
+                        }
+                        bestD[m] = d;
+                        neighbors[i * FieldNeighbors + m] = j;
+                        break;
+                    }
+                }
+            }
+
+            float low = float.MaxValue, high = float.MinValue;
+            for (int i = 0; i < k; i++)
+            {
+                low = math.min(low, node[i].y);
+                high = math.max(high, node[i].y);
+            }
+            float span = math.max(high - low, 1e-4f);
+            var pin = new float[k];
+            for (int i = 0; i < k; i++) pin[i] = 1f - math.smoothstep(PinHeight * 0.5f, PinHeight, (node[i].y - low) / span);
+
+            float pLow = float.MaxValue, pHigh = float.MinValue;
+            for (int i = 0; i < homes.Length; i++)
+            {
+                pLow = math.min(pLow, homes[i].y);
+                pHigh = math.max(pHigh, homes[i].y);
+            }
+            float pSpan = math.max(pHigh - pLow, 1e-4f);
+            var pn = new int4[homes.Length];
+            var pw = new float4[homes.Length];
+            for (int i = 0; i < homes.Length; i++)
+            {
+                int4 idx = new int4(clusters.Assignment[i]);
+                float4 dist = new float4(float.MaxValue);
+                for (int c = 0; c < k; c++)
+                {
+                    float d = math.lengthsq(homes[i] - node[c]);
+                    if (d >= dist.w) continue;
+                    if (d < dist.x) { dist = new float4(d, dist.xyz); idx = new int4(c, idx.xyz); }
+                    else if (d < dist.y) { dist = new float4(dist.x, d, dist.yz); idx = new int4(idx.x, c, idx.yz); }
+                    else if (d < dist.z) { dist = new float4(dist.xy, d, dist.z); idx = new int4(idx.xy, c, idx.z); }
+                    else { dist.w = d; idx.w = c; }
+                }
+                float4 w = 1f / (math.sqrt(math.min(dist, 1e6f)) + 1e-3f);
+                w = math.select(w, 0f, dist >= float.MaxValue);
+                w = w * w;
+                float free = math.smoothstep(0f, PinHeight, (homes[i].y - pLow) / pSpan);
+                pw[i] = w / math.max(math.csum(w), 1e-6f) * free;
+                pn[i] = idx;
+            }
+            var edges = new System.Collections.Generic.HashSet<long>();
+            var edgeList = new System.Collections.Generic.List<int2>();
+            for (int i = 0; i < k; i++)
+                for (int m = 0; m < FieldNeighbors; m++)
+                {
+                    int j = neighbors[i * FieldNeighbors + m];
+                    if (j == i) continue;
+                    int a = math.min(i, j), b = math.max(i, j);
+                    if (edges.Add((long)a * 100000 + b)) edgeList.Add(new int2(a, b));
+                }
+            clusters.Edges = edgeList.ToArray();
+            clusters.Pin = pin;
+            clusters.ParticleNodes = pn;
+            clusters.ParticleWeights = pw;
+        }
+
+        public static void FieldLaplacian(int2[] edges, SplatClusterNode[] nodes, float3[] lap)
+        {
+            for (int c = 0; c < lap.Length; c++) lap[c] = float3.zero;
+            foreach (int2 e in edges)
+            {
+                float3 d = nodes[e.y].displacement - nodes[e.x].displacement;
+                lap[e.x] += d;
+                lap[e.y] -= d;
+            }
         }
 
         public static float SummonArrivals(float3[] homesBody, float[] hash, float[] arrival, in float3x4 bodyToWorld, float3 emitter, float spreadSeconds)
@@ -237,6 +344,7 @@ namespace MoodPicker.Splatter.Sim
                 Particles[i].displacement = worldPositions[j] - Homes[i];
                 Particles[i].velocity = worldVelocities[j];
                 Particles[i].scale = 1f;
+                Particles[i].rest = float3.zero;
             }
             for (int c = 0; c < Nodes.Length; c++) Nodes[c] = default;
         }
@@ -254,6 +362,11 @@ namespace MoodPicker.Splatter.Sim
 
         public void Step(in SplatSimFrame f, in SplatSimParams p, SplatCollider[] colliders, int colliderCount)
         {
+            if (SplatSimKernel.UsesField(p, f.mode))
+            {
+                StepField(f, p, colliders, colliderCount);
+                return;
+            }
             int k = Nodes.Length;
             var clusterHomeWorld = new float3[k];
             for (int c = 0; c < k; c++)
@@ -276,6 +389,42 @@ namespace MoodPicker.Splatter.Sim
                     SplatSimKernel.AccumulateCollider(ref acc, pos, Particles[i].velocity, colliders[j], p, 0f);
                 int c = Clusters.Assignment[i];
                 SplatSimKernel.StepParticle(ref Particles[i], homeWorld, clusterHomeWorld[c], Nodes[c], Hash[i], Arrival[i], acc, f, p);
+                activity = math.max(activity, SplatSimKernel.Activity(Particles[i]));
+            }
+            Activity = activity;
+        }
+
+        void StepField(in SplatSimFrame f, in SplatSimParams p, SplatCollider[] colliders, int colliderCount)
+        {
+            int k = Nodes.Length;
+            var push = new float3[k];
+            var lap = new float3[k];
+            for (int c = 0; c < k; c++)
+            {
+                SplatSimKernel.CarryHome(ref Nodes[c].displacement, Clusters.Home[c], f, out float3 hw);
+                var acc = SplatHandAccum.Empty;
+                float3 pos = hw + Nodes[c].displacement;
+                for (int j = 0; j < colliderCount; j++)
+                    SplatSimKernel.AccumulateCollider(ref acc, pos, Nodes[c].velocity, colliders[j], p, Clusters.Radius[c] * p.clusterReach);
+                push[c] = acc.accel;
+            }
+            float h = f.dt / SplatSimKernel.FieldSubsteps;
+            for (int sub = 0; sub < SplatSimKernel.FieldSubsteps; sub++)
+            {
+                SplatSimSetup.FieldLaplacian(Clusters.Edges, Nodes, lap);
+                for (int c = 0; c < k; c++) SplatSimKernel.StepFieldNode(ref Nodes[c], lap[c], Clusters.Pin[c], push[c], h, p);
+            }
+
+            float activity = 0f;
+            for (int i = 0; i < Particles.Length; i++)
+            {
+                SplatSimKernel.CarryHome(ref Particles[i].displacement, Homes[i], f, out float3 homeWorld);
+                var acc = SplatHandAccum.Empty;
+                float3 pos = homeWorld + Particles[i].displacement;
+                for (int j = 0; j < colliderCount; j++)
+                    SplatSimKernel.AccumulateCollider(ref acc, pos, Particles[i].velocity, colliders[j], p, 0f);
+                int4 n = Clusters.ParticleNodes[i];
+                SplatSimKernel.FieldParticle(ref Particles[i], Nodes[n.x], Nodes[n.y], Nodes[n.z], Nodes[n.w], Clusters.ParticleWeights[i], acc, f, p);
                 activity = math.max(activity, SplatSimKernel.Activity(Particles[i]));
             }
             Activity = activity;

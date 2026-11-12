@@ -134,7 +134,10 @@ public static class SplatterSceneSetup
         {
             EnsureFeel("Drop", "drop", MoodPicker.Splatter.Sim.SplatFeel.Water),
             EnsureFeel("Sand", "sand", MoodPicker.Splatter.Sim.SplatFeel.Sand),
-            EnsureFeel("Fur", "fur", MoodPicker.Splatter.Sim.SplatFeel.Fur)
+            EnsureFeel("Fur", "fur", MoodPicker.Splatter.Sim.SplatFeel.Fur),
+            EnsureFeel("Jelly", "jelly", MoodPicker.Splatter.Sim.SplatFeel.Jelly),
+            EnsureFeel("Slime", "slime", MoodPicker.Splatter.Sim.SplatFeel.Slime),
+            EnsureFeel("Starch", "starch", MoodPicker.Splatter.Sim.SplatFeel.Starch)
         };
         var feelsProp = shelfSo.FindProperty("feels");
         feelsProp.arraySize = feels.Length;

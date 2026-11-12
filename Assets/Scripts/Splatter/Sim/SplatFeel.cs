@@ -12,11 +12,17 @@ namespace MoodPicker.Splatter.Sim
         public float bounce;
         public float grain;
         public float fluff;
+        public float squish;
+        public float plastic;
+        public float tack;
+        public float thicken;
 
         public static SplatFeel Water => new SplatFeel { weight = 0.2f, cohesion = 0.2f, viscosity = 0.1f, bounce = 0.2f, grain = 1f };
         public static SplatFeel Sand => new SplatFeel { weight = 0.7f, cohesion = 0.3f, viscosity = 0.7f, bounce = 0.8f, grain = 1f };
         public static SplatFeel Leaf => new SplatFeel { weight = 0.3f, cohesion = 0.25f, viscosity = 0.55f, bounce = 0.35f, grain = 0.65f };
-        public static SplatFeel Jelly => new SplatFeel { weight = 0.4f, cohesion = 1f, viscosity = 0.45f, bounce = 0.95f, grain = 0f };
+        public static SplatFeel Jelly => new SplatFeel { weight = 0.4f, cohesion = 1f, viscosity = 0.25f, bounce = 0.9f, grain = 0f, squish = 1f };
+        public static SplatFeel Slime => new SplatFeel { weight = 0.5f, cohesion = 0.9f, viscosity = 0.8f, bounce = 0.3f, grain = 0f, plastic = 0.8f, tack = 0.8f };
+        public static SplatFeel Starch => new SplatFeel { weight = 0.8f, cohesion = 0.5f, viscosity = 0.6f, bounce = 0.2f, grain = 0.8f, plastic = 0.5f, thicken = 1f };
         public static SplatFeel Fur => new SplatFeel { weight = 0.1f, cohesion = 0.7f, viscosity = 0.2f, bounce = 0.7f, grain = 1f, fluff = 1f };
 
         public SplatFeel Clamped => new SplatFeel
@@ -26,7 +32,11 @@ namespace MoodPicker.Splatter.Sim
             viscosity = math.saturate(viscosity),
             bounce = math.saturate(bounce),
             grain = math.saturate(grain),
-            fluff = math.saturate(fluff)
+            fluff = math.saturate(fluff),
+            squish = math.saturate(squish),
+            plastic = math.saturate(plastic),
+            tack = math.saturate(tack),
+            thicken = math.saturate(thicken)
         };
     }
 
@@ -61,7 +71,19 @@ namespace MoodPicker.Splatter.Sim
             p.clusterGather = math.lerp(0.9f, 0.45f, f.cohesion);
             p.handPush = math.lerp(90f, 40f, f.weight);
             p.handDrag = math.lerp(6f, 30f, f.viscosity);
-            p.stickFraction = 0.25f * f.cohesion * (1f - f.grain);
+            p.stickFraction = 0.25f * f.cohesion * (1f - f.grain) + 0.35f * f.tack;
+            p.stickDecay = math.lerp(1.2f, 0.25f, f.tack);
+            p.stickReach = math.lerp(0.06f, 0.12f, f.tack);
+            p.field = f.squish;
+            p.fieldStiffness = math.lerp(150f, 900f, f.bounce);
+            p.fieldAnchor = math.lerp(2f, 30f, f.bounce);
+            p.fieldPin = 3000f;
+            p.fieldDamping = math.lerp(0.6f, 6f, f.viscosity);
+            p.plastic = math.lerp(0f, 5f, f.plastic);
+            p.plasticYield = math.lerp(0.02f, 0.005f, f.plastic);
+            p.plasticMax = 0.08f;
+            p.thicken = f.thicken;
+            p.thickenSpeed = 0.35f;
             p.weight = f.weight * 3f;
             p.fallGravity = math.lerp(1.2f, 6f, f.weight);
             p.fallDamping = math.lerp(0.2f, 1.5f, f.viscosity);

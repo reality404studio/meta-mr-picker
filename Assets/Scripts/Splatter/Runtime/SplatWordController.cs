@@ -205,7 +205,7 @@ namespace MoodPicker.Splatter
             SplatSimRunner sim = body != null ? body.EnsureSim(ClusterSize) : null;
             if (sim != null && sim.Mode == SplatSimMode.Formed)
                 sim.Poke(body.transform.localToWorldMatrix, contactWorld, pokeRadius * body.transform.lossyScale.x, pokeSpeed);
-            UnityEngine.Debug.Log($"{Tag} apply feel={label} w={feel.weight:0.##} c={feel.cohesion:0.##} v={feel.viscosity:0.##} b={feel.bounce:0.##} g={feel.grain:0.##} f={feel.fluff:0.##}");
+            UnityEngine.Debug.Log($"{Tag} apply feel={label} w={feel.weight:0.##} c={feel.cohesion:0.##} v={feel.viscosity:0.##} b={feel.bounce:0.##} g={feel.grain:0.##} f={feel.fluff:0.##} sq={feel.squish:0.##} pl={feel.plastic:0.##} tk={feel.tack:0.##} th={feel.thicken:0.##}");
         }
 
         public float FloorY => transform.position.y - (tuning != null ? tuning.floorBelow : 0.45f);

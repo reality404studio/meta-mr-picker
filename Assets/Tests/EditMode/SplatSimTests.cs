@@ -321,6 +321,134 @@ namespace MoodPicker.Tests
             Assert.That(SplatFeelMap.Look(hi).stretchMax, Is.LessThan(SplatFeelMap.Look(lo).stretchMax));
         }
 
+        static SplatSimReference Press(SplatFeel feel, float pressSeconds, float holdSeconds, float afterSeconds)
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(feel);
+            var c = new SplatCollider[1];
+            float speed = 0.018f / pressSeconds;
+            int press = (int)math.round(pressSeconds / Dt);
+            int hold = (int)math.round(holdSeconds / Dt);
+            for (int i = 0; i < press + hold; i++)
+            {
+                bool moving = i < press;
+                float z = math.lerp(0.03f, 0.012f, math.saturate((float)i / press));
+                c[0] = Finger(new float3(0f, 0f, z), moving ? new float3(0f, 0f, -speed) : float3.zero);
+                sim.Step(Frame(), p, c, 1);
+            }
+            Run(sim, p, afterSeconds);
+            return sim;
+        }
+
+        static float MeanZ(SplatSimReference sim, float rMin, float rMax)
+        {
+            float sum = 0f;
+            int n = 0;
+            for (int i = 0; i < sim.Particles.Length; i++)
+            {
+                float r = math.length(sim.Homes[i].xy);
+                if (r < rMin || r >= rMax) continue;
+                sum += sim.Particles[i].displacement.z;
+                n++;
+            }
+            return sum / math.max(1, n);
+        }
+
+        [Test]
+        public void PuddingDentsAsOneSurfaceWithoutOpeningAHole()
+        {
+            SplatSimReference sim = Press(SplatFeel.Jelly, 0.3f, 0.5f, 0f);
+            Assert.That(MeanZ(sim, 0f, 0.012f), Is.LessThan(-0.002f));
+            float worst = 0f;
+            for (int y = 0; y < 30; y++)
+                for (int x = 0; x < 29; x++)
+                {
+                    int i = y * 30 + x;
+                    float3 a = sim.Homes[i] + sim.Particles[i].displacement;
+                    float3 b = sim.Homes[i + 1] + sim.Particles[i + 1].displacement;
+                    worst = math.max(worst, math.abs(math.distance(a, b) - 0.004f));
+                }
+            Assert.That(worst, Is.LessThan(0.002f), "neighbouring dots keep their spacing: no hole, no clumping");
+        }
+
+        [Test]
+        public void PuddingTopSwaysWhileTheBottomStaysOnThePlate()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Jelly);
+            for (int c = 0; c < sim.Nodes.Length; c++) if (sim.Clusters.Home[c].y > 0.02f) sim.Nodes[c].velocity = new float3(0.3f, 0f, 0f);
+            float top = 0f, bottom = 0f;
+            for (int step = 0; step < (int)(1f / Dt); step++)
+            {
+                sim.Step(Frame(), p, new SplatCollider[0], 0);
+                for (int i = 0; i < sim.Particles.Length; i++)
+                {
+                    float y = sim.Homes[i].y;
+                    if (y > 0.03f) top = math.max(top, math.abs(sim.Particles[i].displacement.x));
+                    if (y < -0.05f) bottom = math.max(bottom, math.abs(sim.Particles[i].displacement.x));
+                }
+            }
+            Assert.That(top, Is.GreaterThan(bottom * 3f));
+            Run(sim, p, 5f);
+            Assert.That(sim.Activity, Is.LessThan(1e-6f));
+        }
+
+        [Test]
+        public void EveryDotFollowsFourWeightedSkeletonPoints()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            for (int i = 0; i < sim.Homes.Length; i++)
+            {
+                float sum = math.csum(sim.Clusters.ParticleWeights[i]);
+                if (sim.Homes[i].y > -0.02f) Assert.That(sum, Is.EqualTo(1f).Within(1e-4f));
+                if (sim.Homes[i].y < -0.057f) Assert.That(sum, Is.LessThan(1e-4f), "the row on the plate does not move");
+            }
+            Assert.That(sim.Clusters.Edges.Length, Is.GreaterThanOrEqualTo(sim.Nodes.Length * SplatSimSetup.FieldNeighbors / 2));
+            foreach (int2 e in sim.Clusters.Edges) Assert.That(e.x, Is.LessThan(e.y));
+            Assert.That(sim.Clusters.Pin, Has.Some.GreaterThan(0.99f));
+            Assert.That(sim.Clusters.Pin, Has.Some.LessThan(0.01f));
+        }
+
+        [Test]
+        public void JellySpringsBackButSlimeKeepsTheDent()
+        {
+            float jelly = MeanZ(Press(SplatFeel.Jelly, 0.3f, 0.5f, 3f), 0f, 0.018f);
+            float slime = MeanZ(Press(SplatFeel.Slime, 0.3f, 0.5f, 3f), 0f, 0.018f);
+            Assert.That(jelly, Is.GreaterThan(-0.001f));
+            Assert.That(slime, Is.LessThan(-0.001f));
+        }
+
+        [Test]
+        public void StarchPushesBackHarderAgainstAFastPokeThanASlowPress()
+        {
+            float fast = MeanZ(Press(SplatFeel.Starch, 0.03f, 0.02f, 0f), 0f, 0.018f);
+            float slow = MeanZ(Press(SplatFeel.Starch, 1.2f, 0.02f, 0f), 0f, 0.018f);
+            Assert.That(fast, Is.LessThan(slow - 0.001f));
+        }
+
+        [Test]
+        public void StarchIsFirmWhenHitFastAndSoftWhenPressedSlowly()
+        {
+            SplatSimParams starch = With(SplatFeel.Starch);
+            SplatSimParams water = With(SplatFeel.Water);
+            Assert.That(SplatSimKernel.Firmness(1.5f, starch), Is.GreaterThan(2f));
+            Assert.That(SplatSimKernel.Firmness(0.02f, starch), Is.LessThan(0.4f));
+            Assert.That(SplatSimKernel.Firmness(1.5f, water), Is.EqualTo(1f));
+            Assert.That(SplatSimKernel.Firmness(0.02f, water), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void OlderFeelsGainNoSquishPlasticTackOrThicken()
+        {
+            foreach (SplatFeel f in new[] { SplatFeel.Water, SplatFeel.Sand, SplatFeel.Fur })
+            {
+                SplatSimParams p = With(f);
+                Assert.That(new[] { p.field, p.plastic, p.thicken }, Is.EqualTo(new[] { 0f, 0f, 0f }));
+                Assert.That(p.stickDecay, Is.EqualTo(1.2f));
+                Assert.That(p.stickReach, Is.EqualTo(0.06f));
+            }
+        }
+
         [Test]
         public void WaterIsWhatTheHumanFoundInTheHeadset()
         {

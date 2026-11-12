@@ -51,6 +51,16 @@ namespace MoodPicker.Splatter.Sim
         public float burstDamping;
         public float burstGravity;
         public float gatherRamp;
+        public float field;
+        public float fieldStiffness;
+        public float fieldAnchor;
+        public float fieldPin;
+        public float fieldDamping;
+        public float plastic;
+        public float plasticYield;
+        public float plasticMax;
+        public float thicken;
+        public float thickenSpeed;
 
         public static SplatSimParams WaterDroplet => new SplatSimParams
         {
@@ -121,6 +131,7 @@ namespace MoodPicker.Splatter.Sim
         public float3 velocity;
         public float glow;
         public float stick;
+        public float3 rest;
     }
 
     public struct SplatClusterNode

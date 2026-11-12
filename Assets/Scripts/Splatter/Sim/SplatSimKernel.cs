@@ -64,7 +64,8 @@ namespace MoodPicker.Splatter.Sim
             if (dist < radius)
             {
                 float w = 1f - dist / radius;
-                acc.accel += (n * (p.handPush * w) + (c.velocity - velocity) * (p.handDrag * w)) * c.strength;
+                float firm = Firmness(math.length(c.velocity - velocity), p);
+                acc.accel += (n * (p.handPush * w) + (c.velocity - velocity) * (p.handDrag * w)) * (c.strength * firm);
                 acc.contact = math.max(acc.contact, w);
                 acc.glow = 1f;
             }
@@ -74,6 +75,13 @@ namespace MoodPicker.Splatter.Sim
                 acc.accel += ((c.velocity - velocity) * (p.handDrag * 0.2f * s) - n * (p.handAttract * s)) * c.strength;
                 acc.glow = math.max(acc.glow, s);
             }
+        }
+
+        public static float Firmness(float relativeSpeed, in SplatSimParams p)
+        {
+            if (p.thicken <= 0f) return 1f;
+            float fast = math.saturate(relativeSpeed / math.max(p.thickenSpeed, 1e-3f));
+            return math.lerp(1f, math.lerp(0.15f, 3f, fast), p.thicken);
         }
 
         public static void StepCluster(
@@ -128,6 +136,7 @@ namespace MoodPicker.Splatter.Sim
                     s.scale = 0f;
                     s.glow = 0f;
                     s.stick = 0f;
+                    s.rest = float3.zero;
                     return;
                 }
 
@@ -143,6 +152,7 @@ namespace MoodPicker.Splatter.Sim
                 s.scale = math.saturate((f.modeTime - arrival) / math.max(p.appearSeconds, 1e-3f));
                 s.glow = math.max(hand.glow, math.saturate(dist * 12f));
                 s.stick = 0f;
+                s.rest = float3.zero;
                 return;
             }
 
@@ -160,6 +170,7 @@ namespace MoodPicker.Splatter.Sim
                 accel.y -= p.burstGravity;
                 damping = p.burstDamping;
                 s.stick = 0f;
+                s.rest = float3.zero;
             }
             else if (released)
             {
@@ -167,13 +178,14 @@ namespace MoodPicker.Splatter.Sim
                 accel += new float3(drift.x, -1f, drift.z * 0.6f) * new float3(p.fallGravity * 0.12f, p.fallGravity, p.fallGravity * 0.12f);
                 damping = p.fallDamping;
                 s.stick = 0f;
+                s.rest = float3.zero;
             }
             else
             {
                 float3 rel = homeWorld - clusterHomeWorld;
                 float gather = math.lerp(1f, p.clusterGather, math.saturate(math.length(cluster.displacement) / math.max(p.gatherDistance, 1e-4f)));
                 float3 cohesive = clusterHomeWorld + cluster.displacement + rel * gather;
-                float3 target = math.lerp(homeWorld, cohesive, p.cohesion);
+                float3 target = math.lerp(homeWorld, cohesive, p.cohesion) + s.rest;
                 float k = p.homeStiffness * (1f + p.stiffnessJitter * (hash * 2f - 1f));
                 if (f.mode == (int)SplatSimMode.Gathering)
                     k *= math.saturate((f.modeTime - arrival) / math.max(p.gatherRamp, 1e-3f));
@@ -192,6 +204,15 @@ namespace MoodPicker.Splatter.Sim
                     accel += ((hand.nearestPoint - pos) * p.stickPull + (hand.nearestVelocity - s.velocity) * (p.handDrag * 2f)) * s.stick;
                 accel.y -= p.weight;
                 damping = p.homeDamping;
+
+                if (p.plastic > 0f && f.mode == (int)SplatSimMode.Formed)
+                {
+                    float3 strain = s.displacement - s.rest;
+                    float len = math.length(strain);
+                    float over = len - p.plasticYield;
+                    if (over > 0f)
+                        s.rest = ClampLength(s.rest + strain / len * (over * math.saturate(p.plastic * f.dt)), p.plasticMax);
+                }
             }
 
             s.velocity += accel * f.dt;
@@ -211,6 +232,42 @@ namespace MoodPicker.Splatter.Sim
             s.scale = released
                 ? 1f - math.smoothstep(p.fadeDistance * 0.5f, p.fadeDistance, math.length(s.displacement))
                 : 1f;
+        }
+
+        public const int FieldSubsteps = 4;
+        public const float FieldMaxOffset = 0.06f;
+
+        public static bool UsesField(in SplatSimParams p, int mode)
+        {
+            return p.field > 0.5f && mode == (int)SplatSimMode.Formed;
+        }
+
+        public static void StepFieldNode(ref SplatClusterNode node, float3 laplacian, float pin, float3 handAccel, float h, in SplatSimParams p)
+        {
+            float3 a = handAccel + laplacian * p.fieldStiffness - node.displacement * (p.fieldAnchor + pin * p.fieldPin);
+            node.velocity += a * h;
+            node.velocity *= math.exp(-p.fieldDamping * h);
+            node.velocity = ClampLength(node.velocity, p.maxSpeed);
+            node.displacement = ClampLength(node.displacement + node.velocity * h, FieldMaxOffset);
+        }
+
+        public static void FieldParticle(
+            ref SplatParticle s,
+            in SplatClusterNode a,
+            in SplatClusterNode b,
+            in SplatClusterNode c,
+            in SplatClusterNode d,
+            float4 w,
+            in SplatHandAccum hand,
+            in SplatSimFrame f,
+            in SplatSimParams p)
+        {
+            s.displacement = a.displacement * w.x + b.displacement * w.y + c.displacement * w.z + d.displacement * w.w;
+            s.velocity = a.velocity * w.x + b.velocity * w.y + c.velocity * w.z + d.velocity * w.w;
+            s.scale = 1f;
+            s.stick = 0f;
+            s.rest = float3.zero;
+            s.glow = math.max(hand.glow, s.glow * math.exp(-p.glowDecay * f.dt));
         }
 
         public static float Activity(in SplatParticle s)
