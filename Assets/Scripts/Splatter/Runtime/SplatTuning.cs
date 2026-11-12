@@ -66,6 +66,19 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 100f)] public float fieldAnchor = 10f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 6000f)] public float fieldPin = 3000f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 20f)] public float fieldDamping = 2f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float fieldTack = 0f;
+        [DebugMember(Category = "4 Weight", Min = 0.01f, Max = 0.2f)] public float fieldTackBreak = 0.035f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float fieldReach = 1f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 10f)] public float fieldTouchGain = 6f;
+        [DebugMember(Category = "4 Weight", Min = 0.002f, Max = 0.06f)] public float fieldRestMax = 0.015f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 2f)] public float fieldHeal = 0.15f;
+        [DebugMember(Category = "4 Weight", Min = 0.2f, Max = 20f)] public float fieldStickRate = 2.5f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 2f)] public float fieldTackPull = 0.5f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float crack = 0f;
+        [DebugMember(Category = "4 Weight", Min = 0.02f, Max = 2f)] public float crackSpeed = 0.25f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 0.98f)] public float crackSpread = 0.8f;
+        [DebugMember(Category = "4 Weight", Min = 0.5f, Max = 60f)] public float crackRate = 10f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 3f)] public float crackHeal = 0.3f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 20f)] public float plastic = 0f;
         [DebugMember(Category = "4 Weight", Min = 0.001f, Max = 0.05f)] public float plasticYield = 0.02f;
         [DebugMember(Category = "4 Weight", Min = 0.01f, Max = 0.2f)] public float plasticMax = 0.08f;
@@ -179,6 +192,19 @@ namespace MoodPicker.Splatter
             fieldAnchor = p.fieldAnchor;
             fieldPin = p.fieldPin;
             fieldDamping = p.fieldDamping;
+            fieldTack = p.fieldTack;
+            fieldTackBreak = p.fieldTackBreak;
+            fieldReach = p.fieldReach;
+            fieldTouchGain = p.fieldTouchGain;
+            fieldRestMax = p.fieldRestMax;
+            fieldHeal = p.fieldHeal;
+            fieldStickRate = p.fieldStickRate;
+            fieldTackPull = p.fieldTackPull;
+            crack = p.crack;
+            crackSpeed = p.crackSpeed;
+            crackSpread = p.crackSpread;
+            crackRate = p.crackRate;
+            crackHeal = p.crackHeal;
             plastic = p.plastic;
             plasticYield = p.plasticYield;
             plasticMax = p.plasticMax;
@@ -196,6 +222,7 @@ namespace MoodPicker.Splatter
             stretchMax = look.stretchMax;
             stretchSeconds = look.stretchSeconds;
             fluff = look.fluff;
+            detachDistance = look.detach;
         }
 
         public SplatLook ToLook()
@@ -272,6 +299,19 @@ namespace MoodPicker.Splatter
                 fieldAnchor = fieldAnchor,
                 fieldPin = fieldPin,
                 fieldDamping = fieldDamping,
+                fieldTack = fieldTack,
+                fieldTackBreak = fieldTackBreak,
+                fieldReach = fieldReach,
+                fieldTouchGain = fieldTouchGain,
+                fieldRestMax = fieldRestMax,
+                fieldHeal = fieldHeal,
+                fieldStickRate = fieldStickRate,
+                fieldTackPull = fieldTackPull,
+                crack = crack,
+                crackSpeed = crackSpeed,
+                crackSpread = crackSpread,
+                crackRate = crackRate,
+                crackHeal = crackHeal,
                 plastic = plastic,
                 plasticYield = plasticYield,
                 plasticMax = plasticMax,

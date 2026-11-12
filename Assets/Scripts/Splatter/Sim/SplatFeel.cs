@@ -21,8 +21,8 @@ namespace MoodPicker.Splatter.Sim
         public static SplatFeel Sand => new SplatFeel { weight = 0.7f, cohesion = 0.3f, viscosity = 0.7f, bounce = 0.8f, grain = 1f };
         public static SplatFeel Leaf => new SplatFeel { weight = 0.3f, cohesion = 0.25f, viscosity = 0.55f, bounce = 0.35f, grain = 0.65f };
         public static SplatFeel Jelly => new SplatFeel { weight = 0.4f, cohesion = 1f, viscosity = 0.25f, bounce = 0.9f, grain = 0f, squish = 1f };
-        public static SplatFeel Slime => new SplatFeel { weight = 0.5f, cohesion = 0.9f, viscosity = 0.8f, bounce = 0.3f, grain = 0f, plastic = 0.8f, tack = 0.8f };
-        public static SplatFeel Starch => new SplatFeel { weight = 0.8f, cohesion = 0.5f, viscosity = 0.6f, bounce = 0.2f, grain = 0.8f, plastic = 0.5f, thicken = 1f };
+        public static SplatFeel Slime => new SplatFeel { weight = 0.5f, cohesion = 0.9f, viscosity = 0.8f, bounce = 0.3f, grain = 0f, squish = 1f, plastic = 0.8f, tack = 0.8f };
+        public static SplatFeel Starch => new SplatFeel { weight = 0.8f, cohesion = 0.5f, viscosity = 0.6f, bounce = 0.2f, grain = 0.8f, squish = 1f, plastic = 0.5f, thicken = 1f };
         public static SplatFeel Fur => new SplatFeel { weight = 0.1f, cohesion = 0.7f, viscosity = 0.2f, bounce = 0.7f, grain = 1f, fluff = 1f };
 
         public SplatFeel Clamped => new SplatFeel
@@ -46,6 +46,7 @@ namespace MoodPicker.Splatter.Sim
         public float stretchMax;
         public float stretchSeconds;
         public float fluff;
+        public float detach;
     }
 
     public struct SplatTransitionShape
@@ -79,8 +80,21 @@ namespace MoodPicker.Splatter.Sim
             p.fieldAnchor = math.lerp(2f, 30f, f.bounce);
             p.fieldPin = 3000f;
             p.fieldDamping = math.lerp(0.6f, 6f, f.viscosity);
-            p.plastic = math.lerp(0f, 5f, f.plastic);
-            p.plasticYield = math.lerp(0.02f, 0.005f, f.plastic);
+            p.fieldTack = f.tack;
+            p.fieldTackBreak = 0.035f;
+            p.fieldReach = f.tack > 0f || f.thicken > 0f ? 0f : 1f;
+            p.fieldTouchGain = 6f;
+            p.fieldRestMax = 0.015f;
+            p.fieldHeal = 0.15f;
+            p.fieldStickRate = 2.5f;
+            p.fieldTackPull = 0.5f;
+            p.crack = f.thicken * math.step(0.5f, f.squish);
+            p.crackSpeed = 0.25f;
+            p.crackSpread = 0.8f;
+            p.crackRate = 10f;
+            p.crackHeal = 0.3f;
+            p.plastic = math.lerp(0f, 10f, f.plastic);
+            p.plasticYield = 0.02f * (1f - f.plastic) * (1f - f.plastic) + 0.001f;
             p.plasticMax = 0.08f;
             p.thicken = f.thicken;
             p.thickenSpeed = 0.35f;
@@ -96,12 +110,14 @@ namespace MoodPicker.Splatter.Sim
         public static SplatFeelLook Look(in SplatFeel feel)
         {
             SplatFeel f = feel.Clamped;
+            float slime = math.step(1e-3f, f.tack) * math.step(0.5f, f.squish);
             return new SplatFeelLook
             {
                 grain = math.lerp(1f, 0.45f, f.grain),
-                stretchMax = math.lerp(4f, 0f, f.grain),
-                stretchSeconds = math.lerp(0.012f, 0f, f.grain),
-                fluff = f.fluff
+                stretchMax = math.lerp(4f, 0f, f.grain) * (1f - 0.85f * slime),
+                stretchSeconds = math.lerp(0.012f, 0f, f.grain) * (1f - 0.85f * slime),
+                fluff = f.fluff,
+                detach = math.lerp(0.012f, 0.5f, math.step(0.5f, f.squish) * math.step(1e-3f, f.tack + f.thicken))
             };
         }
 

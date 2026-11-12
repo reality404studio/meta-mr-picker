@@ -410,20 +410,272 @@ namespace MoodPicker.Tests
         }
 
         [Test]
-        public void JellySpringsBackButSlimeKeepsTheDent()
+        public void JellySpringsBack()
         {
             float jelly = MeanZ(Press(SplatFeel.Jelly, 0.3f, 0.5f, 3f), 0f, 0.018f);
-            float slime = MeanZ(Press(SplatFeel.Slime, 0.3f, 0.5f, 3f), 0f, 0.018f);
             Assert.That(jelly, Is.GreaterThan(-0.001f));
-            Assert.That(slime, Is.LessThan(-0.001f));
+        }
+
+        static float WorstSpacingError(SplatSimReference sim)
+        {
+            float worst = 0f;
+            for (int y = 0; y < 30; y++)
+                for (int x = 0; x < 29; x++)
+                {
+                    int i = y * 30 + x;
+                    float3 a = sim.Homes[i] + sim.Particles[i].displacement;
+                    float3 b = sim.Homes[i + 1] + sim.Particles[i + 1].displacement;
+                    worst = math.max(worst, math.abs(math.distance(a, b) - 0.004f));
+                }
+            return worst;
+        }
+
+        [Test]
+        public void SlimeDentsAsOneSurfaceAndStaysDented()
+        {
+            SplatSimReference sim = Press(SplatFeel.Slime, 0.3f, 0.5f, 3f);
+            Assert.That(MeanZ(sim, 0f, 0.012f), Is.LessThan(-0.002f));
+            Assert.That(WorstSpacingError(sim), Is.LessThan(0.002f), "no single dots breaking away");
+        }
+
+        [Test]
+        public void SlimeStretchesTowardAPullingHandKeepsTheStrandAndGrowsItsSplats()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Slime);
+            var c = new SplatCollider[1];
+            float maxScale = 1f;
+            for (int i = 0; i < (int)(0.4f / Dt); i++)
+            {
+                c[0] = Finger(new float3(0f, 0.03f, 0.018f), float3.zero);
+                sim.Step(Frame(), p, c, 1);
+            }
+            float z = 0.018f;
+            for (int i = 0; i < (int)(1.5f / Dt); i++)
+            {
+                z += 0.03f * Dt;
+                c[0] = Finger(new float3(0f, 0.03f, z), new float3(0f, 0f, 0.03f));
+                sim.Step(Frame(), p, c, 1);
+                foreach (SplatParticle s in sim.Particles) maxScale = math.max(maxScale, s.scale);
+            }
+            float pulled = MeanZ(sim, 0f, 1f);
+            Run(sim, p, 2f);
+            float kept = 0f;
+            foreach (SplatClusterNode n in sim.Nodes) kept = math.max(kept, n.rest.z);
+            Assert.That(pulled, Is.GreaterThan(0.001f), "the surface follows the hand away");
+            Assert.That(kept, Is.GreaterThan(0.005f), "part of the strand stays after the hand lets go");
+            Assert.That(maxScale, Is.GreaterThan(1.005f), "stretched skin grows its splats to cover gaps");
+            Assert.That(maxScale, Is.LessThanOrEqualTo(1.3f + 1e-4f), "but never past the cap that kept the look from turning to flakes");
+        }
+
+        static float NodeMoveNearButNotTouching(SplatFeel feel)
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(feel);
+            var c = new SplatCollider[1];
+            float moved = 0f;
+            for (int i = 0; i < (int)(1f / Dt); i++)
+            {
+                float x = math.lerp(-0.04f, 0.04f, i * Dt);
+                c[0] = Finger(new float3(x, 0.02f, 0.026f), new float3(0.08f, 0f, 0f));
+                sim.Step(Frame(), p, c, 1);
+                foreach (SplatClusterNode n in sim.Nodes) moved = math.max(moved, math.length(n.displacement));
+            }
+            return moved;
+        }
+
+        [Test]
+        public void SlimeIgnoresAHandThatIsNearButNotTouching()
+        {
+            Assert.That(NodeMoveNearButNotTouching(SplatFeel.Slime), Is.LessThan(0.0001f));
+            Assert.That(NodeMoveNearButNotTouching(SplatFeel.Jelly), Is.GreaterThan(0.0005f), "jelly keeps its approved reach");
+        }
+
+        static float MaxNode(SplatSimReference sim, Func<SplatClusterNode, float> of)
+        {
+            float m = 0f;
+            foreach (SplatClusterNode n in sim.Nodes) m = math.max(m, of(n));
+            return m;
+        }
+
+        [Test]
+        public void SlimeShapeStaysReadableAfterManyTouchesAndSlowlyHeals()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Slime);
+            var c = new SplatCollider[1];
+            float worst = 0f;
+            for (int touch = 0; touch < 6; touch++)
+            {
+                float2 at = new float2(math.sin(touch * 2.1f), math.cos(touch * 1.3f)) * 0.03f;
+                for (int i = 0; i < (int)(0.8f / Dt); i++)
+                {
+                    float z = i < 30 ? math.lerp(0.03f, 0.008f, i / 30f) : math.lerp(0.008f, 0.06f, (i - 30) / 28f);
+                    c[0] = Finger(new float3(at, z), new float3(0f, 0f, i < 30 ? -0.05f : 0.07f));
+                    sim.Step(Frame(), p, c, 1);
+                    worst = math.max(worst, MaxNode(sim, n => math.length(n.rest)));
+                }
+            }
+            Assert.That(worst, Is.LessThanOrEqualTo(p.fieldRestMax + 1e-4f), "permanent bend is capped");
+            Run(sim, p, 12f);
+            Assert.That(MaxNode(sim, n => math.length(n.rest)), Is.LessThan(0.004f), "the letter drifts back while untouched");
+        }
+
+        static float StickAfterTouch(float seconds)
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Slime);
+            var c = new SplatCollider[] { Finger(new float3(0f, 0.01f, 0.012f), float3.zero) };
+            float best = 0f;
+            for (int i = 0; i < (int)math.round(seconds / Dt); i++)
+            {
+                sim.Step(Frame(), p, c, 1);
+                best = math.max(best, MaxNode(sim, n => n.stick));
+            }
+            return best;
+        }
+
+        [Test]
+        public void SlimeOnlySticksAfterAHeldTouch()
+        {
+            Assert.That(StickAfterTouch(0.05f), Is.LessThan(0.3f));
+            Assert.That(StickAfterTouch(0.8f), Is.GreaterThan(0.6f));
+        }
+
+        [Test]
+        public void SlimeLetsGoOnceTheHandIsFarFromTheStuckSkin()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Slime);
+            var c = new SplatCollider[1];
+            for (int i = 0; i < (int)(0.8f / Dt); i++)
+            {
+                c[0] = Finger(new float3(0f, 0.01f, 0.012f), float3.zero);
+                sim.Step(Frame(), p, c, 1);
+            }
+            Assert.That(MaxNode(sim, n => n.stick), Is.GreaterThan(0.5f));
+            for (int i = 0; i < (int)(0.3f / Dt); i++)
+            {
+                c[0] = Finger(new float3(0f, 0.01f, 0.012f + 0.4f * i * Dt), new float3(0f, 0f, 0.4f));
+                sim.Step(Frame(), p, c, 1);
+            }
+            Assert.That(MaxNode(sim, n => n.stick), Is.EqualTo(0f));
+        }
+
+        static SplatSimReference Poke(SplatFeel feel, float speed, out int hit)
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(feel);
+            var c = new SplatCollider[1];
+            float z = 0.024f;
+            while (z > 0.012f)
+            {
+                z -= speed * Dt;
+                c[0] = Finger(new float3(0f, 0.01f, z), new float3(0f, 0f, -speed));
+                sim.Step(Frame(), p, c, 1);
+            }
+            hit = 0;
+            for (int n = 1; n < sim.Nodes.Length; n++)
+                if (sim.Nodes[n].crack > sim.Nodes[hit].crack) hit = n;
+            return sim;
+        }
+
+        [Test]
+        public void StarchCracksUnderAFastPokeAndTheCrackRunsOutward()
+        {
+            SplatSimReference sim = Poke(SplatFeel.Starch, 0.6f, out int hit);
+            SplatSimParams p = With(SplatFeel.Starch);
+            Assert.That(sim.Nodes[hit].crack, Is.EqualTo(1f));
+            float3 at = sim.Clusters.Home[hit];
+            int far = 0;
+            for (int n = 0; n < sim.Nodes.Length; n++)
+                if (math.distance(sim.Clusters.Home[n], at) > math.distance(sim.Clusters.Home[far], at)) far = n;
+            float early = sim.Nodes[far].crack;
+            var c = new SplatCollider[] { Finger(new float3(0f, 0.01f, 0.012f), float3.zero) };
+            for (int i = 0; i < (int)(0.5f / Dt); i++) sim.Step(Frame(), p, c, 1);
+            int mid = -1;
+            foreach (int2 e in sim.Clusters.Edges)
+                if (e.x == hit || e.y == hit) { mid = e.x == hit ? e.y : e.x; break; }
+            Assert.That(sim.Nodes[mid].crack, Is.GreaterThan(0.5f), "the neighbouring plate cracks too");
+            Assert.That(sim.Nodes[far].crack, Is.GreaterThan(early), "the crack keeps running outward over time");
+            Assert.That(sim.Nodes[far].crack, Is.LessThan(sim.Nodes[mid].crack), "and fades with distance");
+        }
+
+        [Test]
+        public void StarchSlowPressSinksInWithoutCracking()
+        {
+            SplatSimReference sim = Poke(SplatFeel.Starch, 0.02f, out _);
+            Assert.That(MaxNode(sim, n => n.crack), Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void StarchCracksOpenAsGapsAlongPlateEdges()
+        {
+            SplatSimReference sim = Poke(SplatFeel.Starch, 0.6f, out int hit);
+            float edgeScale = 1f, inner = 0f;
+            for (int i = 0; i < sim.Particles.Length; i++)
+            {
+                if (sim.Clusters.ParticleNodes[i].x != hit) continue;
+                float edge = SplatSimKernel.PlateEdge(sim.Clusters.ParticleWeights[i]);
+                if (edge > 0.9f) edgeScale = math.min(edgeScale, sim.Particles[i].scale);
+                if (edge < 0.1f) inner = math.max(inner, sim.Particles[i].scale);
+            }
+            Assert.That(edgeScale, Is.LessThan(0.3f));
+            Assert.That(inner, Is.GreaterThan(0.9f));
+        }
+
+        [Test]
+        public void StarchCracksMeltBackWhenLeftAlone()
+        {
+            SplatSimReference sim = Poke(SplatFeel.Starch, 0.6f, out _);
+            Run(sim, With(SplatFeel.Starch), 6f);
+            Assert.That(MaxNode(sim, n => n.crack), Is.LessThan(0.05f));
+        }
+
+        [Test]
+        public void JellyAndSlimeNeverCrack()
+        {
+            Assert.That(With(SplatFeel.Jelly).crack, Is.EqualTo(0f));
+            Assert.That(With(SplatFeel.Slime).crack, Is.EqualTo(0f));
+            Assert.That(MaxNode(Poke(SplatFeel.Jelly, 0.6f, out _), n => n.crack), Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void JellyStaysWithoutTackRestOrGrowth()
+        {
+            SplatSimParams p = With(SplatFeel.Jelly);
+            Assert.That(p.fieldTack, Is.EqualTo(0f));
+            Assert.That(p.fieldReach, Is.EqualTo(1f));
+            Assert.That(p.plastic, Is.EqualTo(0f));
+            Assert.That(SplatFeelMap.Look(SplatFeel.Jelly).detach, Is.EqualTo(0.012f));
+            Assert.That(SplatFeelMap.Look(SplatFeel.Slime).detach, Is.GreaterThan(0.3f));
+            Assert.That(SplatFeelMap.Look(SplatFeel.Jelly).stretchMax, Is.EqualTo(4f));
+            Assert.That(SplatFeelMap.Look(SplatFeel.Slime).stretchMax, Is.LessThan(1f));
+        }
+
+        static float PeakNodeSpeed(SplatFeel feel, float speed)
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(feel);
+            var c = new SplatCollider[1];
+            float z = 0.024f, peak = 0f;
+            while (z > 0.012f)
+            {
+                z -= speed * Dt;
+                c[0] = Finger(new float3(0f, 0.01f, z), new float3(0f, 0f, -speed));
+                sim.Step(Frame(), p, c, 1);
+                peak = math.max(peak, MaxNode(sim, n => math.length(n.velocity)));
+            }
+            return peak;
         }
 
         [Test]
         public void StarchPushesBackHarderAgainstAFastPokeThanASlowPress()
         {
-            float fast = MeanZ(Press(SplatFeel.Starch, 0.03f, 0.02f, 0f), 0f, 0.018f);
-            float slow = MeanZ(Press(SplatFeel.Starch, 1.2f, 0.02f, 0f), 0f, 0.018f);
-            Assert.That(fast, Is.LessThan(slow - 0.001f));
+            SplatFeel runny = SplatFeel.Starch;
+            runny.thicken = 0f;
+            Assert.That(PeakNodeSpeed(SplatFeel.Starch, 0.6f), Is.GreaterThan(PeakNodeSpeed(runny, 0.6f) * 1.5f), "a fast hit meets a firmer surface");
+            Assert.That(PeakNodeSpeed(SplatFeel.Starch, 0.02f), Is.LessThan(PeakNodeSpeed(runny, 0.02f) * 0.5f), "a slow press sinks in instead of shoving");
         }
 
         [Test]
@@ -443,7 +695,7 @@ namespace MoodPicker.Tests
             foreach (SplatFeel f in new[] { SplatFeel.Water, SplatFeel.Sand, SplatFeel.Fur })
             {
                 SplatSimParams p = With(f);
-                Assert.That(new[] { p.field, p.plastic, p.thicken }, Is.EqualTo(new[] { 0f, 0f, 0f }));
+                Assert.That(new[] { p.field, p.plastic, p.thicken, p.crack }, Is.EqualTo(new[] { 0f, 0f, 0f, 0f }));
                 Assert.That(p.stickDecay, Is.EqualTo(1.2f));
                 Assert.That(p.stickReach, Is.EqualTo(0.06f));
             }

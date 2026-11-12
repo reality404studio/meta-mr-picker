@@ -96,8 +96,12 @@ namespace MoodPicker.Splatter.Sim
             {
                 node.displacement = float3.zero;
                 node.velocity = float3.zero;
+                node.rest = float3.zero;
+                node.stick = 0f;
                 return;
             }
+            node.rest = float3.zero;
+            node.stick = 0f;
 
             float3 a = hand.accel;
             if (springing) a += ClampLength(-node.displacement * p.clusterStiffness, p.maxSpringAccel);
@@ -244,11 +248,66 @@ namespace MoodPicker.Splatter.Sim
 
         public static void StepFieldNode(ref SplatClusterNode node, float3 laplacian, float pin, float3 handAccel, float h, in SplatSimParams p)
         {
-            float3 a = handAccel + laplacian * p.fieldStiffness - node.displacement * (p.fieldAnchor + pin * p.fieldPin);
+            float3 a = handAccel + laplacian * p.fieldStiffness - (node.displacement - node.rest) * (p.fieldAnchor + pin * p.fieldPin);
             node.velocity += a * h;
             node.velocity *= math.exp(-p.fieldDamping * h);
             node.velocity = ClampLength(node.velocity, p.maxSpeed);
             node.displacement = ClampLength(node.displacement + node.velocity * h, FieldMaxOffset);
+            if (p.plastic > 0f)
+            {
+                float3 strain = node.displacement - node.rest;
+                float len = math.length(strain);
+                float over = len - p.plasticYield;
+                if (over > 0f)
+                    node.rest = ClampLength(node.rest + strain / len * (over * math.saturate(p.plastic * h) * (1f - pin)), p.fieldRestMax);
+            }
+        }
+
+        public static bool TouchesThroughSurface(in SplatSimParams p)
+        {
+            return p.fieldReach < 0.5f;
+        }
+
+        public static void SpreadTouch(ref float3 accel, ref float contact, float weight, float nodeMass, in SplatHandAccum dot, in SplatSimParams p)
+        {
+            float k = weight / math.max(nodeMass, 1e-4f) * p.fieldTouchGain;
+            accel += dot.accel * k;
+            contact = math.min(1f, contact + dot.contact * k);
+        }
+
+        public static SplatSimParams FieldTouchParams(in SplatSimParams p)
+        {
+            SplatSimParams t = p;
+            t.attractShell = math.lerp(1f, p.attractShell, p.fieldReach);
+            return t;
+        }
+
+        public static void NearestCollider(in SplatCollider c, float3 pos, ref float best, ref float3 point, ref float3 velocity)
+        {
+            float3 r = pos - c.position;
+            float dist = math.length(r);
+            float surface = dist - c.radius;
+            if (surface >= best) return;
+            best = surface;
+            point = c.position + (dist > 1e-5f ? r / dist : new float3(0f, 1f, 0f)) * c.radius;
+            velocity = c.velocity;
+        }
+
+        public static float3 FieldTack(ref SplatClusterNode node, float3 pos, float pin, in SplatHandAccum hand, float nearest, float3 nearestPoint, float3 nearestVelocity, float dt, in SplatSimParams p)
+        {
+            if (p.fieldTack <= 0f) return float3.zero;
+            node.stick = math.min(1f, node.stick + math.saturate(hand.contact * 8f) * p.fieldStickRate * dt) * math.exp(-p.stickDecay * dt);
+            if (nearest > p.fieldTackBreak) node.stick = 0f;
+            float k = node.stick * p.fieldTack * (1f - pin);
+            if (k <= 1e-4f) return float3.zero;
+            float pull = (p.stickPull + p.fieldStiffness * SplatSimSetup.FieldNeighbors) * p.fieldTackPull;
+            return ((nearestPoint - pos) * pull + (nearestVelocity - node.velocity) * (p.handDrag * 2f)) * k;
+        }
+
+        public static void FieldHeal(ref SplatClusterNode node, float contact, float dt, in SplatSimParams p)
+        {
+            if (p.fieldHeal <= 0f || contact > 0f || node.stick > 0.01f) return;
+            node.rest *= math.exp(-p.fieldHeal * dt);
         }
 
         public static void FieldParticle(
@@ -262,12 +321,38 @@ namespace MoodPicker.Splatter.Sim
             in SplatSimFrame f,
             in SplatSimParams p)
         {
-            s.displacement = a.displacement * w.x + b.displacement * w.y + c.displacement * w.z + d.displacement * w.w;
-            s.velocity = a.velocity * w.x + b.velocity * w.y + c.velocity * w.z + d.velocity * w.w;
-            s.scale = 1f;
+            float4 wb = math.lerp(w, new float4(math.csum(w), 0f, 0f, 0f), a.crack);
+            s.displacement = a.displacement * wb.x + b.displacement * wb.y + c.displacement * wb.z + d.displacement * wb.w;
+            s.velocity = a.velocity * wb.x + b.velocity * wb.y + c.velocity * wb.z + d.velocity * wb.w;
+            float grow = (a.stretch - 1f) * w.x + (b.stretch - 1f) * w.y + (c.stretch - 1f) * w.z + (d.stretch - 1f) * w.w;
+            float scale = p.fieldTack > 0f ? 1f + math.clamp(grow, 0f, 0.3f) : 1f;
+            if (p.crack > 0f) scale *= 1f - 0.85f * a.crack * PlateEdge(w);
+            s.scale = scale;
             s.stick = 0f;
             s.rest = float3.zero;
             s.glow = math.max(hand.glow, s.glow * math.exp(-p.glowDecay * f.dt));
+        }
+
+        public static float PlateEdge(float4 w)
+        {
+            return 1f - math.saturate((w.x - w.y) / math.max(w.x + w.y, 1e-4f) * 4f);
+        }
+
+        public static float EdgeOpen(in SplatClusterNode a, in SplatClusterNode b)
+        {
+            return 1f - math.min(a.crack, b.crack);
+        }
+
+        public static void CrackTrigger(ref SplatClusterNode node, float contact, float3 handVelocity, float dt, in SplatSimParams p)
+        {
+            if (p.crack <= 0f) return;
+            if (contact > 0f && math.length(handVelocity - node.velocity) > p.crackSpeed) node.crack = 1f;
+            else if (contact <= 0f) node.crack = math.max(0f, node.crack - p.crackHeal * dt);
+        }
+
+        public static float CrackToward(float current, float target, float dt, in SplatSimParams p)
+        {
+            return current < target ? math.min(target, current + p.crackRate * dt) : current;
         }
 
         public static float Activity(in SplatParticle s)

@@ -56,6 +56,19 @@ namespace MoodPicker.Splatter.Sim
         public float fieldAnchor;
         public float fieldPin;
         public float fieldDamping;
+        public float fieldTack;
+        public float fieldTackBreak;
+        public float fieldReach;
+        public float fieldTouchGain;
+        public float fieldRestMax;
+        public float fieldHeal;
+        public float fieldStickRate;
+        public float fieldTackPull;
+        public float crack;
+        public float crackSpeed;
+        public float crackSpread;
+        public float crackRate;
+        public float crackHeal;
         public float plastic;
         public float plasticYield;
         public float plasticMax;
@@ -138,6 +151,10 @@ namespace MoodPicker.Splatter.Sim
     {
         public float3 displacement;
         public float3 velocity;
+        public float3 rest;
+        public float stick;
+        public float stretch;
+        public float crack;
     }
 
     public struct SplatHandAccum

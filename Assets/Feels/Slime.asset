@@ -20,7 +20,7 @@ MonoBehaviour:
     bounce: 0.3
     grain: 0
     fluff: 0
-    squish: 0
+    squish: 1
     plastic: 0.8
     tack: 0.8
     thicken: 0

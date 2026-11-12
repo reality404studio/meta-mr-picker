@@ -16,6 +16,11 @@ namespace MoodPicker.Splatter
         [ReadOnly] public NativeArray<SplatCollider> colliders;
         [ReadOnly] public NativeArray<int2> edges;
         [ReadOnly] public NativeArray<float> pin;
+        [ReadOnly] public NativeArray<float3> particleHome;
+        [ReadOnly] public NativeArray<float4> particleState;
+        [ReadOnly] public NativeArray<int4> fieldNodes;
+        [ReadOnly] public NativeArray<float4> fieldWeights;
+        [ReadOnly] public NativeArray<float> nodeMass;
         public NativeArray<float3> homeWorld;
         public NativeArray<SplatClusterNode> nodes;
         public SplatSimFrame frame;
@@ -48,6 +53,12 @@ namespace MoodPicker.Splatter
         {
             int k = nodes.Length;
             var push = new NativeArray<float3>(k, Allocator.Temp);
+            var touched = new NativeArray<SplatHandAccum>(k, Allocator.Temp);
+            var nearestD = new NativeArray<float>(k, Allocator.Temp);
+            var nearestP = new NativeArray<float3>(k, Allocator.Temp);
+            var nearestV = new NativeArray<float3>(k, Allocator.Temp);
+            bool throughSurface = SplatSimKernel.TouchesThroughSurface(p);
+            SplatSimParams touch = SplatSimKernel.FieldTouchParams(p);
             var lap = new NativeArray<float3>(k, Allocator.Temp);
             for (int c = 0; c < k; c++)
             {
@@ -56,11 +67,66 @@ namespace MoodPicker.Splatter
                 homeWorld[c] = hw;
                 SplatHandAccum acc = SplatHandAccum.Empty;
                 float3 pos = hw + node.displacement;
-                float reach = radius[c] * p.clusterReach;
+                float reach = radius[c] * p.clusterReach * p.fieldReach;
+                float nearest = float.MaxValue;
+                float3 nearPoint = pos, nearVel = float3.zero;
                 for (int j = 0; j < colliderCount; j++)
-                    SplatSimKernel.AccumulateCollider(ref acc, pos, node.velocity, colliders[j], p, reach);
+                {
+                    SplatSimKernel.AccumulateCollider(ref acc, pos, node.velocity, colliders[j], touch, reach);
+                    SplatSimKernel.NearestCollider(colliders[j], pos, ref nearest, ref nearPoint, ref nearVel);
+                }
+                if (throughSurface) acc = SplatHandAccum.Empty;
                 push[c] = acc.accel;
+                touched[c] = acc;
+                nearestD[c] = nearest;
+                nearestP[c] = nearPoint;
+                nearestV[c] = nearVel;
                 nodes[c] = node;
+            }
+            if (throughSurface && colliderCount > 0)
+            {
+                for (int i = 0; i < particleHome.Length; i++)
+                {
+                    float4 a = particleState[i * 2];
+                    float4 b = particleState[i * 2 + 1];
+                    float3 pos = SplatSimKernel.Transform(frame.bodyToWorld, particleHome[i]) + a.xyz;
+                    SplatHandAccum dot = SplatHandAccum.Empty;
+                    for (int j = 0; j < colliderCount; j++)
+                        SplatSimKernel.AccumulateCollider(ref dot, pos, b.xyz, colliders[j], touch, 0f);
+                    if (dot.contact <= 0f) continue;
+                    int4 n = fieldNodes[i];
+                    float4 w = fieldWeights[i];
+                    Spread(push, touched, n.x, w.x, dot);
+                    Spread(push, touched, n.y, w.y, dot);
+                    Spread(push, touched, n.z, w.z, dot);
+                    Spread(push, touched, n.w, w.w, dot);
+                }
+            }
+            for (int c = 0; c < k; c++)
+            {
+                SplatClusterNode node = nodes[c];
+                float3 pos = homeWorld[c] + node.displacement;
+                push[c] = push[c] + SplatSimKernel.FieldTack(ref node, pos, pin[c], touched[c], nearestD[c], nearestP[c], nearestV[c], frame.dt, p);
+                SplatSimKernel.FieldHeal(ref node, touched[c].contact, frame.dt, p);
+                SplatSimKernel.CrackTrigger(ref node, touched[c].contact, nearestV[c], frame.dt, p);
+                nodes[c] = node;
+            }
+            if (p.crack > 0f)
+            {
+                var target = new NativeArray<float>(k, Allocator.Temp);
+                for (int e = 0; e < edges.Length; e++)
+                {
+                    int2 ab = edges[e];
+                    target[ab.y] = math.max(target[ab.y], nodes[ab.x].crack * p.crackSpread);
+                    target[ab.x] = math.max(target[ab.x], nodes[ab.y].crack * p.crackSpread);
+                }
+                for (int c = 0; c < k; c++)
+                {
+                    SplatClusterNode node = nodes[c];
+                    node.crack = SplatSimKernel.CrackToward(node.crack, target[c], frame.dt, p);
+                    nodes[c] = node;
+                }
+                target.Dispose();
             }
             float h = frame.dt / SplatSimKernel.FieldSubsteps;
             for (int sub = 0; sub < SplatSimKernel.FieldSubsteps; sub++)
@@ -69,7 +135,7 @@ namespace MoodPicker.Splatter
                 for (int e = 0; e < edges.Length; e++)
                 {
                     int2 ab = edges[e];
-                    float3 d = nodes[ab.y].displacement - nodes[ab.x].displacement;
+                    float3 d = ((nodes[ab.y].displacement - nodes[ab.y].rest) - (nodes[ab.x].displacement - nodes[ab.x].rest)) * SplatSimKernel.EdgeOpen(nodes[ab.x], nodes[ab.y]);
                     lap[ab.x] += d;
                     lap[ab.y] -= d;
                 }
@@ -80,8 +146,43 @@ namespace MoodPicker.Splatter
                     nodes[c] = node;
                 }
             }
+            if (p.fieldTack > 0f)
+            {
+                var sum = new NativeArray<float>(k, Allocator.Temp);
+                var count = new NativeArray<int>(k, Allocator.Temp);
+                for (int e = 0; e < edges.Length; e++)
+                {
+                    int2 ab = edges[e];
+                    float rest = math.distance(homeWorld[ab.x], homeWorld[ab.y]);
+                    float now = math.distance(homeWorld[ab.x] + nodes[ab.x].displacement, homeWorld[ab.y] + nodes[ab.y].displacement);
+                    float r = now / math.max(rest, 1e-5f);
+                    sum[ab.x] += r; count[ab.x]++;
+                    sum[ab.y] += r; count[ab.y]++;
+                }
+                for (int c = 0; c < k; c++)
+                {
+                    SplatClusterNode node = nodes[c];
+                    node.stretch = count[c] > 0 ? sum[c] / count[c] : 1f;
+                    nodes[c] = node;
+                }
+                sum.Dispose();
+                count.Dispose();
+            }
             push.Dispose();
             lap.Dispose();
+            touched.Dispose();
+            nearestD.Dispose();
+            nearestP.Dispose();
+            nearestV.Dispose();
+        }
+
+        void Spread(NativeArray<float3> push, NativeArray<SplatHandAccum> touched, int node, float weight, in SplatHandAccum dot)
+        {
+            float3 accel = push[node];
+            SplatHandAccum t = touched[node];
+            SplatSimKernel.SpreadTouch(ref accel, ref t.contact, weight, nodeMass[node], dot, p);
+            push[node] = accel;
+            touched[node] = t;
         }
     }
 
@@ -196,6 +297,7 @@ namespace MoodPicker.Splatter
         NativeArray<float> _pin;
         NativeArray<int4> _fieldNodes;
         NativeArray<float4> _fieldWeights;
+        NativeArray<float> _nodeMass;
         NativeArray<float4> _texels;
         NativeArray<SplatCollider> _colliders;
         NativeArray<float> _result;
@@ -305,6 +407,7 @@ namespace MoodPicker.Splatter
             _pin = new NativeArray<float>(clusters.Pin, Allocator.Persistent);
             _fieldNodes = new NativeArray<int4>(clusters.ParticleNodes, Allocator.Persistent);
             _fieldWeights = new NativeArray<float4>(clusters.ParticleWeights, Allocator.Persistent);
+            _nodeMass = new NativeArray<float>(clusters.NodeMass, Allocator.Persistent);
             _colliders = new NativeArray<SplatCollider>(MaxColliders, Allocator.Persistent);
             _result = new NativeArray<float>(4, Allocator.Persistent);
             for (int c = 0; c < clusters.Count; c++) _maxClusterRadius = math.max(_maxClusterRadius, clusters.Radius[c]);
@@ -551,6 +654,11 @@ namespace MoodPicker.Splatter
                 colliders = _colliders,
                 edges = _edges,
                 pin = _pin,
+                particleHome = _home,
+                particleState = _texels,
+                fieldNodes = _fieldNodes,
+                fieldWeights = _fieldWeights,
+                nodeMass = _nodeMass,
                 homeWorld = _clusterHomeWorld,
                 nodes = _nodes,
                 frame = frame,
@@ -620,6 +728,7 @@ namespace MoodPicker.Splatter
             if (_pin.IsCreated) _pin.Dispose();
             if (_fieldNodes.IsCreated) _fieldNodes.Dispose();
             if (_fieldWeights.IsCreated) _fieldWeights.Dispose();
+            if (_nodeMass.IsCreated) _nodeMass.Dispose();
             if (_texels.IsCreated) _texels.Dispose();
             if (_colliders.IsCreated) _colliders.Dispose();
             if (_result.IsCreated) _result.Dispose();

@@ -12,6 +12,7 @@ namespace MoodPicker.Splatter.Sim
         public float[] Pin;
         public int4[] ParticleNodes;
         public float4[] ParticleWeights;
+        public float[] NodeMass;
         public int Count => Home.Length;
     }
 
@@ -179,6 +180,15 @@ namespace MoodPicker.Splatter.Sim
             clusters.Pin = pin;
             clusters.ParticleNodes = pn;
             clusters.ParticleWeights = pw;
+            var mass = new float[k];
+            for (int i = 0; i < homes.Length; i++)
+            {
+                mass[pn[i].x] += pw[i].x;
+                mass[pn[i].y] += pw[i].y;
+                mass[pn[i].z] += pw[i].z;
+                mass[pn[i].w] += pw[i].w;
+            }
+            clusters.NodeMass = mass;
         }
 
         public static void FieldLaplacian(int2[] edges, SplatClusterNode[] nodes, float3[] lap)
@@ -186,10 +196,25 @@ namespace MoodPicker.Splatter.Sim
             for (int c = 0; c < lap.Length; c++) lap[c] = float3.zero;
             foreach (int2 e in edges)
             {
-                float3 d = nodes[e.y].displacement - nodes[e.x].displacement;
+                float3 d = ((nodes[e.y].displacement - nodes[e.y].rest) - (nodes[e.x].displacement - nodes[e.x].rest)) * SplatSimKernel.EdgeOpen(nodes[e.x], nodes[e.y]);
                 lap[e.x] += d;
                 lap[e.y] -= d;
             }
+        }
+
+        public static void FieldStretch(int2[] edges, SplatClusterNode[] nodes, float3[] homeWorld)
+        {
+            var sum = new float[nodes.Length];
+            var count = new int[nodes.Length];
+            foreach (int2 e in edges)
+            {
+                float rest = math.distance(homeWorld[e.x], homeWorld[e.y]);
+                float now = math.distance(homeWorld[e.x] + nodes[e.x].displacement, homeWorld[e.y] + nodes[e.y].displacement);
+                float r = now / math.max(rest, 1e-5f);
+                sum[e.x] += r; count[e.x]++;
+                sum[e.y] += r; count[e.y]++;
+            }
+            for (int c = 0; c < nodes.Length; c++) nodes[c].stretch = count[c] > 0 ? sum[c] / count[c] : 1f;
         }
 
         public static float SummonArrivals(float3[] homesBody, float[] hash, float[] arrival, in float3x4 bodyToWorld, float3 emitter, float spreadSeconds)
@@ -399,14 +424,65 @@ namespace MoodPicker.Splatter.Sim
             int k = Nodes.Length;
             var push = new float3[k];
             var lap = new float3[k];
+            var homeWorld = new float3[k];
+            var touched = new SplatHandAccum[k];
+            var nearestD = new float[k];
+            var nearestP = new float3[k];
+            var nearestV = new float3[k];
+            SplatSimParams touch = SplatSimKernel.FieldTouchParams(p);
             for (int c = 0; c < k; c++)
             {
                 SplatSimKernel.CarryHome(ref Nodes[c].displacement, Clusters.Home[c], f, out float3 hw);
+                homeWorld[c] = hw;
                 var acc = SplatHandAccum.Empty;
                 float3 pos = hw + Nodes[c].displacement;
+                float nearest = float.MaxValue;
+                float3 nearPoint = pos, nearVel = float3.zero;
                 for (int j = 0; j < colliderCount; j++)
-                    SplatSimKernel.AccumulateCollider(ref acc, pos, Nodes[c].velocity, colliders[j], p, Clusters.Radius[c] * p.clusterReach);
+                {
+                    SplatSimKernel.AccumulateCollider(ref acc, pos, Nodes[c].velocity, colliders[j], touch, Clusters.Radius[c] * p.clusterReach * p.fieldReach);
+                    SplatSimKernel.NearestCollider(colliders[j], pos, ref nearest, ref nearPoint, ref nearVel);
+                }
+                if (SplatSimKernel.TouchesThroughSurface(p)) acc = SplatHandAccum.Empty;
                 push[c] = acc.accel;
+                touched[c] = acc;
+                nearestD[c] = nearest;
+                nearestP[c] = nearPoint;
+                nearestV[c] = nearVel;
+            }
+            if (SplatSimKernel.TouchesThroughSurface(p) && colliderCount > 0)
+            {
+                for (int i = 0; i < Particles.Length; i++)
+                {
+                    float3 pos = SplatSimKernel.Transform(f.bodyToWorld, Homes[i]) + Particles[i].displacement;
+                    var dot = SplatHandAccum.Empty;
+                    for (int j = 0; j < colliderCount; j++)
+                        SplatSimKernel.AccumulateCollider(ref dot, pos, Particles[i].velocity, colliders[j], touch, 0f);
+                    if (dot.contact <= 0f) continue;
+                    int4 n = Clusters.ParticleNodes[i];
+                    float4 w = Clusters.ParticleWeights[i];
+                    SplatSimKernel.SpreadTouch(ref push[n.x], ref touched[n.x].contact, w.x, Clusters.NodeMass[n.x], dot, p);
+                    SplatSimKernel.SpreadTouch(ref push[n.y], ref touched[n.y].contact, w.y, Clusters.NodeMass[n.y], dot, p);
+                    SplatSimKernel.SpreadTouch(ref push[n.z], ref touched[n.z].contact, w.z, Clusters.NodeMass[n.z], dot, p);
+                    SplatSimKernel.SpreadTouch(ref push[n.w], ref touched[n.w].contact, w.w, Clusters.NodeMass[n.w], dot, p);
+                }
+            }
+            for (int c = 0; c < k; c++)
+            {
+                float3 pos = homeWorld[c] + Nodes[c].displacement;
+                push[c] += SplatSimKernel.FieldTack(ref Nodes[c], pos, Clusters.Pin[c], touched[c], nearestD[c], nearestP[c], nearestV[c], f.dt, p);
+                SplatSimKernel.FieldHeal(ref Nodes[c], touched[c].contact, f.dt, p);
+                SplatSimKernel.CrackTrigger(ref Nodes[c], touched[c].contact, nearestV[c], f.dt, p);
+            }
+            if (p.crack > 0f)
+            {
+                var target = new float[k];
+                foreach (int2 e in Clusters.Edges)
+                {
+                    target[e.y] = math.max(target[e.y], Nodes[e.x].crack * p.crackSpread);
+                    target[e.x] = math.max(target[e.x], Nodes[e.y].crack * p.crackSpread);
+                }
+                for (int c = 0; c < k; c++) Nodes[c].crack = SplatSimKernel.CrackToward(Nodes[c].crack, target[c], f.dt, p);
             }
             float h = f.dt / SplatSimKernel.FieldSubsteps;
             for (int sub = 0; sub < SplatSimKernel.FieldSubsteps; sub++)
@@ -414,13 +490,14 @@ namespace MoodPicker.Splatter.Sim
                 SplatSimSetup.FieldLaplacian(Clusters.Edges, Nodes, lap);
                 for (int c = 0; c < k; c++) SplatSimKernel.StepFieldNode(ref Nodes[c], lap[c], Clusters.Pin[c], push[c], h, p);
             }
+            if (p.fieldTack > 0f) SplatSimSetup.FieldStretch(Clusters.Edges, Nodes, homeWorld);
 
             float activity = 0f;
             for (int i = 0; i < Particles.Length; i++)
             {
-                SplatSimKernel.CarryHome(ref Particles[i].displacement, Homes[i], f, out float3 homeWorld);
+                SplatSimKernel.CarryHome(ref Particles[i].displacement, Homes[i], f, out float3 particleHome);
                 var acc = SplatHandAccum.Empty;
-                float3 pos = homeWorld + Particles[i].displacement;
+                float3 pos = particleHome + Particles[i].displacement;
                 for (int j = 0; j < colliderCount; j++)
                     SplatSimKernel.AccumulateCollider(ref acc, pos, Particles[i].velocity, colliders[j], p, 0f);
                 int4 n = Clusters.ParticleNodes[i];
