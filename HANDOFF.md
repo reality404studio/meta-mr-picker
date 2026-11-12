@@ -1,5 +1,5 @@
 # HANDOFF — 물성 채집 MR 도구 (gather 브랜치, 보드 splatter)
-updated: 2026-11-11 22:40 KST · by: claude-code
+updated: 2026-11-12 22:40 KST · by: claude-code
 
 ## 목표 (한 줄)
 현실의 물성을 채집해서 손안에 갖고 형태에 입혀 쓰는 Quest MR 창작 도구. 손안의 느낌과 아름다움 > 한 바퀴가 걸림 없이 도는 것 > 기능 수. 마감 2026-11-19 05:00 KST. 원문: `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/1110HANDOFF_claude_code.md`
@@ -17,6 +17,7 @@ updated: 2026-11-11 22:40 KST · by: claude-code
 3. 노을(IMG_4398) 촬영 시각 받으면 이름표 교체
 
 ## 정본 / 건드리지 말 것
+- 단풍·하늘은 `LightLayers.BuildAdaptive`(웹 랩 Letter Pigment 빛 굽기 이식) + `_LightGlint` 1. 은행은 옛 `Build` + 0 그대로. 다시 구우려면 `MAPLE_FRAMES_DIR`/`SKY_FRAMES_DIR` (기본 `/tmp/vidref_frames/4566`·`4565`, 원본 작업대 `videref/`)
 - 물성 구슬 값은 사람이 찾음: 물방울 0.2/0.2/0.1/0.2/1/0 · 모래 0.7/0.3/0.7/0.8/1/0 · 복실털 0.1/0.7/0.2/0.7/1/1 (무게/뭉침/끈기/탄성/알갱이/털), 테스트 고정. 은행 빛 모드 확정
 - 고정·저장·재개는 엄지 앞/뒤 쓸기 (엄지 톡은 오인식이라 버림, 서랍 t6)
 - 물방울 물성 = 무게 0.2·뭉침 0.2·끈기 0.1·탄성 0.2·알갱이 1.0 (사람이 찾음, `SplatFeel.Water`, 테스트 고정). 움직임은 형태 변화 × 물성 두 층 (`docs/DECIDED.md` 2026-11-11)
@@ -37,6 +38,7 @@ updated: 2026-11-11 22:40 KST · by: claude-code
 - 디스크 여유 13GB (2026-11-11 01:25). 증분 빌드는 75~100초, 이 여유에서도 성공
 
 ## 최근 증거
+- 2026-11-12 `build-b8af` 단풍(IMG_4566)·하늘(IMG_4565) 색 구슬: 사람 확인(채팅, 빌드 `5428c62-dirty-1112-223138` "좋아요 단풍이랑 sky 이걸로 커밋"), 커밋 `3a519f0`. 하늘 그림자 희게 올리기는 "너무 하얘졌네요" → 롤백. 5구슬 fps 미확인 (u8)
 - 2026-11-11 `build-8ac0` 사람 확인(채팅): 진열대 집기·번짐, 제자리 변형, 구슬 조합, 은행 빛, 쓸기 고정·저장 "베리굿". 기기 저장 PNG `evidence/build-8ac0/stills/` (2048px 투명)
 - 2026-11-11 `build-8ac0` 편집기 한 바퀴: 증거 L2 (`evidence/build-4a39/9d9e0b0-dirty-1111-103533/editor-loop.png`), 투명 PNG 2048px 저장 확인(편집기), 코어 16/16·시뮬레이션 10/10·EditMode 304/304
 - 2026-11-11 Overlay 사람 판정(실기 `70922fa-dirty-1111-095150`): "오버레이는 있는게 낫네요. 오버레이 1" → 기본 1 유지
