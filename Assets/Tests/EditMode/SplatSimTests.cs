@@ -640,6 +640,67 @@ namespace MoodPicker.Tests
             Assert.That(MaxNode(Poke(SplatFeel.Jelly, 0.6f, out _), n => n.crack), Is.EqualTo(0f));
         }
 
+        static void Stroke(SplatSimReference sim, SplatSimParams p, float dir)
+        {
+            var c = new SplatCollider[1];
+            float x = -0.05f * dir;
+            while (x * dir < 0.05f)
+            {
+                c[0] = Finger(new float3(x, 0f, 0.026f), new float3(0.25f * dir, 0f, 0f));
+                sim.Step(Frame(), p, c, 1);
+                x += 0.25f * dir * Dt;
+            }
+        }
+
+        static float CombAlongX(SplatSimReference sim, out float far, out float moved)
+        {
+            float along = 0f;
+            int n = 0;
+            far = 0f;
+            moved = 0f;
+            for (int i = 0; i < sim.Particles.Length; i++)
+            {
+                SplatParticle s = sim.Particles[i];
+                moved = math.max(moved, math.length(s.displacement));
+                if (math.abs(sim.Homes[i].y) < 0.008f) { along += s.velocity.x; n++; }
+                if (sim.Homes[i].y > 0.045f) far = math.max(far, math.length(s.velocity));
+            }
+            return along / math.max(1, n);
+        }
+
+        [Test]
+        public void FurStrokeLaysHairAlongTheHandWithoutMovingTheDots()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Fur);
+            Stroke(sim, p, 1f);
+            float along = CombAlongX(sim, out float far, out float moved);
+            Assert.That(along, Is.GreaterThan(0.6f * p.combMax), "stroked hair lies along the hand");
+            Assert.That(far, Is.LessThan(0.05f), "hair the hand never reached stays as it was");
+            Assert.That(moved, Is.LessThan(0.0005f), "the dots themselves do not fly");
+        }
+
+        [Test]
+        public void FurKeepsTheStrokeAndCanBeBrushedBack()
+        {
+            var sim = new SplatSimReference(Sheet(30, 0.004f), 12);
+            SplatSimParams p = With(SplatFeel.Fur);
+            Stroke(sim, p, 1f);
+            float before = CombAlongX(sim, out _, out _);
+            Run(sim, p, 1f);
+            Assert.That(CombAlongX(sim, out _, out _), Is.GreaterThan(before * 0.9f), "the brushed direction stays");
+            Stroke(sim, p, -1f);
+            Assert.That(CombAlongX(sim, out _, out _), Is.LessThan(-0.4f * p.combMax), "brushing back turns it around");
+        }
+
+        [Test]
+        public void OnlyFluffyFeelsComb()
+        {
+            Assert.That(With(SplatFeel.Fur).comb, Is.EqualTo(1f));
+            foreach (SplatFeel f in new[] { SplatFeel.Water, SplatFeel.Sand, SplatFeel.Jelly, SplatFeel.Slime, SplatFeel.Starch })
+                Assert.That(With(f).comb, Is.EqualTo(0f));
+        }
+
         [Test]
         public void JellyStaysWithoutTackRestOrGrowth()
         {

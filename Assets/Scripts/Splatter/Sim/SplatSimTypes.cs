@@ -69,6 +69,12 @@ namespace MoodPicker.Splatter.Sim
         public float crackSpread;
         public float crackRate;
         public float crackHeal;
+        public float comb;
+        public float combMax;
+        public float combRate;
+        public float combHeal;
+        public float combReach;
+        public float combMinSpeed;
         public float plastic;
         public float plasticYield;
         public float plasticMax;

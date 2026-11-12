@@ -214,11 +214,15 @@ namespace MoodPicker.Splatter
             SplatHandAccum acc = SplatHandAccum.Empty;
             float3 pos = hw + s.displacement;
             for (int j = 0; j < colliderCount; j++)
-                SplatSimKernel.AccumulateCollider(ref acc, pos, s.velocity, colliders[j], p, 0f);
+                SplatSimKernel.AccumulateCollider(ref acc, pos, s.velocity, colliders[j], p, SplatSimKernel.HandReach(p, frame.mode));
             if (SplatSimKernel.UsesField(p, frame.mode))
             {
                 int4 n = fieldNodes[i];
                 SplatSimKernel.FieldParticle(ref s, nodes[n.x], nodes[n.y], nodes[n.z], nodes[n.w], fieldWeights[i], acc, frame, p);
+            }
+            else if (SplatSimKernel.UsesComb(p, frame.mode))
+            {
+                SplatSimKernel.CombParticle(ref s, acc, frame, p);
             }
             else
             {
@@ -238,6 +242,7 @@ namespace MoodPicker.Splatter
         [ReadOnly] public NativeArray<float4> texels;
         public NativeArray<float> result;
         public int count;
+        public int combMode;
 
         public void Execute()
         {
@@ -248,14 +253,34 @@ namespace MoodPicker.Splatter
             {
                 float4 a = texels[i * 2];
                 float4 b = texels[i * 2 + 1];
-                offset = math.max(offset, math.lengthsq(a.xyz));
-                speed = math.max(speed, math.lengthsq(b.xyz));
+                if (combMode != 0)
+                {
+                    offset = math.max(offset, math.max(math.lengthsq(a.xyz), math.lengthsq(b.xyz)));
+                    speed = math.max(speed, math.lengthsq(a.xyz) * 64f);
+                }
+                else
+                {
+                    offset = math.max(offset, math.lengthsq(a.xyz));
+                    speed = math.max(speed, math.lengthsq(b.xyz));
+                }
                 visible = math.max(visible, a.w);
             }
             result[0] = math.max(offset, speed * 0.01f);
             result[1] = visible;
             result[2] = speed;
             result[3] = offset;
+        }
+    }
+
+    [BurstCompile(FloatPrecision.Low, FloatMode.Fast)]
+    struct SplatPackJob : IJob
+    {
+        [ReadOnly] public NativeArray<float4> src;
+        public NativeArray<half4> dst;
+
+        public void Execute()
+        {
+            for (int i = 0; i < src.Length; i++) dst[i] = new half4(src[i]);
         }
     }
 
@@ -271,7 +296,7 @@ namespace MoodPicker.Splatter
     {
         public const int TextureWidth = 256;
         public const int MaxColliders = 16;
-        const float SleepSpeedSq = 4e-6f;
+        const float SleepSpeedSq = 1.6e-5f;
         const float RestOffsetSq = 1e-8f;
         const int SleepFrames = 12;
 
@@ -299,6 +324,7 @@ namespace MoodPicker.Splatter
         NativeArray<float4> _fieldWeights;
         NativeArray<float> _nodeMass;
         NativeArray<float4> _texels;
+        NativeArray<half4> _upload;
         NativeArray<SplatCollider> _colliders;
         NativeArray<float> _result;
         Texture2D _texture;
@@ -414,7 +440,8 @@ namespace MoodPicker.Splatter
 
             int height = math.max(1, (_count * 2 + TextureWidth - 1) / TextureWidth);
             _texels = new NativeArray<float4>(TextureWidth * height, Allocator.Persistent);
-            _texture = new Texture2D(TextureWidth, height, TextureFormat.RGBAFloat, false, true)
+            _upload = new NativeArray<half4>(TextureWidth * height, Allocator.Persistent);
+            _texture = new Texture2D(TextureWidth, height, TextureFormat.RGBAHalf, false, true)
             {
                 name = "SplatSimState",
                 wrapMode = TextureWrapMode.Clamp,
@@ -440,7 +467,8 @@ namespace MoodPicker.Splatter
 
         void Upload()
         {
-            _texture.SetPixelData(_texels, 0);
+            new SplatPackJob { src = _texels, dst = _upload }.Run();
+            _texture.SetPixelData(_upload, 0);
             _texture.Apply(false, false);
             _dirty = false;
         }
@@ -685,7 +713,7 @@ namespace MoodPicker.Splatter
                 colliderCount = active
             }.Schedule(_count, 512, clusterHandle);
 
-            new SplatActivityJob { texels = _texels, result = _result, count = _count }.Schedule(particleHandle).Complete();
+            new SplatActivityJob { texels = _texels, result = _result, count = _count, combMode = SplatSimKernel.UsesComb(p, frame.mode) ? 1 : 0 }.Schedule(particleHandle).Complete();
             Activity = _result[0];
             _dirty = true;
 
@@ -730,6 +758,7 @@ namespace MoodPicker.Splatter
             if (_fieldWeights.IsCreated) _fieldWeights.Dispose();
             if (_nodeMass.IsCreated) _nodeMass.Dispose();
             if (_texels.IsCreated) _texels.Dispose();
+            if (_upload.IsCreated) _upload.Dispose();
             if (_colliders.IsCreated) _colliders.Dispose();
             if (_result.IsCreated) _result.Dispose();
             if (_texture != null)

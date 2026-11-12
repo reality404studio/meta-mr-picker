@@ -333,6 +333,32 @@ namespace MoodPicker.Splatter.Sim
             s.glow = math.max(hand.glow, s.glow * math.exp(-p.glowDecay * f.dt));
         }
 
+        public static bool UsesComb(in SplatSimParams p, int mode)
+        {
+            return p.comb > 0f && p.field < 0.5f && mode == (int)SplatSimMode.Formed;
+        }
+
+        public static float HandReach(in SplatSimParams p, int mode)
+        {
+            return UsesComb(p, mode) ? p.combReach : 0f;
+        }
+
+        public static void CombParticle(ref SplatParticle s, in SplatHandAccum hand, in SplatSimFrame f, in SplatSimParams p)
+        {
+            s.displacement *= math.exp(-8f * f.dt);
+            s.scale = 1f;
+            s.stick = 0f;
+            s.rest = float3.zero;
+            float3 comb = s.velocity;
+            float speed = math.length(hand.nearestVelocity);
+            if (hand.contact > 0f && speed > p.combMinSpeed)
+                comb += (hand.nearestVelocity / speed * (p.combMax * p.comb) - comb) * math.saturate(math.saturate(hand.contact * 4f) * p.combRate * f.dt);
+            else if (hand.contact <= 0f)
+                comb *= math.exp(-p.combHeal * f.dt);
+            s.velocity = comb;
+            s.glow = math.max(hand.glow, s.glow * math.exp(-p.glowDecay * f.dt));
+        }
+
         public static float PlateEdge(float4 w)
         {
             return 1f - math.saturate((w.x - w.y) / math.max(w.x + w.y, 1e-4f) * 4f);

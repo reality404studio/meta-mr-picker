@@ -411,9 +411,10 @@ namespace MoodPicker.Splatter.Sim
                 var acc = SplatHandAccum.Empty;
                 float3 pos = homeWorld + Particles[i].displacement;
                 for (int j = 0; j < colliderCount; j++)
-                    SplatSimKernel.AccumulateCollider(ref acc, pos, Particles[i].velocity, colliders[j], p, 0f);
+                    SplatSimKernel.AccumulateCollider(ref acc, pos, Particles[i].velocity, colliders[j], p, SplatSimKernel.HandReach(p, f.mode));
                 int c = Clusters.Assignment[i];
-                SplatSimKernel.StepParticle(ref Particles[i], homeWorld, clusterHomeWorld[c], Nodes[c], Hash[i], Arrival[i], acc, f, p);
+                if (SplatSimKernel.UsesComb(p, f.mode)) SplatSimKernel.CombParticle(ref Particles[i], acc, f, p);
+                else SplatSimKernel.StepParticle(ref Particles[i], homeWorld, clusterHomeWorld[c], Nodes[c], Hash[i], Arrival[i], acc, f, p);
                 activity = math.max(activity, SplatSimKernel.Activity(Particles[i]));
             }
             Activity = activity;

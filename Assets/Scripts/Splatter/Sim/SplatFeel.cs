@@ -93,6 +93,12 @@ namespace MoodPicker.Splatter.Sim
             p.crackSpread = 0.8f;
             p.crackRate = 10f;
             p.crackHeal = 0.3f;
+            p.comb = f.fluff * (1f - math.step(0.5f, f.squish));
+            p.combMax = 1.6f;
+            p.combRate = 15f;
+            p.combHeal = 0.05f;
+            p.combReach = 0.012f;
+            p.combMinSpeed = 0.02f;
             p.plastic = math.lerp(0f, 10f, f.plastic);
             p.plasticYield = 0.02f * (1f - f.plastic) * (1f - f.plastic) + 0.001f;
             p.plasticMax = 0.08f;

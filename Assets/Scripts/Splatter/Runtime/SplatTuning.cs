@@ -79,6 +79,11 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 0.98f)] public float crackSpread = 0.8f;
         [DebugMember(Category = "4 Weight", Min = 0.5f, Max = 60f)] public float crackRate = 10f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 3f)] public float crackHeal = 0.3f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 1f)] public float comb = 0f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 4f)] public float combMax = 1.6f;
+        [DebugMember(Category = "4 Weight", Min = 0.5f, Max = 40f)] public float combRate = 15f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 2f)] public float combHeal = 0.05f;
+        [DebugMember(Category = "4 Weight", Min = 0f, Max = 0.04f)] public float combReach = 0.012f;
         [DebugMember(Category = "4 Weight", Min = 0f, Max = 20f)] public float plastic = 0f;
         [DebugMember(Category = "4 Weight", Min = 0.001f, Max = 0.05f)] public float plasticYield = 0.02f;
         [DebugMember(Category = "4 Weight", Min = 0.01f, Max = 0.2f)] public float plasticMax = 0.08f;
@@ -205,6 +210,11 @@ namespace MoodPicker.Splatter
             crackSpread = p.crackSpread;
             crackRate = p.crackRate;
             crackHeal = p.crackHeal;
+            comb = p.comb;
+            combMax = p.combMax;
+            combRate = p.combRate;
+            combHeal = p.combHeal;
+            combReach = p.combReach;
             plastic = p.plastic;
             plasticYield = p.plasticYield;
             plasticMax = p.plasticMax;
@@ -241,6 +251,7 @@ namespace MoodPicker.Splatter
                 overlay = overlay,
                 fluff = fluff,
                 fluffLength = fluffLength,
+                comb = comb,
                 glintAmount = glintAmount,
                 glintSpeed = glintSpeed,
                 glintScale = glintScale,
@@ -312,6 +323,12 @@ namespace MoodPicker.Splatter
                 crackSpread = crackSpread,
                 crackRate = crackRate,
                 crackHeal = crackHeal,
+                comb = comb,
+                combMax = combMax,
+                combRate = combRate,
+                combHeal = combHeal,
+                combReach = combReach,
+                combMinSpeed = 0.02f,
                 plastic = plastic,
                 plasticYield = plasticYield,
                 plasticMax = plasticMax,

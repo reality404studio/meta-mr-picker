@@ -64,6 +64,7 @@ public static class SplatterSceneSetup
         wordSo.FindProperty("tuning").objectReferenceValue = tuning;
         wordSo.ApplyModifiedPropertiesWithoutUndo();
 
+        upperAWord.AddComponent<SplatFoveation>();
         var bridge = upperAWord.AddComponent<SplatOvrHandBridge>();
         var bso = new SerializedObject(bridge);
         bso.FindProperty("wordController").objectReferenceValue = upperAWord.GetComponent<SplatWordController>();
