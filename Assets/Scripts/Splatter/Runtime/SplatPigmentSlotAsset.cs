@@ -10,6 +10,7 @@ namespace MoodPicker.Splatter
         public int shaderMode;
         public Texture2D calmTexture;
         public Texture2D sparkTexture;
+        [Range(0f, 1f)] public float glintFromTexture;
         public Texture2D atlasTexture;
         public int frames;
         public int cols;

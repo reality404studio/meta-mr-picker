@@ -284,11 +284,28 @@ public static class SplatterSceneSetup
             list.Add(slot2);
         }
 
+        SplatPigmentSlotAsset slot3 = BuildOrLoadVideoSlot("Slot3_IMG4566", MapleFramesDir, 256, 30f);
+        if (slot3 != null) { EnsureAdaptiveLight(slot3); list.Add(slot3); }
+        SplatPigmentSlotAsset slot4 = BuildOrLoadVideoSlot("Slot4_IMG4565", SkyFramesDir, 256, 30f);
+        if (slot4 != null) { EnsureAdaptiveLight(slot4); list.Add(slot4); }
+
         DefaultMaterial(slot0, "11.03  15:21", SplatShaderMode.Raw);
         DefaultMaterial(slot1, "IMG 4398", SplatShaderMode.Raw);
         DefaultMaterial(slot2, "11.10  13:30", SplatShaderMode.Light);
+        DefaultMaterial(slot3, "11.12  14:54", SplatShaderMode.Light);
+        DefaultMaterial(slot4, "11.12  14:29", SplatShaderMode.Light);
         return list.ToArray();
     }
+
+    static void EnsureAdaptiveLight(SplatPigmentSlotAsset slot)
+    {
+        if (slot.calmTexture == null || slot.sparkTexture == null) VideoSplatPipeline.BuildLightLayers(slot, TexDir, adaptive: true);
+        slot.glintFromTexture = 1f;
+        EditorUtility.SetDirty(slot);
+    }
+
+    public static string MapleFramesDir => Environment.GetEnvironmentVariable("MAPLE_FRAMES_DIR") ?? "/tmp/vidref_frames/4566";
+    public static string SkyFramesDir => Environment.GetEnvironmentVariable("SKY_FRAMES_DIR") ?? "/tmp/vidref_frames/4565";
 
     public static string GinkgoFramesDir => Environment.GetEnvironmentVariable("GINKGO_FRAMES_DIR") ?? "/tmp/vidref_frames/4543";
 

@@ -18,6 +18,7 @@ namespace MoodPicker.Splatter
         public int mode = -1;
         public Texture calm;
         public Texture spark;
+        public float glintTint;
 
         public int ResolveMode(int overrideMode)
         {
@@ -42,7 +43,8 @@ namespace MoodPicker.Splatter
                 palette = asset.ToPalette(),
                 mode = asset.shaderMode,
                 calm = asset.calmTexture,
-                spark = asset.sparkTexture
+                spark = asset.sparkTexture,
+                glintTint = asset.glintFromTexture
             };
         }
 

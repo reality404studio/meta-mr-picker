@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef1535d87611142cb89f7955640f7f81, type: 3}
+  m_Name: Slot4_IMG4565
+  m_EditorClassIdentifier: MoodPicker.Splatter.Runtime::MoodPicker.Splatter.SplatPigmentSlotAsset
+  sourceName: Slot4_IMG4565
+  capturedAt: 11.12  14:29
+  shaderMode: 5
+  calmTexture: {fileID: 2800000, guid: f801ff940aac743dfb665f05e0637bb8, type: 3}
+  sparkTexture: {fileID: 2800000, guid: 38066f2d4ae34429ab796b6f519cb2d8, type: 3}
+  glintFromTexture: 1
+  atlasTexture: {fileID: 2800000, guid: 4f1e26f35d51944bc969b0002e41d0f8, type: 3}
+  frames: 30
+  cols: 6
+  rows: 5
+  tile: 256
+  fps: 30
+  loopStart: 33
+  loopEnd: 63
+  loopScore: 8.64264
+  seamErrorBefore: 15.824456
+  seamErrorAfter: 0.7087213
+  lightTone: {r: 0.871897, g: 0.9433395, b: 0.9940691, a: 1}
+  shadowTone: {r: 0.427525, g: 0.7179559, b: 0.97638386, a: 1}
+  threshold: 0.80334115

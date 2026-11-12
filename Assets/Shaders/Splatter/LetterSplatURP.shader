@@ -24,7 +24,8 @@ Shader "MoodPicker/LetterSplatURP"
         _Layout2 ("Previous Layout", Vector) = (1, 1, 0.001953125, 1)
         _Slot2 ("Previous (frame, has slot, mirror tiled, gamma)", Vector) = (0, 0, 0, 1)
         _AtlasCrop2 ("Previous Crop", Vector) = (1, 1, 0, 0)
-        _Slot2b ("Previous (mode, -, -, -)", Vector) = (0, 0, 0, 0)
+        _Slot2b ("Previous (mode, glint tint, -, -)", Vector) = (0, 0, 0, 0)
+        _LightGlint ("Light mode: glint takes the local colour 0..1", Float) = 0
         _Apply ("Apply wave (origin OS xyz, radius)", Vector) = (0, 0, 0, 1000)
         _ApplyShape ("Apply wave (band, bulge m, lift, -)", Vector) = (0.03, 0.004, 0.15, 0)
         _SplatTime ("Splat time, stops when frozen", Float) = 0
@@ -88,6 +89,7 @@ Shader "MoodPicker/LetterSplatURP"
             float _Intensity;
             float _Threshold;
             float _Outline;
+            float _LightGlint;
         CBUFFER_END
 
         struct Attributes
@@ -175,7 +177,7 @@ Shader "MoodPicker/LetterSplatURP"
                  + SAMPLE_TEXTURE2D_LOD(calm, smp, p.xy * _Scale + 0.71, 0).rgb * w.z;
         }
 
-        float3 ShadeLight(TEXTURE2D_PARAM(calmTex, calmSmp), TEXTURE2D_PARAM(sparkTex, sparkSmp), float4 layout, float frame, float3 p, float3 n, float3 N, float3 V)
+        float3 ShadeLight(TEXTURE2D_PARAM(calmTex, calmSmp), TEXTURE2D_PARAM(sparkTex, sparkSmp), float4 layout, float frame, float3 p, float3 n, float3 N, float3 V, float3 texSRGB, float tint)
         {
             float3 calm = pow(max(SampleCalmTriplanar(TEXTURE2D_ARGS(calmTex, calmSmp), p, n), 0.0), 2.2);
             float2 sh = SampleFlipbookTriplanar(TEXTURE2D_ARGS(sparkTex, sparkSmp), p, n, _Scale, frame, layout).rg;
@@ -184,7 +186,12 @@ Shader "MoodPicker/LetterSplatURP"
             float3 warm = float3(1.0, 0.72, 0.38);
             float3 base = calm * (0.25 + 0.85 * wrapL) * (warm + (1.0 - warm) * wrapL);
             float fres = pow(1.0 - saturate(dot(N, V)), 3.0);
-            float3 c = base + float3(1.0, 0.97, 0.86) * (sh.r * 3.0 + sh.g * 1.4) * _Intensity + calm * fres * 0.6;
+            // tint 0 = warm white glint (ginkgo, confirmed). tint 1 = glint in the colour of that spot (web lab "빛", maple/sky)
+            float3 lift = texSRGB / max(max(texSRGB.r, max(texSRGB.g, texSRGB.b)), 1e-3);
+            float whit = saturate((min(texSRGB.r, min(texSRGB.g, texSRGB.b)) - 0.55) / 0.35);
+            float3 coloured = pow(lerp(lift, float3(1.0, 1.0, 1.0), 0.35 + 0.65 * whit), 2.2);
+            float3 glint = lerp(float3(1.0, 0.97, 0.86), coloured, tint);
+            float3 c = base + glint * (sh.r * 3.0 + sh.g * 1.4) * _Intensity + calm * fres * 0.6;
             return c / (1.0 + 0.6 * c) * 1.25;
         }
 
@@ -391,7 +398,7 @@ Shader "MoodPicker/LetterSplatURP"
             }
             else if (mode == 5)
             {
-                col = ShadeLight(TEXTURE2D_ARGS(_Calm, sampler_Calm), TEXTURE2D_ARGS(_Spark, sampler_Spark), _Layout, _Frame, samplePos, sampleNrm, normalWS, V);
+                col = ShadeLight(TEXTURE2D_ARGS(_Calm, sampler_Calm), TEXTURE2D_ARGS(_Spark, sampler_Spark), _Layout, _Frame, samplePos, sampleNrm, normalWS, V, texSRGB, _HasSlot > 0.5 ? _LightGlint : 0.0);
             }
             else if (mode == 1)
             {
@@ -434,7 +441,9 @@ Shader "MoodPicker/LetterSplatURP"
                     float3 oldCol;
                     if (_Slot2b.x > 4.5)
                     {
-                        oldCol = ShadeLight(TEXTURE2D_ARGS(_Calm2, sampler_Calm2), TEXTURE2D_ARGS(_Spark2, sampler_Spark2), _Layout2, _Slot2.x, samplePos, sampleNrm, normalWS, V);
+                        float3 oldTex = float3(1.0, 1.0, 1.0);
+                        if (_Slot2b.y > 0.0) oldTex = SampleSurfaceSRGB(TEXTURE2D_ARGS(_Atlas2, sampler_Atlas2), _Layout2, _Slot2.x, _Slot2.z, _AtlasCrop2, samplePos, sampleNrm);
+                        oldCol = ShadeLight(TEXTURE2D_ARGS(_Calm2, sampler_Calm2), TEXTURE2D_ARGS(_Spark2, sampler_Spark2), _Layout2, _Slot2.x, samplePos, sampleNrm, normalWS, V, oldTex, _Slot2b.y);
                     }
                     else
                     {

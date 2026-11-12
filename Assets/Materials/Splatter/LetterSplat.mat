@@ -57,6 +57,7 @@ Material:
     - _Frame: 0
     - _HasSlot: 0
     - _Intensity: 1
+    - _LightGlint: 0
     - _Mode: 1
     - _Outline: 1
     - _Scale: 1.2

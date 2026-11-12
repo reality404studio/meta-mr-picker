@@ -97,6 +97,7 @@ namespace MoodPicker.Splatter
         public static readonly int PropCalm2 = Shader.PropertyToID("_Calm2");
         public static readonly int PropSpark2 = Shader.PropertyToID("_Spark2");
         public static readonly int PropSlot2b = Shader.PropertyToID("_Slot2b");
+        public static readonly int PropLightGlint = Shader.PropertyToID("_LightGlint");
         public static readonly int PropApply = Shader.PropertyToID("_Apply");
         public static readonly int PropApplyShape = Shader.PropertyToID("_ApplyShape");
         public static readonly int PropSplatTime = Shader.PropertyToID("_SplatTime");
@@ -311,6 +312,7 @@ namespace MoodPicker.Splatter
             }
             _block.SetFloat(PropFrame, s.currentFrame);
             _block.SetFloat(PropHasSlot, hasCur ? 1f : 0f);
+            _block.SetFloat(PropLightGlint, hasCur ? cur.glintTint : 0f);
             _block.SetFloat(PropCropOn, hasCur && cur.mirrorTiled ? 1f : 0f);
 
             SplatSurfaceMaterial prev = s.previous;
@@ -323,7 +325,7 @@ namespace MoodPicker.Splatter
                 if (prev.calm != null) _block.SetTexture(PropCalm2, prev.calm);
                 if (prev.spark != null) _block.SetTexture(PropSpark2, prev.spark);
             }
-            _block.SetVector(PropSlot2b, new Vector4(hasPrev ? prev.ResolveMode(-1) : 0f, 0f, 0f, 0f));
+            _block.SetVector(PropSlot2b, new Vector4(hasPrev ? prev.ResolveMode(-1) : 0f, hasPrev ? prev.glintTint : 0f, 0f, 0f));
             _block.SetVector(PropSlot2, new Vector4(s.previousFrame, hasPrev ? 1f : 0f, hasPrev && prev.mirrorTiled ? 1f : 0f, hasPrev ? prev.gamma : 1f));
             _block.SetVector(PropApply, hasPrev ? s.apply : SplatSurfaceState.NoApply);
             _block.SetVector(PropApplyShape, s.applyShape);

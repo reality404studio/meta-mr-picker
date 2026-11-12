@@ -47,7 +47,7 @@ public static class VideoSplatPipeline
         EditorApplication.Exit(code);
     }
 
-    public static void BuildLightLayers(SplatPigmentSlotAsset slot, string outputDir = DefaultSlotDir)
+    public static void BuildLightLayers(SplatPigmentSlotAsset slot, string outputDir = DefaultSlotDir, bool adaptive = false)
     {
         string atlasPath = AssetDatabase.GetAssetPath(slot.atlasTexture);
         var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
@@ -62,7 +62,7 @@ public static class VideoSplatPipeline
             rgba[i * 4 + 3] = 255;
         }
         FlipbookLayout layout = slot.ToLayout();
-        LightLayersResult result = LightLayers.Build(rgba, layout);
+        LightLayersResult result = adaptive ? LightLayers.BuildAdaptive(rgba, layout) : LightLayers.Build(rgba, layout);
         UnityEngine.Object.DestroyImmediate(tex);
 
         string calmPath = $"{outputDir}/{slot.sourceName}_Calm.png";
@@ -72,7 +72,7 @@ public static class VideoSplatPipeline
         slot.calmTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(calmPath);
         slot.sparkTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(sparkPath);
         EditorUtility.SetDirty(slot);
-        Debug.Log($"[VideoSplat] {slot.sourceName}: light layers calm={layout.Tile}px spark={layout.Width}x{layout.Height} cover={result.SparkCover:P2}");
+        Debug.Log($"[VideoSplat] {slot.sourceName}: light layers calm={layout.Tile}px spark={layout.Width}x{layout.Height} cover={result.SparkCover:P2} adaptive={adaptive} synthetic={result.Synthetic} calmSigma={result.CalmSigma:F2}");
     }
 
     static void WritePng(string path, byte[] rgba, int w, int h, TextureWrapMode wrap)

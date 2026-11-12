@@ -300,6 +300,64 @@ namespace MoodPicker.Tests
             Assert.That(r.SparkCover, Is.GreaterThan(0f).And.LessThan(0.02f));
         }
     
+        static byte[] FillAtlas(FlipbookLayout layout, System.Func<int, int, int, (byte r, byte g, byte b)> px)
+        {
+            var atlas = new byte[layout.Width * layout.Height * 4];
+            for (int k = 0; k < layout.Frames; k++)
+            {
+                layout.PixelRectUnity(k, out int ox, out int oy);
+                for (int y = 0; y < layout.Tile; y++)
+                    for (int x = 0; x < layout.Tile; x++)
+                    {
+                        int o = ((oy + y) * layout.Width + ox + x) * 4;
+                        var c = px(k, x, y);
+                        atlas[o] = c.r; atlas[o + 1] = c.g; atlas[o + 2] = c.b; atlas[o + 3] = 255;
+                    }
+            }
+            return atlas;
+        }
+
+        [Test]
+        public void AdaptiveLightCatchesColouredGlintsNotJustWhiteOnes()
+        {
+            var layout = new FlipbookLayout { Frames = 8, Cols = 4, Rows = 2, Tile = 32, Fps = 10f };
+            byte[] atlas = FillAtlas(layout, (k, x, y) =>
+            {
+                bool flash = k == 3 && x >= 10 && x < 22 && y >= 10 && y < 22;
+                bool brightHalf = x >= 16;
+                return flash ? ((byte)255, (byte)90, (byte)40) : brightHalf ? ((byte)200, (byte)40, (byte)25) : ((byte)90, (byte)15, (byte)10);
+            });
+            layout.PixelRectUnity(3, out int fx, out int fy);
+            int center = ((fy + 16) * layout.Width + fx + 18) * 4;
+            Assert.That(LightLayers.Build(atlas, layout).SparkRgba[center], Is.EqualTo(0));
+            LightLayersResult r = LightLayers.BuildAdaptive(atlas, layout);
+            Assert.That(r.SparkRgba[center], Is.GreaterThan(100));
+            Assert.That(r.Synthetic, Is.False);
+        }
+
+        [Test]
+        public void AdaptiveLightMakesSeamlessTwinklesForAStillSky()
+        {
+            var layout = new FlipbookLayout { Frames = 6, Cols = 3, Rows = 2, Tile = 64, Fps = 10f };
+            byte[] atlas = FillAtlas(layout, (k, x, y) =>
+            {
+                float dx = x - 32, dy = y - 32;
+                float t = (float)System.Math.Exp(-(dx * dx + dy * dy) / (2f * 12f * 12f));
+                return ((byte)(40 + 205 * t), (byte)(110 + 135 * t), (byte)(230 + 20 * t));
+            });
+            LightLayersResult a = LightLayers.BuildAdaptive(atlas, layout);
+            LightLayersResult b = LightLayers.BuildAdaptive(atlas, layout);
+            Assert.That(a.Synthetic, Is.True);
+            Assert.That(a.SparkCover, Is.LessThan(0.01f));
+            Assert.That(a.CalmSigma, Is.LessThan(3.0), "smooth sky keeps its cloud shape");
+            Assert.That(a.SparkRgba, Is.EqualTo(b.SparkRgba), "seeded → same bake every time");
+            int maxSpark = 0;
+            for (int i = 0; i < a.SparkRgba.Length; i += 4) maxSpark = System.Math.Max(maxSpark, a.SparkRgba[i]);
+            Assert.That(maxSpark, Is.GreaterThan(100));
+            layout.PixelRectUnity(0, out int ox, out int oy);
+            Assert.That(a.SparkRgba[((oy + 32) * layout.Width + ox + 32) * 4], Is.LessThan(40), "cloud middle stays calm, light sits on the edge");
+        }
+
         [Test]
         public void ForwardFreezesThenSavesAndBackwardOnlyResumes()
         {
