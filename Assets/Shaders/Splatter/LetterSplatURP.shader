@@ -113,6 +113,7 @@ Shader "MoodPicker/LetterSplatURP"
             float3 normalWS : TEXCOORD5;
             half4 modeOutlineSplashRadius : TEXCOORD6;
             half glint : TEXCOORD7;
+            float2 applyNF : TEXCOORD8;
             UNITY_VERTEX_INPUT_INSTANCE_ID
             UNITY_VERTEX_OUTPUT_STEREO
         };
@@ -225,6 +226,7 @@ Shader "MoodPicker/LetterSplatURP"
             int mode = (int)round(_Mode);
             bool isOutline = v.centerAndFlags.w > 0.5;
             o.glint = 0.0;
+            o.applyNF = float2(1.0, 0.0);
 
             o.posOS = v.positionOS.xyz;
             o.centerOS = v.centerAndFlags.xyz;
@@ -337,7 +339,9 @@ Shader "MoodPicker/LetterSplatURP"
             float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach) * (1.0 + glint * _GlintShape.y);
             float3 morphedCornerWS = lerp(cornerOffsetWS, billboardCornerWS, billboardBlend) * (grain * simScale);
 
-            float3 applyWS = normalWS * (_ApplyShape.y * ApplyFront(o.centerOS));
+            float applyFront = ApplyFront(o.centerOS);
+            float3 applyWS = normalWS * (_ApplyShape.y * applyFront);
+            o.applyNF = float2(1.0 - smoothstep(_Apply.w - _ApplyShape.x, _Apply.w, distance(o.centerOS, _Apply.xyz)), applyFront);
             float3 finalPosWS = centerWSActual + simDisp + flowWS + applyWS + furOffsetWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
             float3 finalNormalWS = normalize(lerp(normalWS, V, detach * 0.6));
 
@@ -357,7 +361,7 @@ Shader "MoodPicker/LetterSplatURP"
                 return half4(0.027, 0.033, 0.080, 1.0);
             }
 
-            int mode = (int)round(i.modeOutlineSplashRadius.x);
+            int mode = (int)round(_Mode);
             float detach = saturate((float)i.modeOutlineSplashRadius.z);
             float glow = saturate((float)i.modeOutlineSplashRadius.w);
             float3 normalOS = normalize(i.normalOS);
@@ -366,17 +370,28 @@ Shader "MoodPicker/LetterSplatURP"
             float3 L = normalize(V * 0.50 + float3(-0.42, 0.74, 0.0));
 
             float r2 = saturate(dot(i.quadUV, i.quadUV));
-            float sphereZ = sqrt(max(0.0, 1.0 - r2));
-            float3 upRef = abs(V.y) < 0.98 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
-            float3 rightWS = normalize(cross(upRef, V));
-            float3 upWS = cross(V, rightWS);
-            float3 crystalNormalWS = normalize(rightWS * (i.quadUV.x * 1.1) + upWS * (i.quadUV.y * 1.1) + V * (0.25 + 0.75 * sphereZ));
-            float3 normalWS = normalize(lerp(surfaceNormalWS, crystalNormalWS, detach * 0.5));
-
-            float dropletLock = (detach > 0.35) ? saturate((detach - 0.35) * 1.35) : 0.0;
-            float3 samplePosOS = lerp(i.posOS, i.centerOS, dropletLock * 0.75);
-            float3 centerWS = TransformObjectToWorld(i.centerOS);
-            float3 samplePosWS = lerp(i.posWS, centerWS, dropletLock * 0.75);
+            bool detached = detach > 0.001;
+            float3 crystalNormalWS = surfaceNormalWS;
+            float3 normalWS = surfaceNormalWS;
+            float3 samplePosOS = i.posOS;
+            float3 samplePosWS = i.posWS;
+            UNITY_BRANCH
+            if (detached)
+            {
+                float sphereZ = sqrt(max(0.0, 1.0 - r2));
+                float3 upRef = abs(V.y) < 0.98 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
+                float3 rightWS = normalize(cross(upRef, V));
+                float3 upWS = cross(V, rightWS);
+                crystalNormalWS = normalize(rightWS * (i.quadUV.x * 1.1) + upWS * (i.quadUV.y * 1.1) + V * (0.25 + 0.75 * sphereZ));
+                normalWS = normalize(lerp(surfaceNormalWS, crystalNormalWS, detach * 0.5));
+                float dropletLock = (detach > 0.35) ? saturate((detach - 0.35) * 1.35) : 0.0;
+                UNITY_BRANCH
+                if (dropletLock > 0.0)
+                {
+                    samplePosOS = lerp(i.posOS, i.centerOS, dropletLock * 0.75);
+                    samplePosWS = lerp(i.posWS, TransformObjectToWorld(i.centerOS), dropletLock * 0.75);
+                }
+            }
 
             float3 samplePos = (mode == 4) ? samplePosWS : samplePosOS;
             float3 sampleNrm = (mode == 4) ? normalWS : normalOS;
@@ -435,9 +450,11 @@ Shader "MoodPicker/LetterSplatURP"
                     + float3(0.45, 0.82, 1.0) * (CausticTerm(h, 3.0) * (0.35 + 0.65 * d)) * _Intensity;
             }
 
+            UNITY_BRANCH
             if (_Slot2.y > 0.5)
             {
-                float newness = 1.0 - smoothstep(_Apply.w - _ApplyShape.x, _Apply.w, distance(i.centerOS, _Apply.xyz));
+                float newness = i.applyNF.x;
+                UNITY_BRANCH
                 if (newness < 0.999)
                 {
                     float3 oldCol;
@@ -458,12 +475,20 @@ Shader "MoodPicker/LetterSplatURP"
             }
 
             float3 tint = texLinear / max(PigmentLuma(texLinear), 0.04);
-            float sparkleSpec = pow(max(dot(reflect(-L, crystalNormalWS), V), 0.0), 45.0);
-            col += min(tint, 3.0) * (sparkleSpec * detach * _GlowParams.y);
+            UNITY_BRANCH
+            if (detached)
+            {
+                float sparkleSpec = pow(max(dot(reflect(-L, crystalNormalWS), V), 0.0), 45.0);
+                col += min(tint, 3.0) * (sparkleSpec * detach * _GlowParams.y);
+            }
             col *= 1.0 + glow * _GlowParams.x;
-            if (_Slot2.y > 0.5) col *= 1.0 + _ApplyShape.z * ApplyFront(i.centerOS);
+            if (_Slot2.y > 0.5) col *= 1.0 + _ApplyShape.z * i.applyNF.y;
 
-            col += SplatGlintColor((float)i.glint, _GlintParams.x, _GlintShape.z, h, tint, r2);
+            UNITY_BRANCH
+            if (_GlintParams.x > 0.001)
+            {
+                col += SplatGlintColor((float)i.glint, _GlintParams.x, _GlintShape.z, h, tint, r2);
+            }
 
             return half4(col, opacity);
         }
@@ -498,7 +523,7 @@ Shader "MoodPicker/LetterSplatURP"
                 if (r2 > 1.0 || i.modeOutlineSplashRadius.y > 1.5) clip(-1.0);
 
                 half4 shaded = EvaluateSplatShade(i);
-                int mode = (int)round(i.modeOutlineSplashRadius.x);
+                int mode = (int)round(_Mode);
                 if (i.modeOutlineSplashRadius.y > 0.5)
                 {
                     return half4(shaded.rgb, 1.0);
