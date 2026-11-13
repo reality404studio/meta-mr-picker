@@ -41,6 +41,9 @@ public static class SplatterSceneSetup
         var rig = MoodPickerSceneSetup.NewPassthroughScene(out Scene scene);
         OVRSkeleton leftSkel = MoodPickerSceneSetup.AddHand(rig.transform.Find("TrackingSpace/LeftHandAnchor"), OVRHand.Hand.HandLeft, OVRSkeleton.SkeletonType.XRHandLeft);
         OVRSkeleton rightSkel = MoodPickerSceneSetup.AddHand(rig.transform.Find("TrackingSpace/RightHandAnchor"), OVRHand.Hand.HandRight, OVRSkeleton.SkeletonType.XRHandRight);
+        Material filmHandMat = EnsureFilmHandMaterial();
+        AddFilmHandMesh(leftSkel, OVRMesh.MeshType.XRHandLeft, filmHandMat);
+        AddFilmHandMesh(rightSkel, OVRMesh.MeshType.XRHandRight, filmHandMat);
 
         Material splatMat = EnsureSplatMaterial();
         SplatPigmentSlotAsset[] presets = EnsureRealVideoSlotAssets();
@@ -65,6 +68,19 @@ public static class SplatterSceneSetup
         wordSo.ApplyModifiedPropertiesWithoutUndo();
 
         upperAWord.AddComponent<SplatFoveation>();
+        var film = upperAWord.AddComponent<SplatFilmMode>();
+        var filmSo = new SerializedObject(film);
+        filmSo.FindProperty("tuning").objectReferenceValue = tuning;
+        filmSo.FindProperty("handMaterial").objectReferenceValue = filmHandMat;
+        Camera[] rigCams = rig.GetComponentsInChildren<Camera>(true);
+        var camsProp = filmSo.FindProperty("cameras");
+        camsProp.arraySize = rigCams.Length;
+        for (int i = 0; i < rigCams.Length; i++)
+        {
+            camsProp.GetArrayElementAtIndex(i).objectReferenceValue = rigCams[i];
+            rigCams[i].cullingMask = SplatFilmLook.CullingMask(rigCams[i].cullingMask, false);
+        }
+        filmSo.ApplyModifiedPropertiesWithoutUndo();
         var bridge = upperAWord.AddComponent<SplatOvrHandBridge>();
         var bso = new SerializedObject(bridge);
         bso.FindProperty("wordController").objectReferenceValue = upperAWord.GetComponent<SplatWordController>();
@@ -339,6 +355,43 @@ public static class SplatterSceneSetup
     static SplatPigmentSlotAsset BuildOrLoadVideoSlot(string assetBaseName, string framesDir, int tileSize, float fps)
     {
         return VideoSplatPipeline.BuildSlotAssetFromFrames(assetBaseName, framesDir, tileSize, fps, forceRebuild: false, outputDir: TexDir);
+    }
+
+    public const string FilmHandMatPath = "Assets/Materials/Splatter/FilmHandPunch.mat";
+
+    public static Material EnsureFilmHandMaterial()
+    {
+        Directory.CreateDirectory(MatDir);
+        var shader = Shader.Find("MoodPicker/FilmHandPunch");
+        if (shader == null) throw new InvalidOperationException("MoodPicker/FilmHandPunch shader not found");
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(FilmHandMatPath);
+        if (mat == null)
+        {
+            mat = new Material(shader);
+            AssetDatabase.CreateAsset(mat, FilmHandMatPath);
+        }
+        else
+        {
+            mat.shader = shader;
+        }
+        mat.enableInstancing = true;
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
+    static void AddFilmHandMesh(OVRSkeleton skeleton, OVRMesh.MeshType meshType, Material mat)
+    {
+        GameObject go = skeleton.gameObject;
+        go.layer = SplatFilmLook.HandLayer;
+        var mesh = go.AddComponent<OVRMesh>();
+        var meshSo = new SerializedObject(mesh);
+        meshSo.FindProperty("_meshType").intValue = (int)meshType;
+        meshSo.ApplyModifiedPropertiesWithoutUndo();
+        var smr = go.AddComponent<SkinnedMeshRenderer>();
+        smr.sharedMaterial = mat;
+        smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        smr.receiveShadows = false;
+        go.AddComponent<OVRMeshRenderer>();
     }
 
     public static Material EnsureSplatMaterial()

@@ -129,7 +129,11 @@ namespace MoodPicker.Splatter
         void ApplyPassthrough()
         {
             if (tuning == null || passthroughLayer == null) return;
-            var wanted = new Vector3(tuning.passthroughBrightness, tuning.passthroughContrast, tuning.passthroughSaturation);
+            bool film = tuning.filmVr;
+            var wanted = new Vector3(
+                SplatFilmLook.PassthroughBrightness(film, tuning.passthroughBrightness),
+                SplatFilmLook.PassthroughContrast(film, tuning.passthroughContrast),
+                SplatFilmLook.PassthroughSaturation(film, tuning.passthroughSaturation));
             if (wanted == _appliedPassthrough) return;
             _appliedPassthrough = wanted;
             passthroughLayer.SetBrightnessContrastSaturation(wanted.x, wanted.y, wanted.z);

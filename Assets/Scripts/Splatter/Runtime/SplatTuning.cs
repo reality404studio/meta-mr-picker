@@ -133,6 +133,11 @@ namespace MoodPicker.Splatter
         [DebugMember(Category = "6 Look", Min = -1f, Max = 1f)] public float passthroughContrast = 0f;
         [DebugMember(Category = "6 Look", Min = -1f, Max = 1f)] public float passthroughSaturation = 0f;
 
+        [DebugMember(Category = "00 Film")] public bool filmVr;
+        [DebugMember(Category = "00 Film", Min = 0f, Max = 1f)] public float filmBackground = 0.08f;
+        [DebugMember(Category = "00 Film", Min = 0f, Max = 0.02f)] public float filmHandInflate = 0.004f;
+        [DebugMember(Category = "00 Film", Min = 0.05f, Max = 1f)] public float filmHandEdge = 0.45f;
+
         [DebugMember(Category = "8 Catch")] public bool liveCamera;
         [DebugMember(Category = "8 Catch", Min = 0.1f, Max = 1f)] public float cameraCrop = 0.45f;
         [DebugMember(Category = "8 Catch", Min = 0.4f, Max = 2.4f)] public float cameraGamma = 1f;

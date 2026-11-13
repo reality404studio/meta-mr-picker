@@ -93,7 +93,9 @@ namespace MoodPicker.Splatter
             _rows.Clear();
             if (tuning == null) return;
             SplatTuning t = tuning;
-            Row("Weight", () => t.feelWeight, v => { t.feelWeight = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
+            Toggle(SplatFilmLook.ToggleRow, () => t.filmVr, v => t.filmVr = v);
+            Row(SplatFilmLook.BackgroundRow, () => t.filmBackground, v => t.filmBackground = v, 0f, 1f, false, 20);
+            Row("Weight",() => t.feelWeight, v => { t.feelWeight = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Cohesion*", () => t.feelCohesion, v => { t.feelCohesion = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Viscosity*", () => t.feelViscosity, v => { t.feelViscosity = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
             Row("Bounce", () => t.feelBounce, v => { t.feelBounce = v; t.DeriveFromFeel(); }, 0f, 1f, false, 10);
