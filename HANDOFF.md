@@ -1,25 +1,23 @@
-# HANDOFF — 물성 채집 MR 도구 (gather 브랜치, 보드 splatter)
-updated: 2026-11-13 13:05 KST · by: claude-code
+# HANDOFF — 시간 채집 리추얼 (ritual 브랜치, 보드 time-ritual) · 엔진 = 물성 채집 플레이그라운드
+updated: 2026-11-14 14:31 KST · by: claude-code
 
 ## 목표 (한 줄)
-현실의 물성을 채집해서 손안에 갖고 형태에 입혀 쓰는 Quest MR 창작 도구. 손안의 느낌과 아름다움 > 한 바퀴가 걸림 없이 도는 것 > 기능 수. 마감 2026-11-19 05:00 KST. 원문: `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/1110HANDOFF_claude_code.md`
+형태 없이 흘러가 버린 오늘을 그 시간을 보낸 책상 위에 빛으로 남기는 하루 마무리 의식 (제출작, 작업대 `studio/shared/DECIDED.md` 2026-11-13 [time-ritual]). 아름다움(계속 만지고 바라보고 싶은) > Quest 3S 10분 발열·프레임 안정. 가우시안 스플랫으로 먼저 푼다(면·버텍스 메시 금지). 마감 2026-11-19 05:00 KST. 명세: 작업대 `studio/apps/time-ritual/source/ritual-guide-1112.md`
 
 ## 지금 카드
-- 다음 카드: 설명 없이 손이 먼저 나가는 단서 (17일 시험 u7 의 전제). 사람이 시안에서 고른다 (DECIDED A4) → baseline-differential 로 기준안·지도부터
-- `build-16f1` (발열) A 셰이더 다이어트 끝, 커밋. 편집기 시트 전후 최대 1/255, 실기 logcat 대략값 stale 7.7→2.0/초·GPU% 0.95→0.85 (촬영 모드 켬·재료 달라 대략). 남음: 같은 조건 Perfetto 비교(`build-16f1-verify-1666`, 다음 착용 때 1분), 30분 발열 체감(`-verify-5187`, 사람). 그 뒤 모자라면 B 점당 색 / C 스플랫 수 / D 해상도
-- `build-2cdb` (촬영용 VR 모드) 사람 확인 끝, 커밋. 오른손 다이얼 첫 줄 `Film VR`, 둘째 `Film bg`. 방은 단색(기본 0.08), 손 추적 메시 모양으로 패스스루를 뚫어 실제 손이 보임. 값 `SplatTuning` "00 Film" (손 부풀림 4mm·가장자리 0.45)
-- `build-627f` (물성 추가) 젤리·슬라임·전분·털 4개 모두 사람 확인, 끝. 커밋 `da8910d` `1fae59f` `c6c0271`
-- `build-8ac0` (한 바퀴) 는 제작자 확인으로 끝남. 커밋 `8ea1792` `94e604a` `4e8f69d` `2ba1f9a`
-- 조작: 핀치로 구슬 집어 형태에 대기 (윗줄 색 구슬 = 색만, 아랫줄 물성 구슬 = 움직임만) · 왼손 엄지 좌우 쓸기 = 형태(A~Z·구·도넛) · 앞으로 쓸기 = 고정, 고정 중 앞 = 저장 · 뒤로 쓸기 = 재개 · 오른손 엄지 = 조율 다이얼 · 양손 핀치 = 옮기기·키우기
-- 남은 모름: 제작자가 아닌 사람이 설명 없이 3분 안에 도는지 (u7, 17일 시험)
-- 푸시됨: 앱 `gather` (origin/gather), 작업대 `mood-picker-setup` `9097b6f`
-- 미커밋: 기기 저장 이미지·실기 증거 폴더(사람이 커밋 불필요하다고 함), 작업대의 이번 세션 이전 변경(웹 앱 src/·server/, ORION, brief.zip·cakeiceing.md 등 출처 모름)
+- id: `build-4bf1` 뽑기 · `build-24db` 뭉치기 · `build-d285` 병·붓기 · `build-5fae` 봉인 (에이전트 하위 과업 4개 doing) · 상태: 하는중 · 필요한 증거: L1 테스트 → L3 기기 → L4 사람
+- 성공 조건(사람 합격 문장): 하위 과업 `*-verify-*` 4개 = 가이드 「검증 방법」 표. 예) 소리를 듣기 전에 눈금에 걸리는 느낌을 말한다 · 층만 보고 어느 빛인지 맞힌다 · 누르고 난 뒤 "오늘은 끝났다"
+- stop: verify 4개는 사람. 기존 셰이더·파티클·질감 동작을 바꿔야 하면 먼저 묻는다 (가이드 작업 원칙)
+- 11-14 실기 3회로 사람이 답한 것 (카드 note 에 원문): 눈금 걸림 있음 · 손끝 숫자 매우 좋음 · 층만 보고 빛 맞히기 "당연" · 붓기 72~73fps · 밀랍 엄지 꾸욱 괜찮음 · 봉인 결과 예쁨. 아직 안 물은 것: 마디가 보이나/놓으면 매끈해지나, 떼었다 붙였다 반복하나/다른 종류 튕김, 1시간 층 눈에 띄나/붓고 다시 들여다보나, "오늘은 끝났다"·실수로 안 닫히나 → verify 4개 아직 done 아님
+- 11-14 반영(DECIDED 2026-11-14 두 항목): 실타래 회전·휘는 실, 꾸깃하기(막대 양 끝 두 손 핀치 → 울퉁불퉁한 덩어리), 덩어리 주무르기(15%씩, 바닥 70%), 넘치면 튕김+"남은 시간", 밀랍 A(책상 위 막대 → 당겨 방울 → 입구에 떨굼 → 누름, 떠 있던 구 없앰), 거버너 = fps+앱 GPU/CPU 시간(`Hands/Ovr/OvrPerfMetrics`), 굵기 2.2cm, 병 20cm·24시간=몸통 가득(용량 163u)
+- 사람 마지막 말: 주무르기 "양쪽 핀치한 상태에서 꿀렁꿀렁하는거라 약간 힘들다" → 보드 모름 `u1` (손짓 후보: 손바닥 사이에 끼워 누르기 / 한 손 쥐었다 펴기 / 그대로)
+- 미커밋 (카드 done 전): 앱 레포 리추얼 전부 — `Assets/Scripts/Ritual/**`, 새 `Assets/Scripts/Hands/Ovr/OvrPerfMetrics.cs`, `Assets/Shaders/Ritual/`, `Assets/Editor/TimeRitual*.cs`·`MoodPickerBuild.cs`, `Assets/Ritual/*.asset`, 테스트 `{TimeUnits,RitualCore,RitualRuntime,RitualGesture,ShaderPowBase}Tests.cs`, `LESSONS.md`, evidence. 작업대: DECIDED 11-14 두 항목, time-ritual 보드. 패티스리(`PatisserieSceneSetup`·`PatisserieLab.unity`·`IcingCanvasController`·`PipingBagInteractor`, 11-12, 출처 미확인)는 커밋 때 분리
+- 플레이그라운드(splatter): 단서·소리 카드 보류(DECIDED 2026-11-13). `build-16f1` 남은 것: Perfetto 비교(`-verify-1666`), 30분 발열(`-verify-5187`, 사람). 옛 내용은 `evidence/HANDOFF-history.md`
 
 ## 다음 할 일 (최대 3)
-0. 설명 없이 손이 먼저 나가게 하는 단서 (17일 시험 u7 의 전제). 사람이 시안에서 고른다 (DECIDED A4)
-1. 다음 착용 때: 같은 조건 Perfetto 비교 (털 + 11.12 14:29, Film VR 끔, 손 휘젓기 10초) → ALU/픽셀 193 에서 얼마나
-2. 소리 카드: 건드린 세기 → 크기, 물성마다 하나, 첫째는 전분 쩌저적. 소리 재료 출처는 사람 결정. 사용자용 패널(물성 슬라이더)은 물성 구슬과 겹쳐 뺄지 사람 결정
-3. 노을(IMG_4398) 촬영 시각 받으면 이름표 교체
+1. 주무르기 손짓을 사람이 고르면(`u1`) 바꾸기. 고르기 전엔 지금(양쪽 핀치) 유지. 합쳐진 구체 주무르기는 실기 로그에 아직 없음 → 한 번 확인
+2. verify 4개의 남은 문항을 실기에서 묻고(위 「아직 안 물은 것」), 성능 체크리스트 남은 것: 10~15분 연속 발열·온도, 봉인 뒤 책상 빛 fps, 병을 눈앞에 둘 때. 착용 "준비" 뒤에 `sh scripts/ritual.sh run` (LESSONS: 착용 전 실행은 배치가 엉뚱함, 재시작 전 `sealed=` 확인)
+3. 통과한 카드부터 done → 커밋(`card-id: 관찰 가능한 변화`, 패티스리 분리). 디스크 여유 13GB(교훈은 20GB) — 빌드 더 하기 전에 사람과 정리 상의(`~/.codex/sessions` 는 지우지 않음)
 
 ## 정본 / 건드리지 말 것
 - 물성 구슬 6개: 물방울·모래·털(빗질) / 젤리(푸딩 뼈대, 바닥 고정)·슬라임(뼈대+표면 접촉만, 끈적 0.4초, 영구 변형 1.5cm 상한, 천천히 회복)·전분(빠르면 판 갈라짐, 느리면 스며듦). 모두 사람이 확인한 값, 테스트로 고정 (`SplatSimTests`). 뼈대 이웃은 반드시 양방향 간선 (한쪽 방향이면 발산)
@@ -36,33 +34,29 @@ updated: 2026-11-13 13:05 KST · by: claude-code
 - `docs/`, `board/` 는 직접 고치지 않는다. 폰트 Fraunces 72pt Black 확정. 털뭉치 질감은 서랍 보류 `h1`
 
 ## 기기·환경
-- Quest 3S `340YC10G9707W0`, 패키지 `com.DefaultCompany.moodpicker`, 에디터 6000.3.27f2
-- 빌드: `Unity -batchmode -projectPath . -buildTarget Android -executeMethod MoodPickerBuild.BuildSplatterApkBatch` **`-quit` 없이**. `mr build-unity`·`mr preflight`·`mr logcat` 은 이 프로젝트에서 안 맞음 (LESSONS.md), adb 는 Unity SDK platform-tools
-- 헤드셋 없이 보기: `-executeMethod SplatterPreviewRender.RenderSequenceBatch -splatOut <png>` (쓸기·소환·소멸 18장 시트)
+- Quest 3S `340YC10G9707W0`, 에디터 6000.3.27f2. 패키지: 리추얼 `com.DefaultCompany.timeritual`(APK `Builds/time-ritual-dev.apk`), 플레이그라운드 `com.DefaultCompany.moodpicker`
+- 빌드: `Unity -batchmode -projectPath . -buildTarget Android -executeMethod MoodPickerBuild.BuildTimeRitualApkBatch`(플레이그라운드는 `BuildSplatterApkBatch`) **`-quit` 없이**. `mr build-unity`·`mr preflight`·`mr logcat` 은 이 프로젝트에서 안 맞음 (LESSONS.md), adb 는 Unity SDK platform-tools
+- 헤드셋 없이 보기: `-executeMethod TimeRitualPreviewRender.RenderBatch -ritualOut <폴더>` (27장 + sheet.png, 로그에 `ritual-preview PASS`). 플레이그라운드는 `SplatterPreviewRender.RenderSequenceBatch -splatOut <png>`
 - 검증: `python3 Assets/Scripts/Splatter/Verification~/verify_compile.py`, `sh scripts/run-editmode-tests.sh`
-- 맥에서 값 바꾸기: `sh scripts/tuning.sh push <json>` (기기가 0.5초마다 읽음, 실기 미확인)
-- 디스크 여유 13GB (2026-11-11 01:25). 증분 빌드는 75~100초, 이 여유에서도 성공
+- 맥에서 값 바꾸기: 리추얼 `sh scripts/ritual.sh unit|shape|nodes|labels|set|push|reset`, 플레이그라운드 `sh scripts/tuning.sh push <json>` (둘 다 실기 미확인)
 
 ## 최근 증거
+- 2026-11-14 14:25 빌드 `cf24a34-dirty-1114-141553` (2.2cm·큰 병·주무르기): L3 + L4 일부. 144u 에서 21u 거절 → 구김 → 주무르기 2번 → 162u(27시간) 5층 → 밀랍 → 봉인, 72~73fps, 품질 1.00, 예외 0. EditMode 381/381, 프리뷰 run6 PASS. `evidence/build-4bf1/cf24a34-dirty-1114-141553/summary.md`
+- 2026-11-14 14:00 빌드 `cf24a34-dirty-1114-135704` (실타래·꾸깃·거절·밀랍 A·거버너): L3. 두 바퀴, 꾸깃 4번·거절 2번·봉인 2번, 72~73fps, 앱 GPU 최대 10ms, 거버너 감소 0회. `evidence/build-4bf1/cf24a34-dirty-1114-135704/summary.md`
+- 2026-11-14 13:03 첫 실기 `cf24a34-dirty-1114-121724`: L3. 기기가 36fps(VSnc=2, 재부팅으로 풀림) + 거버너가 품질 0.5 로 내린 상태로 한 바퀴. `evidence/build-4bf1/cf24a34-dirty-1114-121724/round1-summary.md`
+- 2026-11-14 12:22 리추얼 첫 APK `cf24a34-dirty-1114-121724`: 증거 L1 (EditMode 369 중 368, 리추얼 23/23, 실패 1개 기존 Folio) + 빌드 Succeeded errors=0 238s. `evidence/build-4bf1/cf24a34-dirty-1114-121724/summary.md`. 설치·기기 미확인
+- 2026-11-14 11:44 리추얼 프리뷰 run3 + EditMode: 증거 L1·L2. 흰 점 픽셀 255→12, 게이트 뮤테이션(셰이더 되돌림) 실패 확인, 리추얼 21/21, 알갱이 8508 그대로. `evidence/build-4bf1/editor-preview-1114/run3-1144/`. 기기·사람 판정 미확인
+- 2026-11-14 00:09 리추얼 에디터 프리뷰 run2: 증거 L2. 27장, 예외 0, 53u·5층·입자 8508, 봉인 dominant=sleep, 시뮬 틱 평균 0.59ms·최악 10ms(맥). `evidence/build-4bf1/editor-preview-1114/`. 기기·소리·사람 판정 미확인
 - 2026-11-13 12:36 빌드 `8341e03-dirty-1113-123454` (A 셰이더 다이어트 + 촬영 모드): 사람 "네 다 괜찮은 것 같아요". logcat 12:39 film vr on, 구슬 4번, 예외 0, 손 닿는 50초 fps 중앙 72·stale 2.0/초·GPU% 0.85 (GPU 2단계). EditMode 346/346, 뮤테이션 2개 실패 확인. 증거 `evidence/build-16f1/8341e03-dirty-1113-123454/`
-- 2026-11-13 12:18 `build-16f1` Perfetto 1회 (L3, 빌드 `1fae59f-dirty-1113-003009`, 새 빌드 없음): 사람 착용·손 휘젓기 중 10초. 픽셀 84%·정점 16%, ALU/픽셀 193, 픽셀 약 950만/프레임, 정점 약 53만/프레임, fps 63~73·stale 6.6/초. 식은 기기·충전 중. 트레이스 `~/Library/Application Support/odh/traces/build-16f1-touch-1113.pftrace`, 요약 `evidence/build-16f1/1fae59f-dirty-1113-003009/summary.md`. 발열 체감 미확인
-- 2026-11-13 `build-627f` 사람 확인(채팅): 젤리 "오 예스 젤리 통과" (`44bf83d-dirty-1112-231103`), 슬라임 "좋아요 슬라임은 이대로" (`da8910d-dirty-1112-235912`), 전분 "음 좋아요" (`da8910d-dirty-1113-000848`), 털 "털은 이 상태 너무 좋네요" (`1fae59f-dirty-1113-003009`). 증거 `evidence/feels/`, `evidence/heat/`. 시뮬 39/39·코어 21/21, EditMode 341/342 (Folio 1개, 기존과 같음)
+- 2026-11-13 12:18 `build-16f1` Perfetto 1회 (L3, 빌드 `1fae59f-dirty-1113-003009`): 픽셀 84%·정점 16%, ALU/픽셀 193, fps 63~73·stale 6.6/초. 요약 `evidence/build-16f1/1fae59f-dirty-1113-003009/summary.md`. 발열 체감 미확인
+- 2026-11-13 `build-627f` 젤리·슬라임·전분·털 사람 확인(채팅). 증거 `evidence/feels/`, `evidence/heat/`. EditMode 341/342 (Folio 1개, 기존과 같음)
 - 2026-11-13 발열: 사람이 "발열 너무 심한데요"로 헤드셋 끔. 직전 배터리 40℃ 열 상태 1, 약 3시간 연속 + 충전 중. 식힌 뒤 4분 30초 37.0→37.0℃
-- 2026-11-12 `build-b8af` 단풍(IMG_4566)·하늘(IMG_4565) 색 구슬: 사람 확인(채팅, 빌드 `5428c62-dirty-1112-223138` "좋아요 단풍이랑 sky 이걸로 커밋"), 커밋 `3a519f0`. 하늘 그림자 희게 올리기는 "너무 하얘졌네요" → 롤백. 5구슬 fps 미확인 (u8)
-- 2026-11-11 `build-8ac0` 사람 확인(채팅): 진열대 집기·번짐, 제자리 변형, 구슬 조합, 은행 빛, 쓸기 고정·저장 "베리굿". 기기 저장 PNG `evidence/build-8ac0/stills/` (2048px 투명)
-- 2026-11-11 `build-8ac0` 편집기 한 바퀴: 증거 L2 (`evidence/build-4a39/9d9e0b0-dirty-1111-103533/editor-loop.png`), 투명 PNG 2048px 저장 확인(편집기), 코어 16/16·시뮬레이션 10/10·EditMode 304/304
-- 2026-11-11 Overlay 사람 판정(실기 `70922fa-dirty-1111-095150`): "오버레이는 있는게 낫네요. 오버레이 1" → 기본 1 유지
-- 2026-11-10 사람 판정(채팅): 발열은 기존 대비 괜찮은 듯, 손 느낌 잘 바뀜, 패널 드래그는 힘듦 → 마이크로제스처 다이얼로 교체, "잘 인식됨". 커밋 `26d07fa`, `94bf813`
-- 2026-11-11 눈별 반짝임 사람 판정: "너무 후처리 느낌, 생각보다 별로" → 롤백. 빌드 `94bf813-dirty-1111-094559` 설치됨 (반짝임 꺼짐, 실행 미확인)
-- 2026-11-11 눈별 반짝임 구현: 증거 L2 (에디터 두 눈 렌더 `evidence/build-4a39/editor-stereo-glint-1111.png`). 빌드 `94bf813-dirty-1111-012234` 설치됨, 실행·체감 미확인
-- 2026-11-10 `build-4a39` 빌드 `42ba43f-dirty-1110-204027`: 증거 L3. 예외 0, 72~73fps (124개 중 70 미만 2개), 손 닿을 때 시뮬레이션 1.6~1.9ms·손 떼면 잠듦, 조율 패널이 기기에 뜸 (`evidence/build-4a39/42ba43f-dirty-1110-204027/summary.md`). 발열 비교·사람 판정·카메라 질감은 미확인
-- 2026-11-10 `build-4a39-build-f7a2`: 증거 L1. `verify_sim.py` NUnit 10/10 (손 쓸기 속도 전달, 손가락 구멍, 뭉침, 묻어남, 소환 지나침 2cm 미만, 소멸, 최대 dt 안정)
-- 2026-11-10 셰이더·러너·손 입력·패널·채집: 증거 L2. `verify_compile.py` exit 0, EditMode 297/298 (실패 1개는 손대지 않은 `FolioRuntimeTests`, 원인 미확인), 에디터 시트 `evidence/build-4a39/editor-sequence-1110.png`. 기기 실행·Burst AOT·정점 텍스처 읽기·패널 손 조작·카메라 질감은 전부 미확인
-- 2026-11-10 `build-9c56` 빌드 `8c63c15-dirty-1110-103808`: 증거 L3 일부, 72fps 위주. 이 카드의 남은 조정은 접음 (사람 결정, 보드 a10)
 
 ## 열린 질문 (사람에게)
-- 발열: A 로 모자라면 B 점 하나에 색 하나(점보다 작은 무늬 사라질 수 있음) / C 스플랫 수(밀도 바뀜) / D 해상도 0.9(살짝 흐려짐) 중 무엇
-- 대비: ORION 때 정한 "패스스루 78% 디밍"을 여기에도 쓸지. 패널 `6 Look > passthroughBrightness` 로 먼저 눈으로 볼 수 있음
-- 채집 제스처: 폐기된 양손 사각형 대신 시선 앞 창틀(펀치)로 갈지. 지금은 패널 버튼으로만 찰칵
+- 주무르기 손짓 (`u1`): 양쪽 핀치는 "꿀렁꿀렁 약간 힘들다". 손바닥 사이에 끼워 누르기 / 한 손 쥐었다 펴기 / 그대로
+- 병 유리 테두리: 병을 키우며 유리 점도 커져 테두리가 굵어 보임(`glassSplatRadius` 0.0025). 거슬리면 점 수를 늘리는 쪽(성능 비용)
+- 인간공부 01 (부동소수점 오차와 셰이더 원리): 공통 보드 `reference-8b57` assets, 읽고 질문은 카드 메모로
+- 리추얼 책상 빛: 번짐(새 기본) vs 빛줄기(옛) — `compare-run2-run3.png` 로 먼저 보고, 실기에서 `ritual.sh glow` 로 바꿔 가며 판정
+- 발열(플레이그라운드): A 로 모자라면 B 점 하나에 색 하나 / C 스플랫 수 / D 해상도 0.9 중 무엇
 
-첫 발화 한 줄: `HANDOFF.md 읽고 이어서. 발열 A·촬영 모드는 커밋됨. 다음은 설명 없이 손이 먼저 나가는 단서.`
+첫 발화 한 줄: `HANDOFF.md 읽고 시간 채집 리추얼 이어서. 열린 질문 u1(주무르기 손짓)부터.`

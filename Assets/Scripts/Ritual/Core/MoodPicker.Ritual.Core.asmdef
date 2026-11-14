@@ -1,0 +1,7 @@
+{
+    "name": "MoodPicker.Ritual.Core",
+    "rootNamespace": "MoodPicker.Ritual",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": true
+}

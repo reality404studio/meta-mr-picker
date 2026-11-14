@@ -12,6 +12,9 @@ public static class MoodPickerBuild
     public const string DeskKeyboardApkPath = "Builds/desk-keyboard-dev.apk";
     public const string CatchApkPath = "Builds/catch-dev.apk";
     public const string SplatterApkPath = "Builds/splatter-dev.apk";
+    public const string TimeRitualApkPath = "Builds/time-ritual-dev.apk";
+    public const string TimeRitualPackage = "com.DefaultCompany.timeritual";
+    public const string TimeRitualProductName = "Time Ritual";
 
     [MenuItem("Mood Picker/Build Dev APK")]
     public static bool BuildDevApk() => BuildDevApk(ApkPath);
@@ -24,6 +27,36 @@ public static class MoodPickerBuild
         SplatterSceneSetup.Run();
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(SplatterSceneSetup.ScenePath, true) };
         return BuildDevApk(SplatterApkPath);
+    }
+
+    [MenuItem("Mood Picker/Build Time Ritual APK")]
+    public static bool BuildTimeRitualApk()
+    {
+        TimeRitualSceneSetup.Run();
+        string savedId = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android);
+        string savedName = PlayerSettings.productName;
+        var savedScenes = EditorBuildSettings.scenes;
+        try
+        {
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, TimeRitualPackage);
+            PlayerSettings.productName = TimeRitualProductName;
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(TimeRitualSceneSetup.ScenePath, true) };
+            return BuildDevApk(TimeRitualApkPath);
+        }
+        finally
+        {
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, savedId);
+            PlayerSettings.productName = savedName;
+            EditorBuildSettings.scenes = savedScenes;
+            AssetDatabase.SaveAssets();
+        }
+    }
+
+    public static void BuildTimeRitualApkBatch()
+    {
+        _deadline = EditorApplication.timeSinceStartup + 120;
+        _job = BuildTimeRitualApk;
+        EditorApplication.update += Wait;
     }
 
     [MenuItem("Mood Picker/Experiments/Build DeskKeyboard APK")]

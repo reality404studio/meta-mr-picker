@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0799c7c89c7cf4c88a620c448e53f8d2, type: 3}
+  m_Name: Category_move
+  m_EditorClassIdentifier: MoodPicker.Ritual.Runtime::MoodPicker.Ritual.TimeCategoryAsset
+  id: move
+  displayKo: "\uD658\uAE30"
+  displayEn: Moved
+  symbol: "\u2022"
+  memoryEn: Fresh Breath
+  beadShape: 0
+  initialFeel: 1
+  look: {fileID: 11400000, guid: 20e1860ca26aa4eac97a3a28ebbb4d66, type: 2}
+  nodeSqueeze: 1
+  nodeGlow: 0.9
+  nodeGrain: 0.65
+  nodeTwinkle: 0.7
+  nodeTwinkleSpeed: 7
+  sandGlint: 1.4
+  sandGlintSpeed: 0.8
+  sandIntensity: 1.2
+  sandSparkle: 1.3
+  waxColor: {r: 0.36, g: 0.68, b: 0.76, a: 1}
+  glowColor: {r: 0.68, g: 0.92, b: 1, a: 1}

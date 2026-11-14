@@ -1,0 +1,16 @@
+{
+    "name": "MoodPicker.Ritual.Ovr",
+    "rootNamespace": "MoodPicker.Ritual",
+    "references": [
+        "MoodPicker.Ritual.Core",
+        "MoodPicker.Hands.Ovr",
+        "MoodPicker.Ritual.Runtime",
+        "MoodPicker.Splatter",
+        "Oculus.VR"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

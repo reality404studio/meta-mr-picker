@@ -85,3 +85,22 @@
 - 원인: 형태가 시야 가운데 있고 포비에이티드는 가장자리 해상도만 낮춘다. 가운데 물체의 픽셀 비용은 그대로
 - 확인법: 짐작 말고 Perfetto `mode vr` 10초 → 카운터 `% Time Shading Fragments` / `% Time Shading Vertices`, `ALU / Fragment`. 앱 GPU 시간은 track `AppInfo` 의 `debug.gpuTime`
 - 적용 범위: 모든 MR (Quest, 화면 가운데에 무거운 물체가 있는 앱)
+
+## Quest 가 앱을 반 속도(36fps)로 돌림 — 앱 탓이 아니라 기기 상태 (2026-11-14, build-4bf1)
+- 증상: VrApi `FPS=36/72`, `VSnc=2`, Stale 0, GPU% 0.2~0.4, App 4ms. 어제 72fps 였던 같은 APK 도 36fps
+- 원인: 미확인. 하루 넘게 켜 둔 기기. 재부팅하자 `VSnc=1`·72fps
+- 확인법: fps 가 낮으면 먼저 `grep -o "VSnc=[0-9]*"` 와 GPU%. VSnc=2 인데 GPU 가 한가하면 코드를 보기 전에 재부팅
+- 적용 범위: Quest 실기 전반 promote?
+
+## 프레임 간격만 보는 품질 거버너는 시스템 상한·로딩 버벅임을 "무겁다"로 읽음 (2026-11-14, build-4bf1)
+- 증상: 36fps 상한에서 7초 만에 입자 품질 최저(0.5), 앱 시작 첫 프레임 18ms 에도 0.9 로 내림
+- 원인: `Time.unscaledDeltaTime` = 일 + 기다림. 입자 수는 일하는 시간만 바꿈
+- 확인법: `RitualGovernor.Judge` — fps 와 앱 GPU/CPU 시간이 둘 다 나쁠 때만 줄임, 시작 3초 무시. 기기 로그 `ritual perf frame= gpu= cpu=`
+- 참고: `OVRPlugin.GetPerfMetricsFloat(App_GpuTime_Float)` 원값은 초 단위(0.00497). VrApi `App=` 와 같은 크기. `OVRPlugin` 이름은 `HandInputTests` 게이트가 `Assets/Scripts/Hands/Ovr/` 밖에서 막으므로 `OvrPerfMetrics` 를 거쳐 읽는다
+- 적용 범위: 이 프로젝트 (입자 거버너가 있는 장면) promote?
+
+## 설치 직후 실행이 가디언·OS 창 때문에 대기, 안 쓴 채 실행하면 자동 배치가 엉뚱한 곳 (2026-11-14, build-4bf1)
+- 증상: `am start` 뒤 프로세스 없음, logcat `Launch is blocked because: a Guardian dialog is currently showing. Caching launch`. 또는 헤드셋을 책상에 둔 채 실행 → `ritual placed at (-0.77, -0.55, …)`
+- 원인: Horizon OS 가 창이 닫힐 때까지 실행을 미룸. `autoPlace` 는 첫 30프레임의 머리 위치로 한 번만 놓음
+- 확인법: 사람이 "준비"(착용) 한 뒤 `sh scripts/ritual.sh run`. 착용 전에 실행했으면 다시 실행. 단, 사람이 이미 쓰는 중이면 재시작이 그 판을 지움 → 재시작 전에 logcat 에서 `sealed=` 확인
+- 적용 범위: Unity Quest 실기 라운드 promote?

@@ -1,0 +1,17 @@
+{
+    "name": "MoodPicker.Ritual.Runtime",
+    "rootNamespace": "MoodPicker.Ritual",
+    "references": [
+        "MoodPicker.Ritual.Core",
+        "MoodPicker.Splatter",
+        "MoodPicker.Splatter.Sim",
+        "MoodPicker.Splatter.Runtime",
+        "MoodPicker.Splatter.Patisserie.Core",
+        "MoodPicker.Splatter.Patisserie.Runtime",
+        "MoodPicker.Hands",
+        "MoodPicker.Pigment",
+        "Unity.Mathematics"
+    ],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

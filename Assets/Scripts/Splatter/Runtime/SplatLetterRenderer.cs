@@ -293,58 +293,63 @@ namespace MoodPicker.Splatter
             return new Vector4(Mathf.Max(1, layout.Cols), Mathf.Max(1, layout.Rows), halfTexel, Mathf.Max(1, layout.Frames));
         }
 
-        public void ApplyState(in SplatSurfaceState s)
+        public static void WriteSurface(MaterialPropertyBlock block, in SplatSurfaceState s, in SplatLook look, SplatShaderMode mode, float sizeMeters, Texture simTex)
         {
-            EnsureComponents();
-            if (_cloudMesh == null && sourceMesh != null) Rebuild();
-            _block.Clear();
+            block.Clear();
             SplatSurfaceMaterial cur = s.current;
             bool hasCur = cur != null && cur.texture != null;
             if (hasCur)
             {
-                _block.SetTexture(PropAtlas, cur.texture);
-                _block.SetVector(PropLayout, LayoutVector(cur.layout));
-                _block.SetVector(PropAtlasCrop, cur.crop);
-                _block.SetColor(PropLightTone, new Color(cur.palette.LightR, cur.palette.LightG, cur.palette.LightB, 1f));
-                _block.SetColor(PropShadowTone, new Color(cur.palette.ShadowR, cur.palette.ShadowG, cur.palette.ShadowB, 1f));
-                _block.SetFloat(PropThreshold, cur.palette.Threshold);
-                if (cur.calm != null) _block.SetTexture(PropCalm, cur.calm);
-                if (cur.spark != null) _block.SetTexture(PropSpark, cur.spark);
+                block.SetTexture(PropAtlas, cur.texture);
+                block.SetVector(PropLayout, LayoutVector(cur.layout));
+                block.SetVector(PropAtlasCrop, cur.crop);
+                block.SetColor(PropLightTone, new Color(cur.palette.LightR, cur.palette.LightG, cur.palette.LightB, 1f));
+                block.SetColor(PropShadowTone, new Color(cur.palette.ShadowR, cur.palette.ShadowG, cur.palette.ShadowB, 1f));
+                block.SetFloat(PropThreshold, cur.palette.Threshold);
+                if (cur.calm != null) block.SetTexture(PropCalm, cur.calm);
+                if (cur.spark != null) block.SetTexture(PropSpark, cur.spark);
             }
-            _block.SetFloat(PropFrame, s.currentFrame);
-            _block.SetFloat(PropHasSlot, hasCur ? 1f : 0f);
-            _block.SetFloat(PropLightGlint, hasCur ? cur.glintTint : 0f);
-            _block.SetFloat(PropCropOn, hasCur && cur.mirrorTiled ? 1f : 0f);
+            block.SetFloat(PropFrame, s.currentFrame);
+            block.SetFloat(PropHasSlot, hasCur ? 1f : 0f);
+            block.SetFloat(PropLightGlint, hasCur ? cur.glintTint : 0f);
+            block.SetFloat(PropCropOn, hasCur && cur.mirrorTiled ? 1f : 0f);
 
             SplatSurfaceMaterial prev = s.previous;
             bool hasPrev = prev != null && prev.texture != null;
             if (hasPrev)
             {
-                _block.SetTexture(PropAtlas2, prev.texture);
-                _block.SetVector(PropLayout2, LayoutVector(prev.layout));
-                _block.SetVector(PropCrop2, prev.crop);
-                if (prev.calm != null) _block.SetTexture(PropCalm2, prev.calm);
-                if (prev.spark != null) _block.SetTexture(PropSpark2, prev.spark);
+                block.SetTexture(PropAtlas2, prev.texture);
+                block.SetVector(PropLayout2, LayoutVector(prev.layout));
+                block.SetVector(PropCrop2, prev.crop);
+                if (prev.calm != null) block.SetTexture(PropCalm2, prev.calm);
+                if (prev.spark != null) block.SetTexture(PropSpark2, prev.spark);
             }
-            _block.SetVector(PropSlot2b, new Vector4(hasPrev ? prev.ResolveMode(-1) : 0f, hasPrev ? prev.glintTint : 0f, 0f, 0f));
-            _block.SetVector(PropSlot2, new Vector4(s.previousFrame, hasPrev ? 1f : 0f, hasPrev && prev.mirrorTiled ? 1f : 0f, hasPrev ? prev.gamma : 1f));
-            _block.SetVector(PropApply, hasPrev ? s.apply : SplatSurfaceState.NoApply);
-            _block.SetVector(PropApplyShape, s.applyShape);
-            _block.SetFloat(PropSplatTime, s.time);
+            block.SetVector(PropSlot2b, new Vector4(hasPrev ? prev.ResolveMode(-1) : 0f, hasPrev ? prev.glintTint : 0f, 0f, 0f));
+            block.SetVector(PropSlot2, new Vector4(s.previousFrame, hasPrev ? 1f : 0f, hasPrev && prev.mirrorTiled ? 1f : 0f, hasPrev ? prev.gamma : 1f));
+            block.SetVector(PropApply, hasPrev ? s.apply : SplatSurfaceState.NoApply);
+            block.SetVector(PropApplyShape, s.applyShape);
+            block.SetFloat(PropSplatTime, s.time);
 
-            _block.SetFloat(PropMode, (float)shaderMode);
-            _block.SetFloat(PropScale, s.triplanarScale / Mathf.Max(0.01f, letterSize));
-            _block.SetFloat(PropIntensity, s.intensity);
-            _block.SetFloat(PropOutline, s.outline ? 1f : 0f);
-            bool simOn = _sim != null && _sim.DrivesShader;
-            if (simOn) _block.SetTexture(PropSimTex, _sim.Texture);
-            _block.SetFloat(PropSimOn, simOn ? 1f : 0f);
-            _block.SetVector(PropFlowParams, new Vector4(_look.flowAmplitude, _look.flowSpeed, _look.contrast, hasCur ? cur.gamma : 1f));
-            _block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, _look.detachDistance), _look.stretchSeconds, _look.stretchMax, _look.grain));
-            _block.SetVector(PropGlowParams, new Vector4(_look.glowGain, _look.sparkle, _look.overlay, 0f));
-            _block.SetVector(PropFurParams, new Vector4(_look.fluff, Mathf.Max(0.5f, _look.fluffLength), 0.35f, _look.comb));
-            _block.SetVector(PropGlintParams, new Vector4(_look.glintAmount, _look.glintSpeed, _look.glintScale, _look.glintRough));
-            _block.SetVector(PropGlintShape, new Vector4(Mathf.Max(1f, _look.glintSharpness), _look.glintSize, _look.glintMaterial, 0f));
+            block.SetFloat(PropMode, (float)mode);
+            block.SetFloat(PropScale, s.triplanarScale / Mathf.Max(0.01f, sizeMeters));
+            block.SetFloat(PropIntensity, s.intensity);
+            block.SetFloat(PropOutline, s.outline ? 1f : 0f);
+            bool simOn = simTex != null;
+            if (simOn) block.SetTexture(PropSimTex, simTex);
+            block.SetFloat(PropSimOn, simOn ? 1f : 0f);
+            block.SetVector(PropFlowParams, new Vector4(look.flowAmplitude, look.flowSpeed, look.contrast, hasCur ? cur.gamma : 1f));
+            block.SetVector(PropDropParams, new Vector4(Mathf.Max(1e-4f, look.detachDistance), look.stretchSeconds, look.stretchMax, look.grain));
+            block.SetVector(PropGlowParams, new Vector4(look.glowGain, look.sparkle, look.overlay, 0f));
+            block.SetVector(PropFurParams, new Vector4(look.fluff, Mathf.Max(0.5f, look.fluffLength), 0.35f, look.comb));
+            block.SetVector(PropGlintParams, new Vector4(look.glintAmount, look.glintSpeed, look.glintScale, look.glintRough));
+            block.SetVector(PropGlintShape, new Vector4(Mathf.Max(1f, look.glintSharpness), look.glintSize, look.glintMaterial, 0f));
+        }
+
+        public void ApplyState(in SplatSurfaceState s)
+        {
+            EnsureComponents();
+            if (_cloudMesh == null && sourceMesh != null) Rebuild();
+            WriteSurface(_block, s, _look, shaderMode, letterSize, _sim != null && _sim.DrivesShader ? _sim.Texture : null);
             _renderer.SetPropertyBlock(_block);
             bool hidden = _sim != null && _sim.Mode == SplatSimMode.Hidden;
             if (_renderer.enabled == hidden) _renderer.enabled = !hidden;

@@ -27,7 +27,9 @@
         "MoodPicker.Splatter.Sim",
         "Unity.Mathematics",
         "MoodPicker.Splatter.Runtime",
-        "MoodPicker.Splatter.Ovr"
+        "MoodPicker.Splatter.Ovr",
+        "MoodPicker.Ritual.Core",
+        "MoodPicker.Ritual.Runtime"
     ],
     "includePlatforms": [
         "Editor"
