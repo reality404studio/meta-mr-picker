@@ -283,5 +283,438 @@ namespace MoodPicker.Tests
                 Object.DestroyImmediate(testConfig);
             }
         }
+
+        sealed class FakeMicrogestureInput : MonoBehaviour, IMicrogestureInput
+        {
+            public Microgesture left;
+            public Microgesture right;
+            public Microgesture Current(Handedness hand) => hand == Handedness.Left ? left : right;
+        }
+
+        static HandPose PinchPose(Vector3 pos, bool pinching)
+        {
+            float gap = pinching ? 0.005f : 0.055f;
+            return new HandPose
+            {
+                tracked = true,
+                thumbTip = pos,
+                indexTip = pos + new Vector3(gap, 0f, 0f),
+                middleTip = pos + new Vector3(0.02f, 0.01f, -0.04f),
+                ringTip = pos + new Vector3(0.03f, 0f, -0.045f),
+                littleTip = pos + new Vector3(0.04f, -0.01f, -0.05f),
+                palm = pos + new Vector3(0f, -0.02f, -0.06f),
+                palmNormal = Vector3.down
+            };
+        }
+
+        [Test]
+        public void ScenePlacesFocusedAndExploredInCenterAndWiresMicrogesture()
+        {
+            UnityEngine.SceneManagement.Scene scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+                "Assets/Scenes/TimeRitual.unity", UnityEditor.SceneManagement.OpenSceneMode.Additive);
+            try
+            {
+                TimeRitual ritual = null;
+                foreach (GameObject go in scene.GetRootGameObjects())
+                {
+                    ritual = go.GetComponentInChildren<TimeRitual>(true);
+                    if (ritual != null) break;
+                }
+                Assert.That(ritual, Is.Not.Null);
+                var pull = ritual.GetComponent<TimePullController>();
+                Assert.That(pull, Is.Not.Null);
+                Assert.That(pull.Heaps.Length, Is.EqualTo(5));
+                Assert.That(pull.Heaps[0].Category.id, Is.EqualTo("sleep"));
+                Assert.That(pull.Heaps[1].Category.id, Is.EqualTo("move"));
+                Assert.That(pull.Heaps[2].Category.id, Is.EqualTo("work"));
+                Assert.That(pull.Heaps[3].Category.id, Is.EqualTo("drift"));
+                Assert.That(pull.Heaps[4].Category.id, Is.EqualTo("play"));
+                for (int i = 0; i < 4; i++)
+                    Assert.That(pull.Heaps[i].transform.localPosition.x, Is.LessThan(pull.Heaps[i + 1].transform.localPosition.x));
+
+                var rso = new UnityEditor.SerializedObject(ritual);
+                Object microObj = rso.FindProperty("microgestureSource").objectReferenceValue;
+                Assert.That(microObj, Is.Not.Null);
+                Assert.That(microObj, Is.InstanceOf<IMicrogestureInput>());
+            }
+            finally
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        [Test]
+        public void RightHandMicrogestureTogglesGuideTrailsAndUpdatesStreams()
+        {
+            TimeCategoryAsset[] cats =
+            {
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_sleep.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_move.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_work.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_drift.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_play.asset"),
+            };
+            var testConfig = Object.Instantiate(_config);
+            testConfig.guideTrails = true;
+            var ritualGo = new GameObject("GuideTestRitual");
+            ritualGo.transform.SetParent(_root.transform, false);
+
+            var heaps = new TimeHeap[cats.Length];
+            for (int i = 0; i < cats.Length; i++)
+            {
+                var hgo = new GameObject("Heap_" + cats[i].id);
+                hgo.transform.SetParent(ritualGo.transform, false);
+                hgo.transform.localPosition = new Vector3((i - 2) * 0.12f, 0f, 0f);
+                hgo.AddComponent<MeshFilter>();
+                hgo.AddComponent<MeshRenderer>();
+                hgo.AddComponent<SplatLetterRenderer>();
+                var heap = hgo.AddComponent<TimeHeap>();
+                var hso = new UnityEditor.SerializedObject(heap);
+                hso.FindProperty("category").objectReferenceValue = cats[i];
+                hso.FindProperty("config").objectReferenceValue = testConfig;
+                hso.ApplyModifiedPropertiesWithoutUndo();
+                heaps[i] = heap;
+            }
+
+            var pull = ritualGo.AddComponent<TimePullController>();
+            var pso = new UnityEditor.SerializedObject(pull);
+            var hp = pso.FindProperty("heaps");
+            hp.arraySize = heaps.Length;
+            for (int i = 0; i < heaps.Length; i++) hp.GetArrayElementAtIndex(i).objectReferenceValue = heaps[i];
+            pso.ApplyModifiedPropertiesWithoutUndo();
+
+            var micro = ritualGo.AddComponent<FakeMicrogestureInput>();
+            var ritual = ritualGo.AddComponent<TimeRitual>();
+            var rso = new UnityEditor.SerializedObject(ritual);
+            rso.FindProperty("config").objectReferenceValue = testConfig;
+            rso.FindProperty("pull").objectReferenceValue = pull;
+            rso.FindProperty("microgestureSource").objectReferenceValue = micro;
+            rso.FindProperty("piecesRoot").objectReferenceValue = ritualGo.transform;
+            rso.FindProperty("autoPlace").boolValue = false;
+            var cp = rso.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            rso.ApplyModifiedPropertiesWithoutUndo();
+
+            try
+            {
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+                Assert.That(ritual.GuideTrailsEnabled, Is.True);
+
+                float now = 1f;
+                for (int i = 0; i < 20; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.GuideTrails.Visible, Is.True);
+                Assert.That(ritual.GuideTrails.Stream0Alpha, Is.GreaterThan(0.2f));
+                Assert.That(ritual.GuideTrails.Stream1Alpha, Is.GreaterThan(0.2f));
+                Assert.That(Vector3.Distance(ritual.GuideTrails.Stream0Start, heaps[2].transform.position), Is.LessThan(0.06f));
+                Assert.That(Vector3.Distance(ritual.GuideTrails.Stream1Start, heaps[3].transform.position), Is.LessThan(0.06f));
+
+                Vector3 workPos = heaps[2].transform.position;
+                Vector3 start1 = workPos + Vector3.up * 0.01f;
+                Vector3 farRight = workPos + new Vector3(0.5f, 0.5f, 0f);
+                HandFrame pullFrame = new HandFrame
+                {
+                    t = now,
+                    left = PinchPose(start1, false),
+                    right = PinchPose(farRight, false)
+                };
+                now += Dt;
+                pullFrame.t = now;
+                ritual.Tick(now, Dt, pullFrame);
+                for (int i = 0; i < 6; i++)
+                {
+                    now += Dt;
+                    pullFrame.t = now;
+                    pullFrame.left = PinchPose(start1, true);
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+                for (int i = 0; i < 30; i++)
+                {
+                    float u = i / 29f;
+                    Vector3 tip = workPos + new Vector3(-0.07f * u, 0.01f + 0.07f * u, 0f);
+                    now += Dt;
+                    pullFrame.t = now;
+                    pullFrame.left = PinchPose(tip, true);
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+                pullFrame.left = PinchPose(workPos + new Vector3(-0.07f, 0.08f, 0f), false);
+                for (int i = 0; i < 20; i++)
+                {
+                    now += Dt;
+                    pullFrame.t = now;
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+
+                Vector3 start2 = workPos + new Vector3(0.025f, -0.02f, 0f);
+                now += Dt;
+                pullFrame.t = now;
+                pullFrame.right = PinchPose(start2, false);
+                ritual.Tick(now, Dt, pullFrame);
+                for (int i = 0; i < 6; i++)
+                {
+                    now += Dt;
+                    pullFrame.t = now;
+                    pullFrame.right = PinchPose(start2, true);
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+                for (int i = 0; i < 30; i++)
+                {
+                    float u = i / 29f;
+                    Vector3 tip = start2 + Vector3.up * (0.085f * u);
+                    now += Dt;
+                    pullFrame.t = now;
+                    pullFrame.right = PinchPose(tip, true);
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+                pullFrame.right = PinchPose(start2 + Vector3.up * 0.085f, false);
+                for (int i = 0; i < 35; i++)
+                {
+                    now += Dt;
+                    pullFrame.t = now;
+                    ritual.Tick(now, Dt, pullFrame);
+                }
+                Assert.That(ritual.Pieces.Count, Is.EqualTo(2));
+                Assert.That(Vector3.Distance(ritual.GuideTrails.Stream0End, ritual.Jar.Spout), Is.LessThan(0.02f));
+                Assert.That(ritual.GuideTrails.Stream1Alpha, Is.GreaterThan(0.15f), "같은 카테고리 조각끼리는 합치기 빛 궤적이 이어진다");
+
+                micro.left = Microgesture.ThumbTap;
+                for (int i = 0; i < 5; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.GuideTrailsEnabled, Is.True, "왼손 마이크로제스쳐는 가이드를 끄지 않는다");
+                micro.left = Microgesture.None;
+
+                micro.right = Microgesture.ThumbTap;
+                for (int i = 0; i < 40; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.GuideTrailsEnabled, Is.False, "오른손 마이크로제스쳐로 가이드를 끈다");
+                Assert.That(ritual.GuideTrails.Visible, Is.False);
+
+                micro.right = Microgesture.None;
+                for (int i = 0; i < 30; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+
+                micro.right = Microgesture.SwipeRight;
+                for (int i = 0; i < 20; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.GuideTrailsEnabled, Is.True, "오른손 마이크로제스쳐로 가이드를 다시 켠다");
+                Assert.That(ritual.GuideTrails.Visible, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(testConfig);
+            }
+        }
+
+        [Test]
+        public void SealedJarRotatesWithTwoHandPinchAtFixedScaleAndReturnsUprightOnRelease()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            Assert.That(glowMat, Is.Not.Null);
+            TimeCategoryAsset[] cats =
+            {
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_sleep.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_move.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_work.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_drift.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_play.asset"),
+            };
+
+            var testConfig = Object.Instantiate(_config);
+            testConfig.showTotals = false;
+            var ritualGo = new GameObject("JarRotateTestRitual");
+            ritualGo.transform.SetParent(_root.transform, false);
+            var ritual = ritualGo.AddComponent<TimeRitual>();
+            var rso = new UnityEditor.SerializedObject(ritual);
+            rso.FindProperty("config").objectReferenceValue = testConfig;
+            rso.FindProperty("glowMaterial").objectReferenceValue = glowMat;
+            rso.FindProperty("piecesRoot").objectReferenceValue = ritualGo.transform;
+            rso.FindProperty("autoPlace").boolValue = false;
+            var cp = rso.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            rso.ApplyModifiedPropertiesWithoutUndo();
+
+            try
+            {
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+                float now = 1f;
+                for (int c = 1; c <= 2; c++)
+                {
+                    TimePieceView piece = Pulled(cats[c], c, 6, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                    Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+                    for (int s = 0; s < 72 * 8 && ritual.Jar.Pouring; s++)
+                    {
+                        now += Dt;
+                        ritual.Tick(now, Dt, default);
+                    }
+                }
+                typeof(TimeRitual).GetMethod("Seal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(ritual, null);
+                for (int i = 0; i < 20; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+
+                Assert.That(ritual.Sealed, Is.True);
+                Assert.That(ritual.Glow.Blooming, Is.True);
+                MeshFilter auraFilter = ritual.Glow.root.GetComponentInChildren<MeshFilter>();
+                Assert.That(auraFilter, Is.Not.Null);
+                Vector3[] auraVerts = auraFilter.sharedMesh.vertices;
+                float minY = float.MaxValue;
+                float maxY = float.MinValue;
+                for (int i = 0; i < auraVerts.Length; i++)
+                {
+                    if (auraVerts[i].y < minY) minY = auraVerts[i].y;
+                    if (auraVerts[i].y > maxY) maxY = auraVerts[i].y;
+                }
+                Assert.That(maxY, Is.GreaterThan(0.14f), "3D 입체 오라가 병 높이를 감싸야 한다");
+                Assert.That(minY, Is.GreaterThanOrEqualTo(0f));
+
+                float initialY = ritual.Jar.root.position.y;
+                Vector3 initialForward = ritual.Jar.root.forward;
+                Vector3 bodyCenter = ritual.Jar.BodyCenter;
+                Vector3 leftStart = bodyCenter + new Vector3(-0.06f, 0f, 0f);
+                Vector3 rightStart = bodyCenter + new Vector3(0.06f, 0f, 0f);
+
+                HandFrame frame = new HandFrame
+                {
+                    t = now,
+                    left = PinchPose(leftStart, false),
+                    right = PinchPose(rightStart, false)
+                };
+                now += Dt;
+                frame.t = now;
+                ritual.Tick(now, Dt, frame);
+
+                for (int i = 0; i < 8; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.left = PinchPose(leftStart, true);
+                    frame.right = PinchPose(rightStart, true);
+                    ritual.Tick(now, Dt, frame);
+                }
+
+                Vector3 lift = new Vector3(0f, 0.20f, 0f);
+                Vector3 leftEnd = bodyCenter + lift + new Vector3(-0.035f, -0.045f, 0.042f);
+                Vector3 rightEnd = bodyCenter + lift + new Vector3(0.035f, 0.045f, -0.042f);
+                for (int i = 1; i <= 36; i++)
+                {
+                    float u = i / 36f;
+                    now += Dt;
+                    frame.t = now;
+                    frame.left = PinchPose(Vector3.Lerp(leftStart, leftEnd, u), true);
+                    frame.right = PinchPose(Vector3.Lerp(rightStart, rightEnd, u), true);
+                    ritual.Tick(now, Dt, frame);
+                }
+
+                Assert.That(Vector3.Dot(ritual.Jar.root.up, Vector3.up), Is.LessThan(0.85f), "양손 핀치로 병을 3D 회전시킬 수 있다");
+                Assert.That(ritual.Jar.root.localScale, Is.EqualTo(Vector3.one), "크기는 변하지 않아야 한다");
+                Assert.That(Vector3.Distance(ritual.Glow.root.position, ritual.Jar.root.position), Is.LessThan(0.03f));
+
+                frame.left = PinchPose(leftEnd, false);
+                frame.right = PinchPose(rightEnd, false);
+                for (int i = 0; i < 90; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    ritual.Tick(now, Dt, frame);
+                }
+
+                Assert.That(Vector3.Dot(ritual.Jar.root.up, Vector3.up), Is.GreaterThan(0.99f), "손을 놓으면 부드럽게 수직으로 선다");
+                Assert.That(ritual.Jar.root.position.y, Is.GreaterThan(initialY + 0.12f), "들어 올린 높이 근처에 머문다");
+                Assert.That(Mathf.Abs(Vector3.Dot(ritual.Jar.root.forward, initialForward)), Is.LessThan(0.85f), "돌려놓은 Yaw 방향을 유지한다");
+                Assert.That(ritual.Jar.root.localScale, Is.EqualTo(Vector3.one));
+            }
+            finally
+            {
+                Object.DestroyImmediate(testConfig);
+            }
+        }
+
+        [Test]
+        public void TiltedJarKeepsTopSandCapInsideAndClosesBottomWithGlassAndSand()
+        {
+            Material glassMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlass.mat");
+            RitualJar jar = new RitualJar(_root.transform, _config, null, null, glassMat, c => _look);
+            try
+            {
+                float now = 0f;
+                TimePieceView first = Pulled(_move, 0, 8, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(jar.BeginPour(first), Is.Not.Null);
+                Finish(jar, ref now);
+
+                TimePieceView second = Pulled(_work, 1, 6, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(jar.BeginPour(second), Is.Not.Null);
+                Finish(jar, ref now);
+
+                jar.root.position = new Vector3(0.15f, 1.15f, 0.35f);
+                jar.root.rotation = Quaternion.Euler(75f, 15f, 20f);
+                now += Dt;
+                jar.Tick(now, Dt);
+
+                Assert.That(jar.Cap.DrawCount, Is.GreaterThan(0));
+                int capActive = 0;
+                for (int i = 0; i < jar.Cap.DrawCount; i++)
+                {
+                    if (jar.Cap.scale[i] < 0.01f) continue;
+                    capActive++;
+                    Vector3 worldPos = jar.Cap.WorldOf(i);
+                    Vector3 localPos = jar.root.InverseTransformPoint(worldPos);
+                    float radial = Mathf.Sqrt(localPos.x * localPos.x + localPos.z * localPos.z);
+                    Assert.That(radial, Is.LessThanOrEqualTo(jar.Shape.bodyRadius), "기울여도 뚜껑 스플랫 반경이 병 안쪽에 있어야 한다");
+                    Assert.That(localPos.y, Is.EqualTo(jar.SurfaceMean).Within(0.01f), "기울여도 윗면 모래 스플랫이 병 위쪽 표면에 붙어 있어야 한다");
+                }
+                Assert.That(capActive, Is.GreaterThan(100));
+
+                Assert.That(jar.Floor, Is.Not.Null);
+                Assert.That(jar.Floor.DrawCount, Is.GreaterThan(100), "모래 바닥면 스플랫이 채워져야 한다");
+                int floorInterior = 0;
+                for (int i = 0; i < jar.Floor.DrawCount; i++)
+                {
+                    if (jar.Floor.scale[i] < 0.01f) continue;
+                    Vector3 localPos = jar.root.InverseTransformPoint(jar.Floor.WorldOf(i));
+                    float radial = Mathf.Sqrt(localPos.x * localPos.x + localPos.z * localPos.z);
+                    Assert.That(localPos.y, Is.InRange(jar.Shape.floor - 0.002f, jar.Shape.floor + 0.004f));
+                    if (radial < jar.Shape.bodyRadius * 0.4f) floorInterior++;
+                }
+                Assert.That(floorInterior, Is.GreaterThan(20), "모래 바닥 안쪽 중심부까지 막혀 있어야 한다");
+
+                if (jar.GlassMesh != null)
+                {
+                    Vector3[] glassVerts = jar.GlassMesh.vertices;
+                    int glassBottomCenter = 0;
+                    for (int i = 0; i < glassVerts.Length; i += 4)
+                    {
+                        Vector3 v = glassVerts[i];
+                        float radial = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+                        if (v.y <= jar.Shape.floor && radial < jar.Shape.bodyRadius * 0.45f) glassBottomCenter++;
+                    }
+                    Assert.That(glassBottomCenter, Is.GreaterThan(20), "유리병 바닥면 중심부도 유리 스플랫으로 막혀 있어야 한다");
+                }
+            }
+            finally
+            {
+                jar.Dispose();
+            }
+        }
     }
 }

@@ -60,9 +60,12 @@ namespace MoodPicker.Ritual
 
         RitualSplatCloud _cap;
         RitualSurface _capSurface;
+        RitualSplatCloud _floor;
+        RitualSurface _floorSurface;
         float[] _capRadius;
         float[] _capAngle;
         float[] _capFrom;
+        float[] _floorRadius;
         float[] _surface;
         float[] _next;
 
@@ -87,9 +90,13 @@ namespace MoodPicker.Ritual
         public JarShape Shape => _shape;
         public float RimY => _shape.height;
         public Vector3 MouthCenter => root.TransformPoint(new Vector3(0f, _shape.height, 0f));
+        public Vector3 BodyCenter => root.TransformPoint(new Vector3(0f, _shape.height * 0.45f, 0f));
         public Vector3 Spout => root.TransformPoint(new Vector3(0f, _shape.height + _config.spoutHeight, 0f));
         public float SurfaceMean => Strata.Mean(_surface);
         public int Capacity => RitualFill.Capacity(_shape, _config.hoursWhenFull);
+        public RitualSplatCloud Cap => _cap;
+        public RitualSplatCloud Floor => _floor;
+        public Mesh GlassMesh => _glassMesh;
 
         public RitualJar(Transform parent, TimeRitualConfig config, SplatTuning tuning, Material splatMaterial, Material glassMaterial,
             Func<TimeCategoryAsset, SplatSurfaceMaterial> lookOf)
@@ -106,6 +113,7 @@ namespace MoodPicker.Ritual
             _next = Strata.Flat(_shape.floor);
             BuildGlass(glassMaterial);
             BuildCap();
+            BuildFloor();
         }
 
         void BuildGlass(Material material)
@@ -134,7 +142,8 @@ namespace MoodPicker.Ritual
             }
             float side = cumulative[steps];
             float innerNeck = 2f * Mathf.PI * _shape.mouthRadius * (_shape.height - _shape.lipBottom) * 1.4f;
-            float total = side + baseArea * 0.8f + lipArea * 2.5f + innerNeck;
+            float baseShare = baseArea * 1.6f;
+            float total = side + baseShare + lipArea * 2.5f + innerNeck;
             var b = RitualStaticSplats.Builder.Create(count);
             for (int i = 0; i < count; i++)
             {
@@ -176,17 +185,37 @@ namespace MoodPicker.Ritual
                         bevel = 1.25f;
                     }
                 }
-                else if (pick < side + baseArea * 0.8f)
+                else if (pick < side + baseShare)
                 {
-                    float rimT = Mathf.Lerp(0.76f, 1.0f, RitualUtil.Hash(i * 17 + 5));
+                    float u = RitualUtil.Hash(i * 17 + 5);
+                    float rimT = Mathf.Sqrt(u);
                     float r = rs[0] * rimT;
-                    p = new Vector3(ca * r, 0.0008f, sa * r);
-                    n = (Vector3.up * 0.55f + new Vector3(ca, 0f, sa) * 0.8f).normalized;
-                    weight = 0.95f;
-                    bevel = 1.25f;
-                    size *= 1.1f;
+                    if (rimT > 0.74f)
+                    {
+                        float footT = (rimT - 0.74f) / 0.26f;
+                        float y = 0.0008f + 0.0012f * Mathf.Sin(footT * Mathf.PI);
+                        p = new Vector3(ca * r, y, sa * r);
+                        n = new Vector3(ca * 0.78f, -0.62f, sa * 0.78f).normalized;
+                        weight = 1.28f;
+                        bevel = 1.35f;
+                        normY = y / Mathf.Max(1e-4f, _shape.height);
+                        size *= 1.15f;
+                    }
+                    else
+                    {
+                        float puntT = rimT / 0.74f;
+                        float dome = 1f - puntT * puntT;
+                        float y = 0.0010f + _shape.floor * 0.62f * dome;
+                        p = new Vector3(ca * r, y, sa * r);
+                        float radialSlope = 0.58f * puntT;
+                        n = new Vector3(-ca * radialSlope, -0.82f, -sa * radialSlope).normalized;
+                        weight = 1.22f;
+                        bevel = 1.30f;
+                        normY = y / Mathf.Max(1e-4f, _shape.height);
+                        size *= 1.22f;
+                    }
                 }
-                else if (pick < side + baseArea * 0.8f + lipArea * 2.5f)
+                else if (pick < side + baseShare + lipArea * 2.5f)
                 {
                     float r = _shape.mouthRadius + lipWidth * RitualUtil.Hash(i * 19 + 4);
                     p = new Vector3(ca * r, _shape.height, sa * r);
@@ -221,6 +250,7 @@ namespace MoodPicker.Ritual
             _capFrom = new float[n];
             float rMax = _shape.InnerRadius(_shape.bodyTop * 0.5f) - _config.grainRadius;
             float spacing = Mathf.Sqrt(Mathf.PI * rMax * rMax / n);
+            float3 rest = new float3(0f, TimeRitualLook.RestLift, 0f);
             for (int i = 0; i < n; i++)
             {
                 float r = rMax * Mathf.Sqrt((i + 0.5f) / n);
@@ -229,6 +259,7 @@ namespace MoodPicker.Ritual
                 _capAngle[i] = a;
                 float3 tilt = new float3(RitualUtil.Hash(i * 3 + 1) - 0.5f, 0f, RitualUtil.Hash(i * 3 + 2) - 0.5f) * 0.5f;
                 int s = _cap.Add(new float3(r * Mathf.Cos(a), _shape.floor, r * Mathf.Sin(a)), math.normalize(new float3(0f, 1f, 0f) + tilt), spacing * 0.62f);
+                _cap.disp[s] = rest;
                 _cap.scale[s] = 0f;
                 _capFrom[i] = _shape.floor;
             }
@@ -237,12 +268,50 @@ namespace MoodPicker.Ritual
             _cap.Flush();
         }
 
+        void BuildFloor()
+        {
+            int n = Mathf.Max(64, _config.capGrains);
+            _floor = new RitualSplatCloud("SandBottom", root, _splatMaterial, n, 0.3f);
+            _floorRadius = new float[n];
+            float rMax = WallRadius(_shape.floor);
+            float spacing = Mathf.Sqrt(Mathf.PI * rMax * rMax / n);
+            float3 rest = new float3(0f, -TimeRitualLook.RestLift, 0f);
+            for (int i = 0; i < n; i++)
+            {
+                float k = Mathf.Sqrt((i + 0.5f) / n);
+                float r = rMax * k;
+                float a = i * GoldenAngle;
+                float ca = Mathf.Cos(a), sa = Mathf.Sin(a);
+                _floorRadius[i] = r;
+                float y = _shape.floor + 0.0014f * k * k * k;
+                float3 tilt = new float3(RitualUtil.Hash(i * 5 + 3) - 0.5f, 0f, RitualUtil.Hash(i * 5 + 4) - 0.5f) * 0.45f;
+                float3 normal = math.normalize(new float3(ca * 0.28f * k, -1f, sa * 0.28f * k) + tilt);
+                int s = _floor.Add(new float3(ca * r, y, sa * r), normal, spacing * 0.66f);
+                _floor.disp[s] = rest;
+                _floor.scale[s] = 0f;
+            }
+            _floor.SetDrawCount(0);
+            _floorSurface = new RitualSurface { sizeMeters = _config.sandTextureSize, triplanarScale = 1f };
+            _floor.Flush();
+        }
+
         public bool InBody(Vector3 worldPoint)
         {
             Vector3 p = root.InverseTransformPoint(worldPoint);
             if (p.y < -0.01f || p.y > _shape.bodyTop) return false;
             float r = Mathf.Sqrt(p.x * p.x + p.z * p.z);
             return r < _shape.bodyRadius + _config.jarGrabMargin;
+        }
+
+        public bool InGrabZone(Vector3 worldPoint, bool sealedVessel, bool secondHand = false)
+        {
+            if (!sealedVessel) return InBody(worldPoint);
+            if (secondHand && Vector3.Distance(worldPoint, BodyCenter) <= _shape.bodyRadius + _config.jarGrabMargin + 0.14f)
+                return true;
+            Vector3 p = root.InverseTransformPoint(worldPoint);
+            if (p.y < -0.025f || p.y > _shape.height + 0.03f) return false;
+            float r = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+            return r < _shape.bodyRadius + _config.jarGrabMargin + 0.022f;
         }
 
         public bool InPourZone(Vector3 worldPoint, float radius)
@@ -379,15 +448,24 @@ namespace MoodPicker.Ritual
             _layers.Add(layer);
             _totalGrains += count;
 
-            for (int i = 0; i < _capFrom.Length; i++) _capFrom[i] = _shape.floor + _cap.disp[i].y;
+            for (int i = 0; i < _capFrom.Length; i++) _capFrom[i] = _cap.home[i].y;
             SplatSurfaceMaterial previous = _capSurface.material;
             _capSurface.material = layer.surface.material;
             _capSurface.look = layer.surface.look;
             _capSurface.intensity = layer.surface.intensity;
             _capSurface.previous = previous != null && previous != _capSurface.material ? previous : null;
-            _capSurface.apply = new Vector4(0f, _shape.floor, 0f, 0f);
+            _capSurface.apply = new Vector4(0f, Strata.Mean(layer.bottom), 0f, 0f);
             _capSurface.applyShape = new Vector4(0.01f, 0f, 0.3f, 0f);
             _capSurface.MarkDirty();
+            if (_layers.Count == 1)
+            {
+                _floorSurface.material = layer.surface.material;
+                _floorSurface.look = layer.surface.look;
+                _floorSurface.intensity = layer.surface.intensity;
+                _floorSurface.previous = null;
+                _floorSurface.apply = SplatSurfaceState.NoApply;
+                _floorSurface.MarkDirty();
+            }
 
             _pouring = layer;
             _pourPiece = piece;
@@ -494,21 +572,41 @@ namespace MoodPicker.Ritual
             float limit = WallRadius(Mathf.Lerp(Strata.Mean(layer.bottom), Strata.Mean(layer.top), capFill)) - _config.grainRadius;
             float reach = _shape.bodyRadius * 1.1f * RitualUtil.Smooth(Mathf.Clamp01(fraction * 1.15f));
             if (_layers.Count == 1) limit = Mathf.Min(limit, reach);
+            float3 capRest = new float3(0f, TimeRitualLook.RestLift, 0f);
             for (int i = 0; i < capCount; i++)
             {
                 float target = CapHeight(layer.top, i, mound);
                 float y = Mathf.Lerp(_capFrom[i], target, capFill);
-                _cap.disp[i] = new float3(0f, y - _shape.floor, 0f);
+                float3 h = _cap.home[i];
+                _cap.SetHome(i, new float3(h.x, y, h.z), _cap.normal[i], _cap.halfSize[i]);
+                _cap.disp[i] = capRest;
                 _cap.scale[i] = _capRadius[i] <= limit ? 1f : 0f;
             }
             _cap.SetDrawCount(Mathf.RoundToInt(capCount * _quality));
             _cap.MarkSim();
-            _capSurface.apply = new Vector4(0f, _shape.floor, 0f, reach);
+            float capMeanY = Mathf.Lerp(Strata.Mean(layer.bottom), Strata.Mean(layer.top), capFill);
+            _capSurface.apply = new Vector4(0f, capMeanY, 0f, reach);
+            if (_layers.Count == 1)
+            {
+                int floorCount = _floorRadius.Length;
+                float floorLimit = Mathf.Min(WallRadius(_shape.floor), reach);
+                for (int i = 0; i < floorCount; i++)
+                {
+                    _floor.scale[i] = _floorRadius[i] <= floorLimit ? 1f : 0f;
+                }
+                _floor.SetDrawCount(Mathf.RoundToInt(floorCount * _quality));
+                _floor.MarkSim();
+            }
 
             if (_pourTime >= _pourSeconds + _pourTail && layer.landedCount >= n)
             {
                 for (int i = 0; i < n; i++) glow[i] = 0f;
                 cloud.MarkSim();
+                if (_layers.Count == 1)
+                {
+                    for (int i = 0; i < _floorRadius.Length; i++) _floor.scale[i] = 1f;
+                    _floor.MarkSim();
+                }
                 layer.settled = true;
                 float[] swap = _surface;
                 _surface = _next;
@@ -541,6 +639,11 @@ namespace MoodPicker.Ritual
                 layer.surface.MarkDirty();
             }
             if (_cap.DrawCount > 0) _cap.SetDrawCount(Mathf.RoundToInt(_capRadius.Length * quality));
+            _capSurface.look.grain = grain;
+            _capSurface.MarkDirty();
+            if (_floor.DrawCount > 0) _floor.SetDrawCount(Mathf.RoundToInt(_floorRadius.Length * quality));
+            _floorSurface.look.grain = grain;
+            _floorSurface.MarkDirty();
         }
 
         public void SetInnerGlow(Color glow)
@@ -574,6 +677,8 @@ namespace MoodPicker.Ritual
             }
             _cap.Flush();
             if (_capSurface.material != null) _capSurface.Apply(_cap.renderer, _cap.SimTexture, now, _level);
+            _floor.Flush();
+            if (_floorSurface.material != null) _floorSurface.Apply(_floor.renderer, _floor.SimTexture, now, _level);
             if (_glass != null && _glassDirty)
             {
                 _glass.GetPropertyBlock(_glassBlock);
@@ -593,6 +698,7 @@ namespace MoodPicker.Ritual
             for (int i = 0; i < _layers.Count; i++) _layers[i].cloud.Dispose();
             _layers.Clear();
             _cap?.Dispose();
+            _floor?.Dispose();
             RitualUtil.Kill(_glassMesh);
             if (root != null) RitualUtil.Kill(root.gameObject);
         }

@@ -56,6 +56,7 @@ namespace MoodPicker.Ritual
         [SerializeField] TimeRitualConfig config;
         [SerializeField] SplatTuning tuning;
         [SerializeField] MonoBehaviour handInputSource;
+        [SerializeField] MonoBehaviour microgestureSource;
         [SerializeField] Transform trackingSpace;
         [SerializeField] Transform head;
         [SerializeField] TimePullController pull;
@@ -90,9 +91,13 @@ namespace MoodPicker.Ritual
 
         TimeRitualConfig _config;
         IHandInput _input;
+        IMicrogestureInput _micro;
+        Microgesture _lastRightMicro;
+        float _lastGuideToggleTime = -10f;
         RitualJar _jar;
         RitualWax _wax;
         RitualDeskGlow _glow;
+        RitualGuideTrails _guideTrails;
         Color _pourPreviewGlow;
         Mesh _labelTextMesh;
         MeshRenderer _labelTextRenderer;
@@ -140,12 +145,18 @@ namespace MoodPicker.Ritual
         float _panelTimer;
         float _dim;
         float _logTimer;
+        bool _twoHandJarActive;
+        Quaternion _jarTwoHandLocalRot = Quaternion.identity;
+        Vector3 _jarTwoHandLocalPos;
+        Quaternion _lastJarRot = Quaternion.identity;
 
         public TimeRitualConfig Config => _config;
         public IReadOnlyList<TimePieceView> Pieces => _pieces;
         public RitualJar Jar => _jar;
         public RitualWax Wax => _wax;
         public RitualDeskGlow Glow => _glow;
+        public RitualGuideTrails GuideTrails => _guideTrails;
+        public bool GuideTrailsEnabled => _config != null && _config.guideTrails;
         public bool Sealed => _sealed;
         public float Quality => _quality;
         public float FrameMs => _frameMs;
@@ -160,6 +171,16 @@ namespace MoodPicker.Ritual
         public float HoldProgress => _press.progress;
         public bool Ready => _ready;
 
+        public void SetMicrogestureInput(IMicrogestureInput input)
+        {
+            _micro = input;
+        }
+
+        public void SetGuideTrailsEnabled(bool enabled)
+        {
+            if (_config != null) _config.guideTrails = enabled;
+        }
+
         public void Init()
         {
             if (_ready) return;
@@ -168,6 +189,7 @@ namespace MoodPicker.Ritual
             _config.hideFlags = HideFlags.DontSave;
             _resetSeen = _config.resetCounter;
             _input = handInputSource as IHandInput;
+            if (_micro == null) _micro = microgestureSource as IMicrogestureInput;
             if (piecesRoot == null) piecesRoot = transform;
             int count = categories != null ? categories.Length : 0;
             _pieceUnits = new int[count];
@@ -182,6 +204,7 @@ namespace MoodPicker.Ritual
                 pull.Cancelled += OnCancelled;
             }
             BuildJar();
+            _guideTrails = new RitualGuideTrails(transform, _config, glowMaterial);
             if (sound != null) sound.Init(_config.volume);
             Font.textureRebuilt += OnFontTextureRebuilt;
             if (labelFont != null)
@@ -518,6 +541,9 @@ namespace MoodPicker.Ritual
             Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
             Quaternion yaw = fwd.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(fwd.normalized, Vector3.up) : Quaternion.identity;
             _jar.root.SetPositionAndRotation(p, yaw);
+            _jar.root.localScale = Vector3.one;
+            _lastJarRot = yaw;
+            _twoHandJarActive = false;
             _deskY = p.y;
         }
 
@@ -550,6 +576,7 @@ namespace MoodPicker.Ritual
             _hoveredHeap = null;
             _hands.Update(frame, trackingSpace, _config, dt);
             for (int h = 0; h < 2; h++) StepHand(h, now, dt);
+            StepJarPose(dt);
             if (!_sealed) _jar.SetInnerGlow(_pourPreviewGlow);
             if (_config.sweepEnabled && !_sealed) StepSweep(now, dt);
             if (!_sealed) StepTouch(now, dt);
@@ -560,6 +587,8 @@ namespace MoodPicker.Ritual
                 if (!piece.Alive) _pieces.RemoveAt(i);
             }
             StepSeal(now, dt);
+            StepMicrogesture(now);
+            StepGuideTrails(dt);
             StepRoomNote(dt);
             StepHeapNote(dt);
             _jar.Tick(now, dt);
@@ -594,13 +623,7 @@ namespace MoodPicker.Ritual
             }
             if (g.mode == GripJar)
             {
-                if (!hand.tracked || !hand.pinching)
-                {
-                    g = default;
-                    _deskY = _jar.root.position.y;
-                    if (_sealed) _glow.root.position = _jar.root.position + Vector3.up * 0.0015f;
-                }
-                else _jar.root.position = hand.pinch + g.jarOffset;
+                if (!hand.tracked || !hand.pinching) g = default;
                 return;
             }
             if (g.mode == GripSqueeze)
@@ -658,7 +681,8 @@ namespace MoodPicker.Ritual
                     return;
                 }
             }
-            if (_jar.InBody(hand.pinch))
+            bool otherHoldingJar = _grips[1 - h].mode == GripJar;
+            if (_jar.InGrabZone(hand.pinch, _sealed, otherHoldingJar))
             {
                 g.mode = GripJar;
                 g.jarOffset = _jar.root.position - hand.pinch;
@@ -1009,7 +1033,6 @@ namespace MoodPicker.Ritual
                 _jar.SetLevel(level);
                 float wave = Mathf.Clamp01(_sealTime / 1.35f);
                 _jar.SetPulse(wave < 1f ? wave : 0f);
-                _glow.SetLift(_jar.root.position.y - _deskY);
                 _dim = Mathf.MoveTowards(_dim, _config.baseDim + _config.sealDim, dt * 0.12f);
                 return;
             }
@@ -1640,7 +1663,320 @@ namespace MoodPicker.Ritual
             RitualUtil.Kill(_labelTextMesh);
             _wax?.Dispose();
             _glow?.Dispose();
+            _guideTrails?.Dispose();
             _jar?.Dispose();
+        }
+
+        void StepMicrogesture(float now)
+        {
+            if (_micro == null) _micro = microgestureSource as IMicrogestureInput;
+            Microgesture g = _micro != null ? _micro.Current(Handedness.Right) : Microgesture.None;
+            bool fresh = g != Microgesture.None && g != _lastRightMicro && now - _lastGuideToggleTime >= 0.35f;
+            _lastRightMicro = g;
+            if (!fresh || _config == null) return;
+            _lastGuideToggleTime = now;
+            _config.guideTrails = !_config.guideTrails;
+            if (sound != null)
+            {
+                Vector3 anchor = _jar != null ? _jar.Spout : transform.position;
+                sound.Unit(anchor, _config.guideTrails ? 6 : 2, _config.guideTrails, true);
+            }
+            ShowRoomNote(_config.guideTrails ? "Light Guide · On" : "Light Guide · Off");
+            Debug.Log($"{Tag} ritual guide trails enabled={_config.guideTrails} gesture={g}");
+        }
+
+        void StepGuideTrails(float dt)
+        {
+            if (_guideTrails == null) return;
+            RitualGuideTrails.ArcSpec primary = default;
+            RitualGuideTrails.ArcSpec secondary = default;
+            if (_sealed || _config == null || !_config.guideTrails)
+            {
+                _guideTrails.SetStreams(false, in primary, in secondary, dt);
+                return;
+            }
+
+            Vector3 spout = _jar != null ? _jar.Spout : transform.position + Vector3.up * 0.18f;
+            Color warmGold = new Color(1f, 0.88f, 0.60f, 1f);
+
+            TimePieceView held = null;
+            for (int h = 1; h >= 0; h--)
+            {
+                if ((_grips[h].mode == GripHold || _grips[h].mode == GripSqueeze) && _grips[h].piece != null && _grips[h].piece.Alive)
+                {
+                    held = _grips[h].piece;
+                    break;
+                }
+            }
+
+            if (held != null)
+            {
+                Color hCol = CategoryGlow(held.category, warmGold);
+                if (_jar != null && !_jar.Pouring && _jar.CanAccept(held.Units))
+                {
+                    float lift = 0.055f + 0.16f * Vector3.Distance(held.Center, spout);
+                    primary = MakeArc(held.Center, spout, lift, hCol, 0.72f, 0.0085f, 0.42f);
+                }
+                TimePieceView mergePartner = NearestSameCategory(held, 0.36f, out float mergeDist);
+                if (mergePartner != null)
+                {
+                    float nearK = Mathf.Clamp01(1.12f - mergeDist / 0.36f);
+                    secondary = MakeArc(mergePartner.Center, held.Center, 0.025f, Color.Lerp(hCol, Color.white, 0.2f), 0.66f * nearK, 0.006f, 0.48f);
+                }
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            TimePieceView pullingPiece = null;
+            for (int i = _pieces.Count - 1; i >= 0; i--)
+            {
+                if (_pieces[i].Alive && _pieces[i].state == PieceState.Pulling)
+                {
+                    pullingPiece = _pieces[i];
+                    break;
+                }
+            }
+            if (pullingPiece != null)
+            {
+                Color pCol = CategoryGlow(pullingPiece.category, warmGold);
+                Vector3 tip = pullingPiece.Units > 0 && pullingPiece.Transform != null
+                    ? pullingPiece.Transform.TransformPoint(new Vector3(0f, 0f, pullingPiece.Length))
+                    : pullingPiece.Center;
+                float lift = 0.055f + 0.16f * Vector3.Distance(tip, spout);
+                primary = MakeArc(tip, spout, lift, pCol, pullingPiece.Units > 0 ? 0.62f : 0.38f, 0.008f, 0.38f);
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            if (_wax != null && (_wax.DrawState == WaxDraw.Drawing || _wax.DrawState == WaxDraw.Falling))
+            {
+                Color wCol = Color.Lerp(_wax.Color, warmGold, 0.45f);
+                primary = MakeArc(_wax.DropPosition, spout, 0.045f, wCol, 0.72f, 0.007f, 0.46f);
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            if (_wax != null && _wax.Ready)
+            {
+                Color wCol = Color.Lerp(_wax.Color, warmGold, 0.48f);
+                Vector3 pressTop = _wax.DropCenter + Vector3.up * 0.115f;
+                Vector3 pressBot = _wax.DropCenter + Vector3.up * 0.008f;
+                primary = MakeArc(pressTop, pressBot, 0f, wCol, 0.72f, 0.011f, 0.40f);
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            TimePieceView floating = null;
+            for (int i = _pieces.Count - 1; i >= 0; i--)
+            {
+                if (_pieces[i].Alive && _pieces[i].state == PieceState.Floating)
+                {
+                    floating = _pieces[i];
+                    break;
+                }
+            }
+            if (floating != null && _jar != null && !_jar.Pouring)
+            {
+                Color fCol = CategoryGlow(floating.category, warmGold);
+                if (_jar.CanAccept(floating.Units))
+                {
+                    float lift = 0.055f + 0.15f * Vector3.Distance(floating.Center, spout);
+                    primary = MakeArc(floating.Center, spout, lift, fCol, 0.64f, 0.008f, 0.38f);
+                }
+                TimePieceView mergePartner = NearestSameCategory(floating, 0.34f, out float _);
+                if (mergePartner != null)
+                {
+                    secondary = MakeArc(mergePartner.Center, floating.Center, 0.025f, Color.Lerp(fCol, Color.white, 0.2f), 0.58f, 0.006f, 0.45f);
+                }
+                else if (_wax != null && _wax.StickShown && !_wax.Dripped && _jar.TotalUnits > 0)
+                {
+                    Color wCol = Color.Lerp(_wax.Color, warmGold, 0.48f);
+                    secondary = MakeArc(_wax.stickRoot.position, spout, 0.055f, wCol, 0.46f, 0.007f, 0.34f);
+                }
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            if (_wax != null && _wax.StickShown && !_wax.Dripped && _jar != null && _jar.TotalUnits > 0)
+            {
+                Color wCol = Color.Lerp(_wax.Color, warmGold, 0.48f);
+                primary = MakeArc(_wax.stickRoot.position, spout, 0.06f, wCol, 0.66f, 0.008f, 0.38f);
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            if (_hoveredHeap != null)
+            {
+                Vector3 heapTop = _hoveredHeap.transform.position + Vector3.up * _hoveredHeap.Radius;
+                primary = MakeArc(heapTop, heapTop + Vector3.up * 0.125f, 0f, CategoryGlow(_hoveredHeap.Category, warmGold), 0.62f, 0.011f, 0.36f);
+                _guideTrails.SetStreams(true, in primary, in secondary, dt);
+                return;
+            }
+
+            if (_jar != null && _jar.TotalUnits == 0 && _pieces.Count == 0 && pull != null && pull.Heaps != null && pull.Heaps.Length > 0)
+            {
+                int idx0 = Mathf.Clamp(2, 0, pull.Heaps.Length - 1);
+                TimeHeap h0 = pull.Heaps[idx0];
+                if (h0 != null && h0.Present)
+                {
+                    Vector3 b0 = h0.transform.position + Vector3.up * h0.Radius;
+                    primary = MakeArc(b0, b0 + Vector3.up * 0.105f, 0f, CategoryGlow(h0.Category, warmGold), 0.42f, 0.010f, 0.28f);
+                }
+                if (pull.Heaps.Length > 3)
+                {
+                    TimeHeap h1 = pull.Heaps[3];
+                    if (h1 != null && h1 != h0 && h1.Present)
+                    {
+                        Vector3 b1 = h1.transform.position + Vector3.up * h1.Radius;
+                        secondary = MakeArc(b1, b1 + Vector3.up * 0.105f, 0f, CategoryGlow(h1.Category, warmGold), 0.42f, 0.010f, 0.28f);
+                    }
+                }
+            }
+
+            _guideTrails.SetStreams(true, in primary, in secondary, dt);
+        }
+
+        TimePieceView NearestSameCategory(TimePieceView reference, float maxDist, out float bestDist)
+        {
+            TimePieceView best = null;
+            bestDist = maxDist;
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                TimePieceView other = _pieces[i];
+                if (other == reference || !other.Alive) continue;
+                if (other.state != PieceState.Floating && other.state != PieceState.Held) continue;
+                if (other.categoryIndex != reference.categoryIndex) continue;
+                float d = reference.DistanceTo(other);
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = other;
+                }
+            }
+            return best;
+        }
+
+        static Color CategoryGlow(TimeCategoryAsset category, Color fallback)
+        {
+            return category != null ? Color.Lerp(category.glowColor, Color.white, 0.24f) : fallback;
+        }
+
+        void StepJarPose(float dt)
+        {
+            if (_jar == null) return;
+            bool hold0 = _grips[0].mode == GripJar && _hands[0].tracked && _hands[0].pinching;
+            bool hold1 = _grips[1].mode == GripJar && _hands[1].tracked && _hands[1].pinching;
+
+            if (hold0 && hold1 && _sealed)
+            {
+                Vector3 mid = (_hands[0].pinch + _hands[1].pinch) * 0.5f;
+                if (TryTwoHandFrame(in _hands[0], in _hands[1], _jar.root.up, out Quaternion frameRot))
+                {
+                    if (!_twoHandJarActive)
+                    {
+                        _twoHandJarActive = true;
+                        _jarTwoHandLocalRot = Quaternion.Inverse(frameRot) * _jar.root.rotation;
+                        _jarTwoHandLocalPos = Quaternion.Inverse(_jar.root.rotation) * (_jar.root.position - mid);
+                    }
+                    else
+                    {
+                        Quaternion wantedRot = frameRot * _jarTwoHandLocalRot;
+                        Vector3 wantedPos = mid + wantedRot * _jarTwoHandLocalPos;
+                        float follow = 1f - Mathf.Exp(-dt * 24f);
+                        _jar.root.SetPositionAndRotation(
+                            Vector3.Lerp(_jar.root.position, wantedPos, follow),
+                            Quaternion.Slerp(_jar.root.rotation, wantedRot, follow));
+                    }
+                }
+                _jar.root.localScale = Vector3.one;
+            }
+            else if (hold0 || hold1)
+            {
+                int h = hold0 ? 0 : 1;
+                if (_twoHandJarActive)
+                {
+                    _twoHandJarActive = false;
+                    _grips[h].jarOffset = _jar.root.position - _hands[h].pinch;
+                }
+                Vector3 targetPos = _hands[h].pinch + _grips[h].jarOffset;
+                Quaternion nextRot = _jar.root.rotation;
+                if (Vector3.Dot(_jar.root.up, Vector3.up) < 0.9999f)
+                    nextRot = Quaternion.Slerp(_jar.root.rotation, UprightYaw(_jar.root, transform.forward), 1f - Mathf.Exp(-dt * 5f));
+                _jar.root.SetPositionAndRotation(targetPos, nextRot);
+                _jar.root.localScale = Vector3.one;
+            }
+            else
+            {
+                _twoHandJarActive = false;
+                if (Vector3.Dot(_jar.root.up, Vector3.up) < 0.9999f)
+                {
+                    Vector3 center = _jar.BodyCenter;
+                    Quaternion upright = UprightYaw(_jar.root, transform.forward);
+                    Quaternion nextRot = Quaternion.Slerp(_jar.root.rotation, upright, 1f - Mathf.Exp(-dt * 4.5f));
+                    Vector3 nextPos = center - nextRot * new Vector3(0f, _config.jar.height * 0.45f, 0f);
+                    _jar.root.SetPositionAndRotation(nextPos, nextRot);
+                }
+                _jar.root.localScale = Vector3.one;
+                _deskY = _jar.root.position.y;
+            }
+
+            float angSpeed = Quaternion.Angle(_lastJarRot, _jar.root.rotation) * Mathf.Deg2Rad / Mathf.Max(dt, 1e-4f);
+            _lastJarRot = _jar.root.rotation;
+            if (_sealed && _glow != null) _glow.TrackVessel(_jar.root.position, _jar.root.rotation, angSpeed, dt);
+        }
+
+        static bool TryTwoHandFrame(in RitualHand left, in RitualHand right, Vector3 fallbackUp, out Quaternion rot)
+        {
+            Vector3 span = right.pinch - left.pinch;
+            if (span.sqrMagnitude < 1e-6f)
+            {
+                rot = Quaternion.identity;
+                return false;
+            }
+            Vector3 xAxis = span.normalized;
+            Vector3 handUp = left.rotation * Vector3.up + right.rotation * Vector3.up;
+            if (handUp.sqrMagnitude < 1e-6f) handUp = fallbackUp;
+            Vector3 orthoUp = handUp - xAxis * Vector3.Dot(handUp, xAxis);
+            if (orthoUp.sqrMagnitude < 1e-6f)
+            {
+                orthoUp = fallbackUp - xAxis * Vector3.Dot(fallbackUp, xAxis);
+                if (orthoUp.sqrMagnitude < 1e-6f)
+                    orthoUp = Vector3.Cross(xAxis, Mathf.Abs(xAxis.y) < 0.9f ? Vector3.up : Vector3.right);
+            }
+            orthoUp.Normalize();
+            Vector3 zAxis = Vector3.Cross(xAxis, orthoUp).normalized;
+            rot = Quaternion.LookRotation(zAxis, orthoUp);
+            return true;
+        }
+
+        static Quaternion UprightYaw(Transform jarRoot, Vector3 fallbackForward)
+        {
+            Vector3 up = jarRoot.up;
+            Quaternion q = jarRoot.rotation;
+            Quaternion swing = Vector3.Dot(up, Vector3.up) < -0.999f
+                ? Quaternion.AngleAxis(180f, jarRoot.right)
+                : Quaternion.FromToRotation(up, Vector3.up);
+            Quaternion rectified = swing * q;
+            Vector3 fwd = Vector3.ProjectOnPlane(rectified * Vector3.forward, Vector3.up);
+            if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.ProjectOnPlane(fallbackForward, Vector3.up);
+            if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.forward;
+            return Quaternion.LookRotation(fwd.normalized, Vector3.up);
+        }
+
+        static RitualGuideTrails.ArcSpec MakeArc(Vector3 start, Vector3 end, float arcHeight, Color color, float alpha, float radius, float speed)
+        {
+            Vector3 mid = (start + end) * 0.5f + Vector3.up * arcHeight;
+            return new RitualGuideTrails.ArcSpec
+            {
+                active = true,
+                start = start,
+                mid = mid,
+                end = end,
+                color = color,
+                alpha = alpha,
+                radius = radius,
+                speed = speed
+            };
         }
     }
 }

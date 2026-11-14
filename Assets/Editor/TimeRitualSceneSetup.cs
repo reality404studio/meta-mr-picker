@@ -16,7 +16,7 @@ public static class TimeRitualSceneSetup
     public const string AssetDir = "Assets/Ritual";
     public const string MatDir = "Assets/Materials/Ritual";
     public const string ConfigPath = AssetDir + "/TimeRitualConfig.asset";
-    public static readonly string[] PlacedCategories = { "sleep", "move", "work", "play", "drift" };
+    public static readonly string[] PlacedCategories = { "sleep", "move", "work", "drift", "play" };
 
     struct CategorySpec
     {
@@ -39,12 +39,12 @@ public static class TimeRitualSceneSetup
         new CategorySpec { id = "work", ko = "몰입", en = "Focused", symbol = "*", memory = "Deep Dive", shape = BeadShape.Star, feel = PieceFeel.Jelly,
             slotAsset = "Slot1_IMG4398", squeeze = 1.1f, nodeGlow = 0.55f, nodeGrain = 0.85f, twinkle = 0.25f, twinkleSpeed = 2.5f,
             glint = 0.8f, glintSpeed = 0.5f, sandIntensity = 1.15f, sparkle = 0.9f, wax = new Color(0.82f, 0.52f, 0.28f), glow = new Color(1f, 0.76f, 0.52f) },
-        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Heart, feel = PieceFeel.Jelly,
-            slotAsset = "Slot3_IMG4566", squeeze = 0.9f, nodeGlow = 0.7f, nodeGrain = 0.8f, twinkle = 0.45f, twinkleSpeed = 5f,
-            glint = 0.95f, glintSpeed = 0.7f, sandIntensity = 1.15f, sparkle = 1.05f, wax = new Color(0.84f, 0.24f, 0.22f), glow = new Color(1f, 0.48f, 0.30f) },
         new CategorySpec { id = "drift", ko = "탐색", en = "Explored", symbol = "·", memory = "Trial & Wonder", shape = BeadShape.Diamond, feel = PieceFeel.Jelly,
             slotAsset = "Slot2_IMG4543", squeeze = 0.9f, nodeGlow = 0.65f, nodeGrain = 0.85f, twinkle = 0.3f, twinkleSpeed = 3.5f,
             glint = 1f, glintSpeed = 0.6f, sandIntensity = 1.1f, sparkle = 1f, wax = new Color(0.86f, 0.64f, 0.18f), glow = new Color(1f, 0.84f, 0.36f) },
+        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Heart, feel = PieceFeel.Jelly,
+            slotAsset = "Slot3_IMG4566", squeeze = 0.9f, nodeGlow = 0.7f, nodeGrain = 0.8f, twinkle = 0.45f, twinkleSpeed = 5f,
+            glint = 0.95f, glintSpeed = 0.7f, sandIntensity = 1.15f, sparkle = 1.05f, wax = new Color(0.84f, 0.24f, 0.22f), glow = new Color(1f, 0.48f, 0.30f) },
     };
 
     static bool ResetAssets => Environment.GetEnvironmentVariable("RITUAL_RESET_ASSETS") == "1";
@@ -104,6 +104,12 @@ public static class TimeRitualSceneSetup
         hso.FindProperty("rightSkeleton").objectReferenceValue = rightSkel;
         hso.ApplyModifiedPropertiesWithoutUndo();
 
+        var microInput = root.AddComponent<MoodPicker.Hands.Ovr.OvrMicrogestureInput>();
+        var mso = new SerializedObject(microInput);
+        mso.FindProperty("leftHand").objectReferenceValue = leftSkel.GetComponent<OVRHand>();
+        mso.FindProperty("rightHand").objectReferenceValue = rightSkel.GetComponent<OVRHand>();
+        mso.ApplyModifiedPropertiesWithoutUndo();
+
         var heapList = new List<TimeHeap>();
         for (int i = 0; i < PlacedCategories.Length; i++)
         {
@@ -162,6 +168,7 @@ public static class TimeRitualSceneSetup
         rso.FindProperty("config").objectReferenceValue = config;
         rso.FindProperty("tuning").objectReferenceValue = tuning;
         rso.FindProperty("handInputSource").objectReferenceValue = handInput;
+        rso.FindProperty("microgestureSource").objectReferenceValue = microInput;
         rso.FindProperty("trackingSpace").objectReferenceValue = trackingSpace;
         rso.FindProperty("head").objectReferenceValue = centerEye;
         rso.FindProperty("pull").objectReferenceValue = pull;

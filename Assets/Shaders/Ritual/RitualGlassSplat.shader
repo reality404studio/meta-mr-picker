@@ -92,10 +92,12 @@ Shader "MoodPicker/RitualGlassSplat"
                 float dw = (v.dataB.w - _Pulse) * 5.5;
                 float wave = _Pulse > 0.001 ? exp(-(dw * dw)) * (0.65 + 0.9 * rimMask) : 0.0;
                 float twinkle = 0.94 + 0.06 * sin(_Time.y * 0.8 + v.dataA.w * 40.0);
-                float light = (rim * _Rim * weight * bevel + spec * _Spec * (0.72 + 0.28 * v.dataA.w) + _Body + wave * 0.45) * twinkle;
+                float baseMask = saturate((0.038 - v.dataB.w) / 0.038);
+                float baseSheen = baseMask * (0.14 + 0.55 * pow(saturate(rimAngle), 2.0)) * _Rim * weight;
+                float light = (rim * _Rim * weight * bevel + baseSheen + spec * _Spec * (0.72 + 0.28 * v.dataA.w) + _Body + wave * 0.45) * twinkle;
 
                 o.quadUV = v.quadUV;
-                float innerMix = rim * weight * 1.15 + spec * 0.35 + wave * 0.55;
+                float innerMix = rim * weight * 1.15 + baseMask * 0.42 + spec * 0.35 + wave * 0.55;
                 o.color = (half3)(_Tint.rgb * light + _Inner.rgb * innerMix);
                 if (light < 0.018 && dot(_Inner.rgb, float3(1.0, 1.0, 1.0)) * innerMix < 0.008)
                 {

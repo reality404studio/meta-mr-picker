@@ -30,6 +30,14 @@ Material:
     - _Intensity: 0.5
     - _Reveal: 0
     - _Swirl: 0.025
-    m_Colors: []
+    m_Colors:
+    - _Arc0Color: {r: 1, g: 0.9, b: 0.7, a: 1}
+    - _Arc0End: {r: 0, g: 0, b: 0, a: 0.5}
+    - _Arc0Mid: {r: 0, g: 0, b: 0, a: 0.01}
+    - _Arc0Start: {r: 0, g: 0, b: 0, a: 0}
+    - _Arc1Color: {r: 1, g: 0.9, b: 0.7, a: 1}
+    - _Arc1End: {r: 0, g: 0, b: 0, a: 0.5}
+    - _Arc1Mid: {r: 0, g: 0, b: 0, a: 0.01}
+    - _Arc1Start: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

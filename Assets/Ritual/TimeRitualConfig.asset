@@ -168,6 +168,8 @@ MonoBehaviour:
   glowPetals: 84
   glowMotes: 56
   glowIntensity: 0.58
+  guideTrails: 1
+  guideIntensity: 0.85
   baseDim: -0.08
   sealDim: -0.28
   cpuLevel: 1

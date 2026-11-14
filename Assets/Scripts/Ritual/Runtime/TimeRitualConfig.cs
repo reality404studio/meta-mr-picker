@@ -179,6 +179,8 @@ namespace MoodPicker.Ritual
         public int glowPetals = 84;
         public int glowMotes = 56;
         public float glowIntensity = 0.58f;
+        public bool guideTrails = true;
+        [Range(0.1f, 2f)] public float guideIntensity = 0.85f;
         public float baseDim = -0.08f;
         public float sealDim = -0.28f;
 
