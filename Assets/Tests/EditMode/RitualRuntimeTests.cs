@@ -1105,5 +1105,304 @@ namespace MoodPicker.Tests
                 Object.DestroyImmediate(cfg);
             }
         }
+
+        static Vector3[] ShapeBox(BeadShape kind)
+        {
+            Vector3 lo = Vector3.one * 9f, hi = -Vector3.one * 9f;
+            for (int i = 0; i < 600; i++)
+            {
+                float t = (i + 0.5f) / 600f;
+                float z = 1f - 2f * t;
+                float r = Mathf.Sqrt(Mathf.Max(0f, 1f - z * z));
+                float phi = i * 2.39996323f;
+                Unity.Mathematics.float3 p = TimePieceView.ShapePoint(kind, new Unity.Mathematics.float3(r * Mathf.Cos(phi), r * Mathf.Sin(phi), z), 1f, out _);
+                Vector3 v = new Vector3(p.x, p.y, p.z);
+                Assert.That(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z), Is.False);
+                Assert.That(v.magnitude, Is.LessThan(1.6f));
+                lo = Vector3.Min(lo, v);
+                hi = Vector3.Max(hi, v);
+            }
+            return new[] { lo, hi };
+        }
+
+        [Test]
+        public void EachKindWearsTheShapeThePersonChoseAndKeepsItsOwnSilhouette()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var expected = new System.Collections.Generic.Dictionary<string, BeadShape>
+            {
+                { "sleep", BeadShape.Crescent },
+                { "move", BeadShape.Droplet },
+                { "work", BeadShape.Star },
+                { "drift", BeadShape.Diamond },
+                { "play", BeadShape.Feather },
+            };
+            System.Type setup = System.Type.GetType("TimeRitualSceneSetup, Assembly-CSharp-Editor");
+            Assert.That(setup, Is.Not.Null, "빌드가 카테고리 에셋을 다시 쓰는 장면 설정");
+            var specs = (System.Array)setup.GetField("Categories", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static).GetValue(null);
+            foreach (object spec in specs)
+            {
+                string id = (string)spec.GetType().GetField("id").GetValue(spec);
+                BeadShape shape = (BeadShape)spec.GetType().GetField("shape").GetValue(spec);
+                Assert.That(shape, Is.EqualTo(expected[id]), id + " 형상은 빌드 때 다시 써도 사람이 고른 것");
+            }
+            var kinds = new System.Collections.Generic.List<BeadShape>();
+            foreach (TimeCategoryAsset cat in cats)
+            {
+                BeadShape k = cat.EffectiveShape;
+                Assert.That(k, Is.EqualTo(expected[cat.id]), cat.id + " 형상은 사람이 고른 것");
+                Assert.That(kinds, Has.No.Member(k), "카테고리마다 한 종");
+                kinds.Add(k);
+            }
+            for (int a = 0; a < kinds.Count; a++)
+            {
+                Vector3[] ba = ShapeBox(kinds[a]);
+                for (int b = a + 1; b < kinds.Count; b++)
+                {
+                    Vector3[] bb = ShapeBox(kinds[b]);
+                    float diff = Mathf.Max(Vector3.Distance(ba[0], bb[0]), Vector3.Distance(ba[1], bb[1]));
+                    Assert.That(diff, Is.GreaterThan(0.08f), $"{kinds[a]} 와 {kinds[b]} 는 색을 빼도 모양으로 구분된다");
+                }
+            }
+        }
+
+        [Test]
+        public void TheChainSagsUnderGravityWhilePulled()
+        {
+            foreach (float sag in new[] { 0.06f, 0f })
+            {
+                _config.threadSag = sag;
+                var piece = new TimePieceView(_root.transform, _move, 0, _look, null, _config, null, null, null);
+                Vector3 origin = new Vector3(0f, 1.2f, 0.4f);
+                piece.BeginPull(origin, Vector3.right);
+                float now = 0f;
+                for (int i = 1; i <= 40; i++)
+                {
+                    float raw = 0.12f * i / 40f;
+                    piece.UpdatePull(origin + Vector3.right * raw, TimeUnits.Step(raw, piece.Units, _config.unitLength, _config.hysteresis, _config.maxUnits), raw, Dt);
+                    now += Dt;
+                    piece.Tick(now, Dt);
+                }
+                if (sag > 0f) Assert.That(piece.Bend.y, Is.LessThan(-0.003f), "사슬은 중력에 살짝 처진다");
+                else Assert.That(Mathf.Abs(piece.Bend.y), Is.LessThan(1e-3f));
+                piece.Kill();
+            }
+        }
+
+        [TestCase(FormStyle.Flow)]
+        [TestCase(FormStyle.Gather)]
+        public void ReleasingTheChainTurnsTheSameGrainsIntoTheShape(FormStyle style)
+        {
+            _config.formStyle = style;
+            Vector3 origin = new Vector3(0f, 1.2f, 0.4f);
+            TimePieceView piece = Pulled(_move, 0, 6, origin, Vector3.right);
+            Vector3 tip = origin + Vector3.right * (6 * _config.unitLength + 0.001f);
+            Vector3 middle = piece.Center;
+            int splats = piece.SplatCount;
+            Assert.That(piece.Crumple(), Is.True);
+            Assert.That(piece.shape, Is.EqualTo(PieceShape.Blob));
+            Assert.That(piece.Units, Is.EqualTo(6), "당긴 길이가 크기를 정한다");
+            if (style == FormStyle.Flow) Assert.That(Vector3.Distance(piece.Center, tip), Is.LessThan(0.01f), "사슬이 놓은 손 쪽으로 흘러 모인다");
+            else Assert.That(Vector3.Distance(piece.Center, Vector3.Lerp(middle, tip, 0.5f)), Is.LessThan(0.01f), "흩어졌다 사슬 가운데쯤에서 모인다");
+            Assert.That(piece.BlobRadiusFull, Is.GreaterThanOrEqualTo(_config.formMinRadius), "짧게 당겨도 실한 덩어리");
+            float now = 5f;
+            for (int i = 0; i < 72 * 4; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(piece.Awake, Is.False, "형상으로 다 모이면 잠든다");
+            Assert.That(piece.SplatCount, Is.EqualTo(splats), "알갱이는 사라지거나 생기지 않는다");
+            piece.Kill();
+        }
+
+        [Test]
+        public void AReleasedPieceDriftsSlowlyToItsPlaceAndStopsWhenHeld()
+        {
+            TimePieceView piece = Pulled(_move, 0, 3, new Vector3(0f, 1.2f, 0.4f), Vector3.right);
+            Assert.That(piece.Crumple(), Is.True);
+            Vector3 start = piece.Center;
+            Vector3 target = start + new Vector3(0.1f, 0.12f, 0.08f);
+            piece.FloatTo(target, 0.4f);
+            float now = 10f;
+            for (int i = 0; i < 20; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(Vector3.Distance(piece.Center, start), Is.LessThan(0.003f), "형상이 다 된 뒤에 떠난다");
+            for (int i = 0; i < 30; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            float early = Vector3.Distance(piece.Center, start);
+            Assert.That(early, Is.LessThan(0.05f), "튀지 않고 천천히 출발한다");
+            for (int i = 0; i < 72 * 8; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(Vector3.Distance(piece.Center, target), Is.LessThan(0.01f), "자리에 가서 떠 있는다");
+            Assert.That(piece.FloatingAway, Is.False);
+            piece.FloatTo(start, 0f);
+            piece.Hold();
+            Assert.That(piece.FloatingAway, Is.False, "손에 쥐면 흘러가기를 멈춘다");
+            piece.Kill();
+        }
+
+        [Test]
+        public void FloatSlotsFillTheRoomInFrontWithinReach()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            var headGo = new GameObject("SlotHead");
+            try
+            {
+                var go = new GameObject("SlotRitual");
+                go.transform.SetParent(_root.transform, false);
+                var ritual = go.AddComponent<TimeRitual>();
+                var so = new UnityEditor.SerializedObject(ritual);
+                so.FindProperty("config").objectReferenceValue = cfg;
+                so.FindProperty("head").objectReferenceValue = headGo.transform;
+                so.FindProperty("piecesRoot").objectReferenceValue = go.transform;
+                so.FindProperty("autoPlace").boolValue = false;
+                var cp = so.FindProperty("categories");
+                cp.arraySize = cats.Length;
+                for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+                so.ApplyModifiedPropertiesWithoutUndo();
+                headGo.transform.position = new Vector3(0f, 1.2f, 0f);
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.06f, 0.42f), Quaternion.identity);
+                Vector3 eye = headGo.transform.position;
+                var slots = new System.Collections.Generic.List<Vector3>();
+                int left = 0, right = 0;
+                for (int i = 0; i < 10; i++)
+                {
+                    Vector3 slot = ritual.NextFloatSlot();
+                    Vector3 flat = slot - eye;
+                    flat.y = 0f;
+                    Assert.That(flat.magnitude, Is.InRange(0.35f, 0.6f), "앉은 채 팔이 닿는다");
+                    Assert.That(slot.y - eye.y, Is.InRange(ritual.Config.floatLow - 1e-3f, ritual.Config.floatHigh + 1e-3f));
+                    Assert.That(flat.z, Is.GreaterThan(0.2f), "앞쪽 방 안");
+                    if (flat.x < -0.05f) left++;
+                    if (flat.x > 0.05f) right++;
+                    foreach (Vector3 other in slots) Assert.That(Vector3.Distance(other, slot), Is.GreaterThan(0.04f), "조각끼리 겹치지 않게 흩어진다");
+                    slots.Add(slot);
+                }
+                Assert.That(left, Is.GreaterThanOrEqualTo(3));
+                Assert.That(right, Is.GreaterThanOrEqualTo(3), "방이 양쪽으로 찬다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(headGo);
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void SpringsAreLooseSwirlingSwarmsAndOneInvitesWhenNothingHappens()
+        {
+            Material splatMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Splatter/LetterSplat.mat");
+            Assert.That(splatMat, Is.Not.Null);
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.springSwarm = true;
+            cfg.springSplats = 300;
+            cfg.hintIdleSeconds = 1f;
+            var ritualGo = new GameObject("SwarmRitual");
+            ritualGo.transform.SetParent(_root.transform, false);
+            var heaps = new TimeHeap[cats.Length];
+            for (int i = 0; i < cats.Length; i++)
+            {
+                var hgo = new GameObject("Heap_" + cats[i].id);
+                hgo.transform.SetParent(ritualGo.transform, false);
+                hgo.transform.localPosition = new Vector3((i - 2) * 0.12f, 0f, 0f);
+                hgo.AddComponent<MeshFilter>();
+                hgo.AddComponent<MeshRenderer>();
+                hgo.AddComponent<SplatLetterRenderer>();
+                var heap = hgo.AddComponent<TimeHeap>();
+                var hso = new UnityEditor.SerializedObject(heap);
+                hso.FindProperty("category").objectReferenceValue = cats[i];
+                hso.FindProperty("config").objectReferenceValue = cfg;
+                hso.FindProperty("splatMaterial").objectReferenceValue = splatMat;
+                hso.ApplyModifiedPropertiesWithoutUndo();
+                heaps[i] = heap;
+            }
+            var pull = ritualGo.AddComponent<TimePullController>();
+            var pso = new UnityEditor.SerializedObject(pull);
+            var hp = pso.FindProperty("heaps");
+            hp.arraySize = heaps.Length;
+            for (int i = 0; i < heaps.Length; i++) hp.GetArrayElementAtIndex(i).objectReferenceValue = heaps[i];
+            pso.ApplyModifiedPropertiesWithoutUndo();
+            var ritual = ritualGo.AddComponent<TimeRitual>();
+            var rso = new UnityEditor.SerializedObject(ritual);
+            rso.FindProperty("config").objectReferenceValue = cfg;
+            rso.FindProperty("pull").objectReferenceValue = pull;
+            rso.FindProperty("piecesRoot").objectReferenceValue = ritualGo.transform;
+            rso.FindProperty("autoPlace").boolValue = false;
+            var cp = rso.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            rso.ApplyModifiedPropertiesWithoutUndo();
+            try
+            {
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+                TimeHeap center = heaps[2];
+                Assert.That(center.Swarming, Is.True, "샘은 유리구슬이 아니라 알갱이 무리");
+                Assert.That(center.Swarm.Count, Is.EqualTo(300));
+                Assert.That(center.GetComponent<MeshRenderer>().enabled, Is.False);
+                float now = 1f;
+                now += Dt;
+                ritual.Tick(now, Dt, default);
+                Unity.Mathematics.float3 before = center.Swarm.Cloud.disp[7];
+                for (int i = 0; i < 36; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Unity.Mathematics.float3 after = center.Swarm.Cloud.disp[7];
+                Assert.That(Unity.Mathematics.math.distance(before, after), Is.GreaterThan(0.002f), "느슨하게 맴돈다");
+                float loose = cfg.heapDiameter * 0.5f * cfg.springLoose;
+                Assert.That(center.Swarm.MaxReach, Is.InRange(loose * 0.5f, loose * 1.6f), "집을 수 있을 만큼 성긴 공으로 모여 있다");
+
+                Assert.That(ritual.EverPulled, Is.False);
+                for (int i = 0; i < 72 * 2; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                float invited = 0f;
+                foreach (TimeHeap h in heaps) invited = Mathf.Max(invited, h.Invitation);
+                Assert.That(invited, Is.GreaterThan(0.5f), "아무것도 안 하면 샘 하나가 숨 쉬듯 밝아지며 다가온다");
+
+                Vector3 grab = center.transform.position + Vector3.up * 0.01f;
+                HandFrame frame = new HandFrame { t = now, left = PinchPose(grab, false) };
+                now += Dt;
+                frame.t = now;
+                ritual.Tick(now, Dt, frame);
+                for (int i = 0; i < 8; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.left = PinchPose(grab, true);
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(ritual.EverPulled, Is.True);
+                for (int i = 0; i < 72 * 3; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.left = PinchPose(grab, false);
+                    ritual.Tick(now, Dt, frame);
+                }
+                foreach (TimeHeap h in heaps) Assert.That(h.Invitation, Is.LessThan(0.01f), "한 번 당기면 다시 나오지 않는다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
     }
 }

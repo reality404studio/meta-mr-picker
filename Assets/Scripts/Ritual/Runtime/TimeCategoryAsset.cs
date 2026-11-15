@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace MoodPicker.Ritual
 {
-    public enum BeadShape { Droplet = 0, Heart = 1, Star = 2, Diamond = 3, Crescent = 4 }
+    public enum BeadShape { Droplet = 0, Heart = 1, Star = 2, Diamond = 3, Crescent = 4, Feather = 7 }
     public enum PieceFeel { Jelly = 0, Water = 1, Fur = 2 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Category")]

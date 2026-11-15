@@ -4,6 +4,7 @@ namespace MoodPicker.Ritual
 {
     public enum MergedShape { Rod = 0, Blob = 1 }
     public enum GlowStyle { Seep = 0, Petals = 1 }
+    public enum FormStyle { Gather = 0, Flow = 1 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Ritual Config")]
     public sealed class TimeRitualConfig : ScriptableObject
@@ -198,6 +199,26 @@ namespace MoodPicker.Ritual
         [Range(0.05f, 1f)] public float roomLight = 0.38f;
         [Range(0.05f, 1f)] public float roomLightSealed = 0.32f;
         public float roomLightRate = 0.22f;
+
+        [Header("Pull Out")]
+        [Range(0f, 0.3f)] public float threadSag = 0.06f;
+        public FormStyle formStyle = FormStyle.Flow;
+        public float formFlowSeconds = 0.6f;
+        public float formMinRadius = 0.022f;
+        public bool floatAway = false;
+        public float floatSpeed = 0.07f;
+        public float floatDistance = 0.46f;
+        public float floatSpread = 55f;
+        public float floatLow = -0.05f;
+        public float floatHigh = 0.10f;
+        public bool springSwarm = true;
+        public int springSplats = 520;
+        public float springSpin = 0.9f;
+        public float springLoose = 1.35f;
+        public float springGrain = 0.0024f;
+        public bool pullHint = true;
+        public float hintIdleSeconds = 4.5f;
+        public float hintLean = 0.02f;
 
         [Header("Scatter")]
         [Range(1f, 3.5f)] public float scatterAspectMax = 1.6f;

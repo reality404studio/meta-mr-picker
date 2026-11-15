@@ -116,3 +116,9 @@
 - 원인: `mr launch` 가 실행 시각을 날짜만 기록. 커밋 훅(`my-mr-studio/scripts/githooks/rules.mjs`)은 첫 줄 `card-id:` 의 카드가 보드에 있고 status done 이어야 통과
 - 확인법: logcat 은 `adb logcat -d -v time -s Unity:I VrApi:I > evidence/<card>/<buildId>/logcat.txt` 로 직접. 커밋 전 `npm run studio -- show <id> --app time-ritual` 에서 상태 done 확인 (보드에 없으면 add → sub → done 으로 카드부터)
 - 적용 범위: 모든 MR (mr 도구 · 작업대 커밋 훅)
+
+## 카테고리 에셋을 고쳐도 빌드하면 되돌아감 — `TimeRitualSceneSetup` 이 코드 값으로 다시 씀 (2026-11-15, build-c5b8 뒤 3단계)
+- 증상: `Category_*.asset` 의 `beadShape` 를 바꾸고 EditMode 테스트까지 통과했는데, 기기에서는 예전 하트·별이 나옴
+- 원인: `MoodPickerBuild.BuildTimeRitualApkBatch` 가 장면을 다시 만들면서 `Assets/Editor/TimeRitualSceneSetup.cs` 의 `Categories` 배열(이름·형상·색·질감)로 카테고리 에셋을 덮어쓴다. 테스트는 빌드 전에 돌아서 못 잡음
+- 확인법: 빌드 뒤 `grep beadShape Assets/Ritual/Category_*.asset`. 카테고리 값은 `TimeRitualSceneSetup.Categories` 에서 바꾸고, 게이트 `EachKindWearsTheShapeThePersonChoseAndKeepsItsOwnSilhouette` 가 그 배열을 리플렉션으로 확인
+- 적용 범위: 이 프로젝트 (장면 설정이 에셋을 다시 쓰는 빌드 전반)

@@ -17,7 +17,7 @@ MonoBehaviour:
   displayEn: Enjoyed
   symbol: +
   memoryEn: Warm Joy
-  beadShape: 1
+  beadShape: 7
   initialFeel: 0
   look: {fileID: 11400000, guid: cd35cae7900da46959c89c849db3fc20, type: 2}
   nodeSqueeze: 0.9

@@ -42,7 +42,7 @@ public static class TimeRitualSceneSetup
         new CategorySpec { id = "drift", ko = "탐색", en = "Explored", symbol = "·", memory = "Trial & Wonder", shape = BeadShape.Diamond, feel = PieceFeel.Jelly,
             slotAsset = "Slot2_IMG4543", squeeze = 0.9f, nodeGlow = 0.65f, nodeGrain = 0.85f, twinkle = 0.3f, twinkleSpeed = 3.5f,
             glint = 1f, glintSpeed = 0.6f, sandIntensity = 1.1f, sparkle = 1f, wax = new Color(0.86f, 0.64f, 0.18f), glow = new Color(1f, 0.84f, 0.36f) },
-        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Heart, feel = PieceFeel.Jelly,
+        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Feather, feel = PieceFeel.Jelly,
             slotAsset = "Slot3_IMG4566", squeeze = 0.9f, nodeGlow = 0.7f, nodeGrain = 0.8f, twinkle = 0.45f, twinkleSpeed = 5f,
             glint = 0.95f, glintSpeed = 0.7f, sandIntensity = 1.15f, sparkle = 1.05f, wax = new Color(0.84f, 0.24f, 0.22f), glow = new Color(1f, 0.48f, 0.30f) },
     };

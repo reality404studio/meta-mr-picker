@@ -185,6 +185,24 @@ MonoBehaviour:
   roomLight: 0.38
   roomLightSealed: 0.32
   roomLightRate: 0.22
+  threadSag: 0.06
+  formStyle: 1
+  formFlowSeconds: 0.6
+  formMinRadius: 0.022
+  floatAway: 0
+  floatSpeed: 0.07
+  floatDistance: 0.46
+  floatSpread: 55
+  floatLow: -0.05
+  floatHigh: 0.1
+  springSwarm: 1
+  springSplats: 520
+  springSpin: 0.9
+  springLoose: 1.35
+  springGrain: 0.0024
+  pullHint: 1
+  hintIdleSeconds: 4.5
+  hintLean: 0.02
   scatterAspectMax: 1.6
   halos: 1
   haloIntensity: 0.55

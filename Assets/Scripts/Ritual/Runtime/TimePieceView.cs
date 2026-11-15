@@ -79,6 +79,11 @@ namespace MoodPicker.Ritual
         float _dissolve;
         bool _awake = true;
         bool _reformed;
+        float _mergeWindow = 0.9f;
+        Vector3 _floatTarget;
+        bool _hasFloat;
+        float _floatWait;
+        float _floatAge;
         float _lump;
         float _squeeze;
         Vector3 _bend;
@@ -243,6 +248,25 @@ namespace MoodPicker.Ritual
                     float l1 = math.max(0.45f, math.abs(d.x) * 1.05f + math.abs(d.y) * 0.86f + math.abs(d.z) * 1.15f);
                     float facet = math.lerp(1f, 0.88f / l1, 0.78f);
                     return new float3(d.x * 0.88f, d.y * 1.16f, d.z * 0.52f) * (facet * radius);
+                }
+                case BeadShape.Feather:
+                {
+                    float t = math.saturate(0.5f * (d.y + 1f));
+                    float u = t >= 0.42f ? (t - 0.42f) / 0.58f : (t - 0.42f) / 0.42f;
+                    float vane = math.sqrt(math.max(0f, 1f - math.pow(math.abs(u), 2.4f)));
+                    float quill = math.saturate((t - 0.05f) / 0.12f);
+                    bool right = d.x >= 0f;
+                    float side = right ? 1.15f : 0.82f;
+                    float splitAt = right ? (t - 0.64f) / 0.022f : (t - 0.33f) / 0.026f;
+                    float split = 1f - (right ? 0.6f : 0.5f) * math.exp(-splitAt * splitAt);
+                    float w = (0.035f + 0.38f * vane * quill * split) * side;
+                    float y = d.y * 1.45f;
+                    float x = d.x * w + 0.3f * (t * t - t);
+                    float across = math.saturate(math.abs(d.x) * 1.5f);
+                    float barbs = 0.02f * math.sin(52f * (t + 0.4f * across)) * across;
+                    float shaft = 0.04f * math.exp(-d.x * d.x / 0.003f);
+                    float z = d.z * (0.06f + 0.03f * vane) + barbs + shaft + 0.05f * across * across;
+                    return new float3(x, y, z) * radius;
                 }
                 case BeadShape.Crescent:
                 {
@@ -456,8 +480,10 @@ namespace MoodPicker.Ritual
             }
             _bendMid = Vector3.Lerp(_bendMid, straightMid, 1f - Mathf.Exp(-dt * Mathf.Max(0.1f, _config.threadFollow)));
             Vector3 bend = (_bendMid - straightMid) * _config.threadBend;
+            float span = Vector3.Distance(origin, tipWS);
+            bend += Vector3.down * (_config.threadSag * span);
             bend -= _axisWS * Vector3.Dot(bend, _axisWS);
-            float limit = _config.threadBendMax * Vector3.Distance(origin, tipWS);
+            float limit = Mathf.Max(_config.threadBendMax, _config.threadSag) * span;
             if (bend.sqrMagnitude > limit * limit) bend = bend.normalized * limit;
             _bend = bend;
         }
@@ -629,9 +655,22 @@ namespace MoodPicker.Ritual
             _awake = true;
         }
 
+        public bool FloatingAway => _hasFloat;
+        public Vector3 FloatTarget => _floatTarget;
+
+        public void FloatTo(Vector3 target, float wait)
+        {
+            _floatTarget = target;
+            _hasFloat = true;
+            _floatWait = Mathf.Max(0f, wait);
+            _floatAge = 0f;
+            _awake = true;
+        }
+
         public void Hold()
         {
             if (state == PieceState.Floating) state = PieceState.Held;
+            _hasFloat = false;
             drift = Vector3.zero;
             _awake = true;
         }
@@ -694,6 +733,10 @@ namespace MoodPicker.Ritual
         void Reform(TimePieceView other, PieceShape target)
         {
             int ua = data.units, ub = other != null ? other.data.units : 0;
+            bool flow = other == null && shape == PieceShape.Rod && _config.formStyle == FormStyle.Flow;
+            Vector3 chainBase = _cloud != null ? _cloud.transform.position : Vector3.zero;
+            Vector3 chainAxis = _cloud != null ? _cloud.transform.forward : Vector3.forward;
+            float chainLength = Mathf.Max(1e-3f, Length);
             int na = ua * _per, nb = ub * _per;
             int total = na + nb;
             var world = new float3[total];
@@ -728,11 +771,11 @@ namespace MoodPicker.Ritual
             Quaternion rot;
             if (shape == PieceShape.Blob)
             {
-                _blobRadius = BlobRadius(_radius, Length);
+                _blobRadius = Mathf.Max(_config.formMinRadius, BlobRadius(_radius, Length));
                 _baseBlobRadius = _blobRadius;
                 if (other == null)
                 {
-                    pos = _tipWS.sqrMagnitude > 1e-6f ? Vector3.Lerp(centerA, _tipWS, 0.5f) : centerA;
+                    pos = _tipWS.sqrMagnitude > 1e-6f ? (flow ? _tipWS : Vector3.Lerp(centerA, _tipWS, 0.5f)) : centerA;
                     if (_head != null && _head.position.sqrMagnitude > 1e-4f)
                     {
                         Vector3 toEye = Vector3.ProjectOnPlane(_head.position - pos, Vector3.up);
@@ -790,16 +833,27 @@ namespace MoodPicker.Ritual
             float3[] burstVel = SplatSimSetup.BurstVelocities(toHomes, hashes, 0.24f);
             var arrivals = new float[total];
             SplatSimSetup.GatherArrivals(toHomes, hashes, arrivals, 0.28f);
-            const float BurstWindow = 0.10f;
+            float burstWindow = flow ? 0f : 0.10f;
+            float flowSeconds = Mathf.Max(0.05f, _config.formFlowSeconds);
+            _mergeWindow = flow ? flowSeconds + 0.6f : 0.9f;
             for (int q = 0; q < total; q++)
             {
                 float3 h = toHomes[q];
                 int m = map[q];
                 int s = _cloud.Add(h, toNormals[q], pieceHalf);
                 _cloud.disp[s] = world[m] - (p + math.mul(r, h));
-                _cloud.vel[s] = velocity[m] * 0.30f + math.mul(r, burstVel[q]);
                 _cloud.glow[s] = Mathf.Max(glow[m], 0.85f);
-                _delay[s] = BurstWindow + arrivals[q];
+                if (flow)
+                {
+                    float along = Mathf.Clamp01(Vector3.Dot((Vector3)world[m] - chainBase, chainAxis) / chainLength);
+                    _cloud.vel[s] = velocity[m] * 0.30f;
+                    _delay[s] = flowSeconds * (1f - along) + hashes[q] * 0.06f;
+                }
+                else
+                {
+                    _cloud.vel[s] = velocity[m] * 0.30f + math.mul(r, burstVel[q]);
+                    _delay[s] = burstWindow + arrivals[q];
+                }
             }
             _age = 0f;
             _nodeAmount = 0f;
@@ -917,6 +971,20 @@ namespace MoodPicker.Ritual
                     drift *= Mathf.Exp(-_config.pieceDrag * dt);
                     if (drift.sqrMagnitude < 1e-7f) drift = Vector3.zero;
                 }
+                if (_hasFloat)
+                {
+                    if (_floatWait > 0f) _floatWait -= dt;
+                    else
+                    {
+                        _floatAge += dt;
+                        Vector3 to = _floatTarget - _rest;
+                        float dist = to.magnitude;
+                        float ease = Mathf.Clamp01(_floatAge / 0.8f);
+                        float speed = Mathf.Min(_config.floatSpeed * ease * ease, dist * 1.2f);
+                        if (dist < 0.002f) _hasFloat = false;
+                        else _rest += to / dist * Mathf.Min(dist, speed * dt);
+                    }
+                }
                 float bob = Mathf.Sin(now * _config.hoverBobSpeed * 6.2831853f + _bobPhase) * _config.hoverBob;
                 _cloud.transform.position = _rest + Vector3.up * bob;
             }
@@ -970,7 +1038,7 @@ namespace MoodPicker.Ritual
             bool pulling = state == PieceState.Pulling;
             bool pouring = state == PieceState.Pouring;
             bool dissolving = state == PieceState.Dissolving;
-            bool merging = (_reformed || data.mergedCount > 0) && _age < 0.90f;
+            bool merging = (_reformed || data.mergedCount > 0) && _age < _mergeWindow;
             float k = merging ? _config.mergeStiffness : (feel == PieceFeel.Water ? 180f : 260f);
             float c = merging ? _config.mergeDamping : (feel == PieceFeel.Water ? 13.5f : 16.0f);
             float maxAccel = feel == PieceFeel.Water ? 25f : 32f;

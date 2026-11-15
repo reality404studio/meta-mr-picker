@@ -103,6 +103,9 @@ namespace MoodPicker.Ritual
         float _labelTag = 1f;
         string _labelShownText = "";
         MeshRenderer _labelBorderTag;
+        int _floatSlots;
+        bool _everPulled;
+        float _idle;
         Mesh _labelBorderTagMesh;
         RitualJar _jar;
         RitualWax _wax;
@@ -187,6 +190,8 @@ namespace MoodPicker.Ritual
         public bool TimeLabels => _config != null && _config.timeLabels;
         public string LabelShownText => _labelShownText;
         public Transform LabelRoot => _labelRoot;
+        public bool EverPulled => _everPulled;
+        public float IdleSeconds => _idle;
         public float HoldProgress => _press.progress;
         public bool Ready => _ready;
 
@@ -603,6 +608,7 @@ namespace MoodPicker.Ritual
             _hoveredHeap = null;
             _hands.Update(frame, trackingSpace, _config, dt);
             for (int h = 0; h < 2; h++) StepHand(h, now, dt);
+            StepHint(dt);
             StepJarPose(dt);
             if (!_sealed) _jar.SetInnerGlow(_pourPreviewGlow);
             if (_config.sweepEnabled && !_sealed) StepSweep(now, dt);
@@ -701,6 +707,7 @@ namespace MoodPicker.Ritual
                 if (heap != null && (piece == null || (pieceDistance >= _config.holdReach * 0.65f && heapDistance < pieceDistance - 0.015f)))
                 {
                     g.mode = GripPull;
+                    _everPulled = true;
                     _pieces.Add(pull.Begin(h, heap, hand.pinch, CreatePiece));
                     return;
                 }
@@ -1225,6 +1232,9 @@ namespace MoodPicker.Ritual
             _heapNoteAlpha = 0f;
             if (_heapNote != null) _heapNote.gameObject.SetActive(false);
             _labelAppear = 0f;
+            _floatSlots = 0;
+            _everPulled = false;
+            _idle = 0f;
             _labelAttach = 0f;
             _labelGlow = 0f;
             _panelTimer = 0f;
@@ -1252,6 +1262,74 @@ namespace MoodPicker.Ritual
             if (piece.Crumple() && sound != null && IsWindChime(piece)) sound.Knead(piece.Center, piece.feel, true);
             Transform t = piece.Transform;
             if (_config.releaseDrift > 1e-4f && t != null) piece.Nudge(t.forward * _config.releaseDrift);
+            if (_config.floatAway)
+            {
+                float wait = _config.formStyle == FormStyle.Flow ? _config.formFlowSeconds + 0.35f : 0.6f;
+                piece.FloatTo(NextFloatSlot(), wait);
+            }
+        }
+
+        Vector3 EyePosition()
+        {
+            return (head != null && head.position.sqrMagnitude > 1e-4f) ? head.position : transform.position + Vector3.up * _config.placeBelowEye - transform.forward * _config.placeDistance;
+        }
+
+        public Vector3 NextFloatSlot()
+        {
+            int n = _floatSlots++;
+            Vector3 eye = EyePosition();
+            Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.forward;
+            fwd.Normalize();
+            float u = Mathf.Repeat(n * 0.6180340f + 0.31f, 1f);
+            float v = Mathf.Repeat(n * 0.4142136f + 0.17f, 1f);
+            float w = Mathf.Repeat(n * 0.7548777f + 0.53f, 1f);
+            float azimuth = Mathf.Lerp(-_config.floatSpread, _config.floatSpread, u);
+            Vector3 dir = Quaternion.AngleAxis(azimuth, Vector3.up) * fwd;
+            float dist = _config.floatDistance * Mathf.Lerp(0.88f, 1.12f, w);
+            Vector3 slot = eye + dir * dist + Vector3.up * Mathf.Lerp(_config.floatLow, _config.floatHigh, v);
+            if (_jar != null)
+            {
+                Vector3 jarTop = _jar.root.position + Vector3.up * (_config.jar.height + 0.06f);
+                Vector3 flat = slot - jarTop;
+                flat.y = 0f;
+                if (flat.magnitude < 0.12f && slot.y < jarTop.y) slot.y = jarTop.y;
+            }
+            return slot;
+        }
+
+        void StepHint(float dt)
+        {
+            if (!_config.pullHint || _everPulled || _sealed || pull == null || pull.Heaps == null) return;
+            bool busy = _grips[0].mode != GripNone || _grips[1].mode != GripNone || _hands[0].pinching || _hands[1].pinching;
+            _idle = busy ? 0f : _idle + dt;
+            if (_idle < _config.hintIdleSeconds) return;
+            Vector3 toward = EyePosition();
+            float bestHand = float.MaxValue;
+            for (int h = 0; h < 2; h++)
+            {
+                if (!_hands[h].tracked) continue;
+                float d = Vector3.Distance(_hands[h].palm, transform.position);
+                if (d < bestHand)
+                {
+                    bestHand = d;
+                    toward = _hands[h].palm;
+                }
+            }
+            TimeHeap target = null;
+            float best = float.MaxValue;
+            for (int i = 0; i < pull.Heaps.Length; i++)
+            {
+                TimeHeap heap = pull.Heaps[i];
+                if (heap == null || !heap.Present) continue;
+                float d = Vector3.Distance(heap.transform.position, toward);
+                if (d < best)
+                {
+                    best = d;
+                    target = heap;
+                }
+            }
+            if (target != null) target.Invite(toward);
         }
 
         void OnCancelled(TimePieceView piece)

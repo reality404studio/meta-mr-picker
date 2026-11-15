@@ -114,7 +114,7 @@ namespace MoodPicker.Tests
         }
 
         [Test]
-        public void TheThreadBendsOnlyWhenTheHandSwingsAndStraightensAfterRelease()
+        public void TheThreadSagsSlightlyBendsWhenTheHandSwingsAndStraightensAfterRelease()
         {
             var piece = new TimePieceView(_root.transform, _sleep, 0, _look, null, _config, null, null, null);
             piece.BeginPull(Vector3.zero, Vector3.forward);
@@ -129,7 +129,8 @@ namespace MoodPicker.Tests
                 now += Dt;
                 piece.Tick(now, Dt);
             }
-            Assert.That(piece.Bend.magnitude, Is.LessThan(1e-4f), "곧게 당기면 곧다");
+            Assert.That(Mathf.Abs(piece.Bend.x), Is.LessThan(1e-4f), "곧게 당기면 옆으로는 곧다");
+            Assert.That(piece.Bend.y, Is.EqualTo(-_config.threadSag * tip.magnitude).Within(1e-3f), "중력에 살짝 처질 뿐");
 
             for (int i = 1; i <= 10; i++)
             {
