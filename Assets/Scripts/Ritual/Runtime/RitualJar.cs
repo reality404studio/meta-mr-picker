@@ -264,7 +264,7 @@ namespace MoodPicker.Ritual
                 _capFrom[i] = _shape.floor;
             }
             _cap.SetDrawCount(0);
-            _capSurface = new RitualSurface { sizeMeters = _config.sandTextureSize, triplanarScale = 1f };
+            _capSurface = new RitualSurface { sizeMeters = _config.sandTextureSize, triplanarScale = 1f, aspectMax = _config.scatterAspectMax };
             _cap.Flush();
         }
 
@@ -291,7 +291,7 @@ namespace MoodPicker.Ritual
                 _floor.scale[s] = 0f;
             }
             _floor.SetDrawCount(0);
-            _floorSurface = new RitualSurface { sizeMeters = _config.sandTextureSize, triplanarScale = 1f };
+            _floorSurface = new RitualSurface { sizeMeters = _config.sandTextureSize, triplanarScale = 1f, aspectMax = _config.scatterAspectMax };
             _floor.Flush();
         }
 
@@ -443,7 +443,8 @@ namespace MoodPicker.Ritual
                 look = TimeRitualLook.Sand(_tuning, piece.category, _config.sandDetach, 1f),
                 sizeMeters = _config.sandTextureSize,
                 triplanarScale = 1f,
-                intensity = piece.category != null ? piece.category.sandIntensity : 1.1f
+                intensity = piece.category != null ? piece.category.sandIntensity : 1.1f,
+                aspectMax = _config.scatterAspectMax
             };
             _layers.Add(layer);
             _totalGrains += count;

@@ -40,6 +40,7 @@ namespace MoodPicker.Ritual
         PieceFeel _labelFeel;
         int _labelMerged = -1;
         bool _labelCompact;
+        bool _labelNumbers = true;
         float _labelAlpha = 0.96f;
 
         int _cap;
@@ -100,6 +101,7 @@ namespace MoodPicker.Ritual
         public float Lump => _lump;
         public float BlobRadiusNow => _blobRadius;
         public float BlobRadiusFull => _baseBlobRadius;
+        public string LabelText => _label != null && _label.gameObject.activeSelf ? _label.text : "";
 
         public Vector3 Center
         {
@@ -160,6 +162,7 @@ namespace MoodPicker.Ritual
             _surface.sizeMeters = _config.pieceTextureSize;
             _surface.triplanarScale = _tuning != null ? _tuning.triplanarScale : 1.15f;
             _surface.intensity = _config.pieceIntensity;
+            _surface.aspectMax = _config.scatterAspectMax;
             _surface.MarkDirty();
             if (_font != null && _label == null) _label = MakeLabel(_font, out _shadow);
             if (_label != null) _label.transform.SetParent(_cloud.transform, false);
@@ -1152,13 +1155,16 @@ namespace MoodPicker.Ritual
         void UpdateLabel()
         {
             if (_label == null) return;
-            bool show = _config.showMinutesLabel && data.units > 0 && state != PieceState.Pouring && state != PieceState.Dissolving;
+            bool numbers = _config.timeLabels;
+            bool inHand = state == PieceState.Held || state == PieceState.Pulling;
+            bool show = _config.showMinutesLabel && data.units > 0 && state != PieceState.Pouring && state != PieceState.Dissolving && (numbers || inHand);
             if (_label.gameObject.activeSelf != show) _label.gameObject.SetActive(show);
             if (!show) return;
             bool active = state == PieceState.Pulling || state == PieceState.Held || _age < 2.2f || _flash > 0.05f || nodePulse > 0.05f;
             bool compact = !active && state == PieceState.Floating;
-            if (_labelUnits != data.units || _labelShape != shape || _labelFeel != feel || _labelMerged != data.mergedCount || _labelCompact != compact)
+            if (_labelUnits != data.units || _labelShape != shape || _labelFeel != feel || _labelMerged != data.mergedCount || _labelCompact != compact || _labelNumbers != numbers)
             {
+                _labelNumbers = numbers;
                 _labelUnits = data.units;
                 _labelShape = shape;
                 _labelFeel = feel;
@@ -1171,7 +1177,7 @@ namespace MoodPicker.Ritual
                 int pieces = data.mergedCount + 1;
                 string line1 = compact && pieces > 1 ? $"{sym} {title} · {dur} ({pieces})" : $"{sym} {title} · {dur}";
                 string line2 = compact ? "" : (pieces > 1 ? $"{pieces} fragments · {mem}" : mem);
-                string formatted = string.IsNullOrEmpty(line2) ? line1 : $"{line1}\n{line2}";
+                string formatted = !numbers ? title : string.IsNullOrEmpty(line2) ? line1 : $"{line1}\n{line2}";
                 _label.text = formatted;
                 if (_shadow != null) _shadow.text = formatted;
             }

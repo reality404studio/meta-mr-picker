@@ -7,6 +7,7 @@ Shader "MoodPicker/RitualGlowSplat"
         _Breath ("Breath amount", Float) = 0.12
         _Swirl ("Swirl (rad/s)", Float) = 0.025
         _AlphaShare ("Alpha written per unit of light", Float) = 0.18
+        _Flat ("Lie flat on the object XZ plane", Float) = 0
         _Arc0Start ("Arc0 Start", Vector) = (0, 0, 0, 0)
         _Arc0Mid ("Arc0 Mid", Vector) = (0, 0, 0, 0.01)
         _Arc0End ("Arc0 End", Vector) = (0, 0, 0, 0.5)
@@ -42,6 +43,7 @@ Shader "MoodPicker/RitualGlowSplat"
                 float _Breath;
                 float _Swirl;
                 float _AlphaShare;
+                float _Flat;
                 float4 _Arc0Start;
                 float4 _Arc0Mid;
                 float4 _Arc0End;
@@ -156,7 +158,7 @@ Shader "MoodPicker/RitualGlowSplat"
                 float s = sin(angle), c = cos(angle);
                 float3 center = v.positionOS.xyz;
                 center.xz = float2(center.x * c - center.z * s, center.x * s + center.z * c);
-                center.y += sin(_Time.y * speed * 0.85 + phase) * 0.003 * v.dataC.w;
+                float2 rotAxis = float2(v.dataA.x * c - v.dataA.y * s, v.dataA.x * s + v.dataA.y * c);
 
                 o.quadUV = v.quadUV;
                 o.color = (half3)(v.dataB.rgb * light);
@@ -166,6 +168,16 @@ Shader "MoodPicker/RitualGlowSplat"
                     return o;
                 }
 
+                if (_Flat > 0.5)
+                {
+                    float2 flatPerp = float2(-rotAxis.y, rotAxis.x);
+                    float2 flatOffset = rotAxis * (v.quadUV.x * v.dataA.z) + flatPerp * (v.quadUV.y * v.dataA.w);
+                    o.positionCS = TransformObjectToHClip(center + float3(flatOffset.x, 0.0, flatOffset.y));
+                    return o;
+                }
+
+                center.y += sin(_Time.y * speed * 0.85 + phase) * 0.003 * v.dataC.w;
+
                 float3 centerWS = TransformObjectToWorld(center);
                 float3 viewDirWS = GetWorldSpaceNormalizeViewDir(centerWS);
                 float3 objUpRaw = mul((float3x3)GetObjectToWorldMatrix(), float3(0.0, 1.0, 0.0));
@@ -174,7 +186,6 @@ Shader "MoodPicker/RitualGlowSplat"
                 float3 refUp = abs(dot(viewDirWS, objUpWS)) < 0.94 ? objUpWS : float3(1.0, 0.0, 0.0);
                 float3 rightWS = normalize(cross(refUp, viewDirWS));
                 float3 upWS = cross(viewDirWS, rightWS);
-                float2 rotAxis = float2(v.dataA.x * c - v.dataA.y * s, v.dataA.x * s + v.dataA.y * c);
                 float3 axisWS = rightWS * rotAxis.x + upWS * rotAxis.y;
                 float3 perpWS = -rightWS * rotAxis.y + upWS * rotAxis.x;
                 float3 posWS = centerWS + axisWS * (v.quadUV.x * v.dataA.z) + perpWS * (v.quadUV.y * v.dataA.w);

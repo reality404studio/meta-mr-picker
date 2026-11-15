@@ -53,6 +53,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _AspectMax: 99
     - _CropOn: 0
     - _Frame: 0
     - _HasSlot: 0

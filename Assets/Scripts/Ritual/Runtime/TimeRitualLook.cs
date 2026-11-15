@@ -83,6 +83,7 @@ namespace MoodPicker.Ritual
 
     public sealed class RitualSurface
     {
+        static readonly int AspectMaxId = Shader.PropertyToID("_AspectMax");
         readonly MaterialPropertyBlock _block = new MaterialPropertyBlock();
         public SplatSurfaceMaterial material;
         public SplatSurfaceMaterial previous;
@@ -90,6 +91,7 @@ namespace MoodPicker.Ritual
         public float sizeMeters = 0.18f;
         public float triplanarScale = 1.15f;
         public float intensity = 1.15f;
+        public float aspectMax = 99f;
         public Vector4 apply = SplatSurfaceState.NoApply;
         public Vector4 applyShape = new Vector4(0.012f, 0f, 0.25f, 0f);
         bool _dirty = true;
@@ -122,6 +124,7 @@ namespace MoodPicker.Ritual
                     outline = false
                 };
                 SplatLetterRenderer.WriteSurface(_block, state, look, Mode, sizeMeters, simTex);
+                _block.SetFloat(AspectMaxId, aspectMax);
                 _simBound = simTex;
                 _dirty = false;
             }

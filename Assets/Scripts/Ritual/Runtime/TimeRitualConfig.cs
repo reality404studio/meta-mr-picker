@@ -85,7 +85,10 @@ namespace MoodPicker.Ritual
 
         [Header("Merge")]
         public float mergeDistance = 0.055f;
-        public float mergeMagnetRange = 0f;
+        public float mergeMagnetRange = 0.06f;
+        public float mergeMagnetSpeed = 0.32f;
+        public float mergeTouchDistance = 0.012f;
+        [Range(0f, 1f)] public float mergeMagnetGlow = 0.35f;
         public float mergeSeconds = 0.5f;
         public MergedShape mergedShape = MergedShape.Blob;
         public float mergeDelaySpread = 0.26f;
@@ -179,10 +182,45 @@ namespace MoodPicker.Ritual
         public int glowPetals = 84;
         public int glowMotes = 56;
         public float glowIntensity = 0.58f;
-        public bool guideTrails = true;
+        public bool deskPool = true;
+        [Range(0f, 2f)] public float deskPoolGain = 1f;
+        public float deskPoolFadeHeight = 0.08f;
+        [Range(0f, 1f)] public float deskPoolOpenMin = 0.3f;
+        [Range(0f, 1f)] public float deskPoolOpenMax = 0.75f;
+        public float deskPoolSwell = 0.8f;
+        public bool guideTrails = false;
         [Range(0.1f, 2f)] public float guideIntensity = 0.85f;
         public float baseDim = -0.08f;
         public float sealDim = -0.28f;
+
+        [Header("Room Light")]
+        public bool roomDarkFromStart = true;
+        [Range(0.05f, 1f)] public float roomLight = 0.38f;
+        [Range(0.05f, 1f)] public float roomLightSealed = 0.32f;
+        public float roomLightRate = 0.22f;
+
+        [Header("Scatter")]
+        [Range(1f, 3.5f)] public float scatterAspectMax = 1.6f;
+
+        [Header("Halo")]
+        public bool halos = true;
+        [Range(0f, 2f)] public float haloIntensity = 0.55f;
+        public float haloCore = 1.8f;
+        public float haloWide = 3.4f;
+        [Range(0f, 1.5f)] public float haloBehind = 0.6f;
+        [Range(0f, 1f)] public float haloJar = 0.45f;
+        public bool handLight = true;
+        public float handLightRange = 0.12f;
+        [Range(0f, 2f)] public float handLightIntensity = 0.7f;
+        public float handLightSize = 0.011f;
+
+        [Header("Labels")]
+        public bool timeLabels = false;
+        public float labelTagScale = 0.42f;
+        public float labelTagHeight = 0.158f;
+        public float labelTagSide = 0.022f;
+        public float labelTagTilt = 7f;
+        public float labelSwitchSeconds = 0.45f;
 
         [Header("Performance")]
         public int cpuLevel = 1;

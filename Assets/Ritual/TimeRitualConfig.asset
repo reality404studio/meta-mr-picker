@@ -76,7 +76,10 @@ MonoBehaviour:
   compactLumpMax: 0.4
   blobSquash: 0.4
   mergeDistance: 0.055
-  mergeMagnetRange: 0
+  mergeMagnetRange: 0.06
+  mergeMagnetSpeed: 0.32
+  mergeTouchDistance: 0.012
+  mergeMagnetGlow: 0.35
   mergeSeconds: 0.5
   mergedShape: 1
   mergeDelaySpread: 0.26
@@ -168,10 +171,37 @@ MonoBehaviour:
   glowPetals: 84
   glowMotes: 56
   glowIntensity: 0.58
-  guideTrails: 1
+  deskPool: 1
+  deskPoolGain: 1
+  deskPoolFadeHeight: 0.08
+  deskPoolOpenMin: 0.3
+  deskPoolOpenMax: 0.75
+  deskPoolSwell: 0.8
+  guideTrails: 0
   guideIntensity: 0.85
   baseDim: -0.08
   sealDim: -0.28
+  roomDarkFromStart: 1
+  roomLight: 0.38
+  roomLightSealed: 0.32
+  roomLightRate: 0.22
+  scatterAspectMax: 1.6
+  halos: 1
+  haloIntensity: 0.55
+  haloCore: 1.8
+  haloWide: 3.4
+  haloBehind: 0.6
+  haloJar: 0.45
+  handLight: 1
+  handLightRange: 0.12
+  handLightIntensity: 0.7
+  handLightSize: 0.011
+  timeLabels: 0
+  labelTagScale: 0.42
+  labelTagHeight: 0.158
+  labelTagSide: 0.022
+  labelTagTilt: 7
+  labelSwitchSeconds: 0.45
   cpuLevel: 1
   gpuLevel: 1
   dynamicResolution: 1

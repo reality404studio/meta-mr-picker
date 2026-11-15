@@ -33,6 +33,7 @@ Shader "MoodPicker/LetterSplatURP"
         _SimOn ("Sim Drives Vertices", Float) = 0
         _FlowParams ("Flow (amplitude m, speed, contrast, crop gamma)", Vector) = (0.0008, 1.6, 1, 1)
         _DropParams ("Drop (detach m, stretch s, stretch max, grain)", Vector) = (0.012, 0.008, 2.5, 0.85)
+        _AspectMax ("Max length to width of a stretched splat", Float) = 99
         _GlowParams ("Glow (gain, sparkle, painted overlay, -)", Vector) = (0.35, 0.6, 1, 0)
         _FurParams ("Fur (fluff 0..1, hair length x radius, sway, comb 0..1)", Vector) = (0, 3, 0.35, 0)
         _GlintParams ("Glint module, off at 0 (amount, speed, wave scale 1/m, roughness)", Vector) = (0, 1.2, 120, 0.45)
@@ -69,6 +70,7 @@ Shader "MoodPicker/LetterSplatURP"
             float4 _FlowParams;
             float4 _AtlasCrop;
             float4 _DropParams;
+            float _AspectMax;
             float4 _GlowParams;
             float4 _GlintParams;
             float4 _GlintShape;
@@ -305,7 +307,7 @@ Shader "MoodPicker/LetterSplatURP"
 
             float3 velView = simVel - V * dot(simVel, V);
             float velViewLen = length(velView);
-            float stretch = min(velViewLen * _DropParams.y / max(splatRadiusWS, 1e-4), _DropParams.z);
+            float stretch = min(velViewLen * _DropParams.y / max(splatRadiusWS, 1e-4), min(_DropParams.z, max(_AspectMax - 1.0, 0.0)));
             if (velViewLen > 1e-4 && stretch > 0.01)
             {
                 float3 ax = velView / velViewLen;

@@ -189,6 +189,7 @@ namespace MoodPicker.Tests
 
             var testConfig = Object.Instantiate(_config);
             testConfig.showTotals = true;
+            testConfig.timeLabels = true;
             var headGo = new GameObject("TestHead");
             headGo.transform.position = new Vector3(0f, 1.17f, 0f);
             var ritualGo = new GameObject("TestRitual");
@@ -714,6 +715,394 @@ namespace MoodPicker.Tests
             finally
             {
                 jar.Dispose();
+            }
+        }
+
+        static TimeCategoryAsset[] ShippedCategories()
+        {
+            return new[]
+            {
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_sleep.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_move.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_work.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_drift.asset"),
+                UnityEditor.AssetDatabase.LoadAssetAtPath<TimeCategoryAsset>("Assets/Ritual/Category_play.asset"),
+            };
+        }
+
+        TimeRitual BareRitual(string name, TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root.transform, false);
+            var ritual = go.AddComponent<TimeRitual>();
+            var so = new UnityEditor.SerializedObject(ritual);
+            so.FindProperty("config").objectReferenceValue = cfg;
+            so.FindProperty("glowMaterial").objectReferenceValue = glowMat;
+            so.FindProperty("piecesRoot").objectReferenceValue = go.transform;
+            so.FindProperty("autoPlace").boolValue = false;
+            var cp = so.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
+            ritual.Init();
+            ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+            return ritual;
+        }
+
+        static System.Collections.Generic.List<TimePieceView> PiecesOf(TimeRitual ritual)
+        {
+            var field = typeof(TimeRitual).GetField("_pieces", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            return (System.Collections.Generic.List<TimePieceView>)field.GetValue(ritual);
+        }
+
+        void DragHeldPieceToward(TimeRitual ritual, TimePieceView held, TimePieceView loose, out float looseShift, ref float now)
+        {
+            Vector3 grab = held.Center;
+            HandFrame frame = new HandFrame { t = now, right = PinchPose(grab, false) };
+            now += Dt;
+            frame.t = now;
+            ritual.Tick(now, Dt, frame);
+            for (int i = 0; i < 8; i++)
+            {
+                now += Dt;
+                frame.t = now;
+                frame.right = PinchPose(grab, true);
+                ritual.Tick(now, Dt, frame);
+            }
+            Assert.That(held.state, Is.EqualTo(PieceState.Held), "핀치로 조각을 집는다");
+            float startX = loose.Center.x;
+            looseShift = 0f;
+            Vector3 stop = grab + new Vector3(-0.05f, 0f, 0f);
+            for (int i = 1; i <= 120; i++)
+            {
+                float u = Mathf.Clamp01(i / 40f);
+                now += Dt;
+                frame.t = now;
+                frame.right = PinchPose(Vector3.Lerp(grab, stop, u), true);
+                ritual.Tick(now, Dt, frame);
+                if (loose.Alive) looseShift = Mathf.Max(looseShift, loose.Center.x - startX);
+            }
+        }
+
+        [Test]
+        public void AHeldPieceDrawsInAFloatingPieceOfTheSameKindWithinSixCentimetresAndMerges()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.mergeMagnetRange = 0.06f;
+            cfg.mergeTouchDistance = 0.012f;
+            try
+            {
+                TimeRitual ritual = BareRitual("MagnetRitual", cfg, cats, null);
+                TimePieceView loose = Pulled(cats[2], 2, 2, new Vector3(-0.14f, 1.25f, 0.42f), Vector3.right);
+                TimePieceView held = Pulled(cats[2], 2, 3, new Vector3(0.02f, 1.25f, 0.42f), Vector3.right);
+                PiecesOf(ritual).Add(loose);
+                PiecesOf(ritual).Add(held);
+                Assert.That(held.DistanceTo(loose), Is.GreaterThan(cfg.mergeMagnetRange), "처음엔 끌림 범위 밖");
+                float now = 1f;
+                DragHeldPieceToward(ritual, held, loose, out float shift, ref now);
+                Assert.That(shift, Is.GreaterThan(0.005f), "6cm 안으로 들어오면 떠 있던 조각이 쥔 조각 쪽으로 끌려온다");
+                Assert.That(loose.Alive, Is.False, "끌려와 닿으면 하나로 합쳐진다");
+                Assert.That(ritual.Pieces.Count, Is.EqualTo(1));
+                Assert.That(held.Units, Is.EqualTo(5), "합친 단위 수는 두 조각의 합");
+                Assert.That(held.data.mergedCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void WithoutMagnetRangeAFloatingPieceStaysApart()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.mergeMagnetRange = 0f;
+            try
+            {
+                TimeRitual ritual = BareRitual("NoMagnetRitual", cfg, cats, null);
+                TimePieceView loose = Pulled(cats[2], 2, 2, new Vector3(-0.14f, 1.25f, 0.42f), Vector3.right);
+                TimePieceView held = Pulled(cats[2], 2, 3, new Vector3(0.02f, 1.25f, 0.42f), Vector3.right);
+                PiecesOf(ritual).Add(loose);
+                PiecesOf(ritual).Add(held);
+                float now = 1f;
+                DragHeldPieceToward(ritual, held, loose, out float shift, ref now);
+                Assert.That(shift, Is.LessThan(0.002f));
+                Assert.That(loose.Alive, Is.True);
+                Assert.That(ritual.Pieces.Count, Is.EqualTo(2));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void DeskPoolGlowsUnderTheJarWhileFillingSwellsAfterTheSealAndFadesWhenLifted()
+        {
+            Assert.That(RitualDeskPool.RestShare(0.75f, 0.75f, 0.08f), Is.EqualTo(1f));
+            Assert.That(RitualDeskPool.RestShare(0.95f, 0.75f, 0.08f), Is.EqualTo(0f));
+            Assert.That(RitualDeskPool.RestShare(0.80f, 0.75f, 0.08f), Is.InRange(0.01f, 0.99f));
+
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.showTotals = false;
+            try
+            {
+                TimeRitual ritual = BareRitual("PoolRitual", cfg, cats, glowMat);
+                float now = 1f;
+                for (int c = 1; c <= 2; c++)
+                {
+                    TimePieceView piece = Pulled(cats[c], c, 6, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                    Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+                    for (int s = 0; s < 72 * 8 && ritual.Jar.Pouring; s++)
+                    {
+                        now += Dt;
+                        ritual.Tick(now, Dt, default);
+                    }
+                }
+                for (int i = 0; i < 40; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.DeskPool.Visible, Is.True, "병 아래 책상에 빛 웅덩이가 생긴다");
+                float openGain = ritual.DeskPool.Gain;
+                Assert.That(openGain, Is.InRange(cfg.deskPoolOpenMin - 1e-3f, cfg.deskPoolOpenMax + 1e-3f), "채우는 동안은 담긴 만큼만");
+                typeof(TimeRitual).GetMethod("Seal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(ritual, null);
+                now += Dt;
+                ritual.Tick(now, Dt, default);
+                Assert.That(ritual.DeskPool.Blooming, Is.True);
+                Assert.That(ritual.DeskPool.Gain, Is.LessThan(openGain), "봉인 순간 빛이 병으로 한 번 가라앉는다");
+                for (int i = 0; i < 150; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.Glow.Blooming, Is.True, "병을 감싸는 오라는 그대로");
+                Assert.That(ritual.DeskPool.Visible, Is.True, "그다음 병빛이 책상 면에 번진다");
+                Assert.That(ritual.DeskPool.Gain, Is.GreaterThan(0.95f));
+                Assert.That(ritual.DeskPool.Strength, Is.GreaterThan(0.9f));
+                Assert.That(ritual.DeskPool.root.position.y, Is.EqualTo(ritual.TableY + 0.0015f).Within(1e-4f));
+                Vector3[] verts = ritual.DeskPool.root.GetComponentInChildren<MeshFilter>().sharedMesh.vertices;
+                for (int i = 0; i < verts.Length; i++) Assert.That(verts[i].y, Is.EqualTo(0f).Within(1e-6f), "책상 면에 눕는다");
+
+                Vector3 rest = ritual.Jar.root.position;
+                ritual.Jar.root.position = rest + Vector3.up * 0.2f;
+                for (int i = 0; i < 90; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.DeskPool.Strength, Is.LessThan(0.05f), "들어 올리면 책상 빛이 걷힌다");
+                Assert.That(ritual.DeskPool.Visible, Is.False);
+
+                ritual.Jar.root.position = rest;
+                for (int i = 0; i < 90; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.DeskPool.Strength, Is.GreaterThan(0.9f), "내려놓으면 다시 번진다");
+                Assert.That(Vector3.Distance(ritual.DeskPool.root.position, new Vector3(rest.x, ritual.TableY + 0.0015f, rest.z)), Is.LessThan(1e-4f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void ShippedConfigKeepsTheSpecFixedLightAndCleanup()
+        {
+            var shipped = UnityEditor.AssetDatabase.LoadAssetAtPath<TimeRitualConfig>("Assets/Ritual/TimeRitualConfig.asset");
+            Assert.That(shipped, Is.Not.Null);
+            Assert.That(shipped.mergeMagnetRange, Is.GreaterThan(shipped.mergeTouchDistance), "같은 카테고리의 두 조각을 가까이 대면 서로 끌린다");
+            Assert.That(shipped.mergeTouchDistance, Is.GreaterThan(0f));
+            Assert.That(shipped.deskPool, Is.True, "병 아래 책상에는 빛 웅덩이");
+            Assert.That(shipped.roomDarkFromStart, Is.True, "리추얼이 시작되면 패스스루가 어두워진다");
+            Assert.That(shipped.roomLight, Is.LessThan(1f));
+            Assert.That(shipped.guideTrails, Is.False, "형상에서 병으로 계속 떨어지는 입자 줄기는 없앤다");
+            Assert.That(shipped.halos && shipped.handLight, Is.True, "오브제가 광원, 손에 빛이 닿는다");
+        }
+
+        [Test]
+        public void RoomDarkensFromTheStartByScalingPassthroughAndCanFallBack()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.roomDarkFromStart = true;
+            cfg.roomLight = 0.38f;
+            var old = Object.Instantiate(_config);
+            old.roomDarkFromStart = false;
+            try
+            {
+                TimeRitual dark = BareRitual("DarkRitual", cfg, cats, null);
+                TimeRitual plain = BareRitual("PlainRitual", old, cats, null);
+                Assert.That(dark.PassthroughLight, Is.EqualTo(1f), "처음에는 원래 밝기에서 시작");
+                float now = 1f;
+                for (int i = 0; i < 72 * 5; i++)
+                {
+                    now += Dt;
+                    dark.Tick(now, Dt, default);
+                    plain.Tick(now, Dt, default);
+                }
+                Assert.That(dark.PassthroughLight, Is.EqualTo(0.38f).Within(0.01f), "곧 원래 밝기의 30~40%로");
+                Assert.That(dark.PassthroughDim, Is.EqualTo(0f).Within(1e-3f), "밝기 오프셋이 아니라 배율로 어둡힌다");
+                Assert.That(plain.PassthroughLight, Is.EqualTo(1f), "플래그를 끄면 이전 동작");
+                Assert.That(plain.PassthroughDim, Is.LessThan(0f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+                Object.DestroyImmediate(old);
+            }
+        }
+
+        [Test]
+        public void FloatingPiecesGetAHaloAndLightANearbyHand()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("LightRitual", cfg, cats, glowMat);
+                TimePieceView piece = Pulled(cats[1], 1, 3, new Vector3(0f, 1.25f, 0.42f), Vector3.right);
+                PiecesOf(ritual).Add(piece);
+                float now = 1f;
+                now += Dt;
+                ritual.Tick(now, Dt, default);
+                Assert.That(ritual.LightField.Visible, Is.True);
+                Assert.That(ritual.LightField.HaloSplats, Is.GreaterThanOrEqualTo(2), "떠 있는 조각 뒤에 후광");
+                Assert.That(ritual.LightField.HandSplats, Is.EqualTo(0));
+
+                HandPose far = PinchPose(piece.Center + new Vector3(0f, 0.5f, 0f), false);
+                HandPose near = PinchPose(piece.Center + new Vector3(0f, 0.045f, 0f), false);
+                now += Dt;
+                ritual.Tick(now, Dt, new HandFrame { t = now, right = far });
+                Assert.That(ritual.LightField.HandSplats, Is.EqualTo(0), "먼 손에는 빛이 닿지 않는다");
+                now += Dt;
+                ritual.Tick(now, Dt, new HandFrame { t = now, right = near });
+                Assert.That(ritual.LightField.HandSplats, Is.EqualTo(6), "가까운 손가락과 손바닥에 빛이 닿는다");
+
+                ritual.Config.halos = false;
+                ritual.Config.handLight = false;
+                now += Dt;
+                ritual.Tick(now, Dt, new HandFrame { t = now, right = near });
+                Assert.That(ritual.LightField.SplatCount, Is.EqualTo(0));
+                Assert.That(ritual.LightField.Visible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void LeftMicrogestureSwitchesBetweenTimeNumbersAndTheNeckTag()
+        {
+            Font fraunces = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            Material waxMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualWax.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.showTotals = true;
+            cfg.showMinutesLabel = true;
+            cfg.timeLabels = false;
+            var go = new GameObject("LabelRitual");
+            go.transform.SetParent(_root.transform, false);
+            var micro = go.AddComponent<FakeMicrogestureInput>();
+            var ritual = go.AddComponent<TimeRitual>();
+            var so = new UnityEditor.SerializedObject(ritual);
+            so.FindProperty("config").objectReferenceValue = cfg;
+            so.FindProperty("waxMaterial").objectReferenceValue = waxMat;
+            so.FindProperty("labelFont").objectReferenceValue = fraunces;
+            so.FindProperty("microgestureSource").objectReferenceValue = micro;
+            so.FindProperty("piecesRoot").objectReferenceValue = go.transform;
+            so.FindProperty("autoPlace").boolValue = false;
+            var cp = so.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
+            try
+            {
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+                var piece = new TimePieceView(_root.transform, cats[2], 2, _look, null, ritual.Config, null, fraunces, null);
+                piece.BeginPull(new Vector3(0f, 1.25f, 0.42f), Vector3.right);
+                float now = 1f;
+                for (int i = 1; i <= 30; i++)
+                {
+                    float raw = 3 * cfg.unitLength * i / 30f + 0.001f;
+                    piece.UpdatePull(new Vector3(raw, 1.25f, 0.42f), TimeUnits.Step(raw, piece.Units, cfg.unitLength, cfg.hysteresis, cfg.maxUnits), raw, Dt);
+                    now += Dt;
+                    piece.Tick(now, Dt);
+                }
+                piece.ReleasePull();
+                PiecesOf(ritual).Add(piece);
+                TimePieceView pourable = Pulled(cats[1], 1, 6, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(ritual.Jar.BeginPour(pourable), Is.Not.Null);
+                for (int s = 0; s < 72 * 8 && ritual.Jar.Pouring; s++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                for (int i = 0; i < 60; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.TimeLabels, Is.False);
+                Assert.That(ritual.LabelShownText, Is.EqualTo("Pour your day into the vessel"), "꼬리표에는 한 줄뿐");
+                Assert.That(System.Text.RegularExpressions.Regex.IsMatch(ritual.LabelShownText, "[0-9]"), Is.False, "시·분 숫자가 없다");
+                Vector3 local = ritual.Jar.root.InverseTransformPoint(ritual.LabelRoot.position);
+                Assert.That(local.y, Is.EqualTo(cfg.labelTagHeight).Within(0.005f), "병목에 묶인 꼬리표");
+                Assert.That(ritual.LabelRoot.localScale.x, Is.EqualTo(cfg.labelTagScale).Within(0.01f));
+                Assert.That(piece.LabelText, Is.Empty, "떠 있는 조각에는 글자가 없다");
+
+                micro.left = Microgesture.ThumbTap;
+                for (int i = 0; i < 3; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                micro.left = Microgesture.None;
+                for (int i = 0; i < 60; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.TimeLabels, Is.True, "왼손 마이크로제스처로 숫자 라벨을 켠다");
+                Assert.That(ritual.GuideTrailsEnabled, Is.False, "왼손은 가이드를 건드리지 않는다");
+                Assert.That(ritual.LabelShownText, Does.Contain("TODAY'S TIME"));
+                Assert.That(ritual.LabelShownText, Does.Contain("01h 00m"));
+                Assert.That(piece.LabelText, Does.Contain("Focused"));
+                Assert.That(piece.LabelText, Does.Contain("30m"));
+
+                micro.left = Microgesture.SwipeLeft;
+                for (int i = 0; i < 3; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                micro.left = Microgesture.None;
+                typeof(TimeRitual).GetMethod("Seal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(ritual, null);
+                for (int i = 0; i < 90; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.TimeLabels, Is.False, "다시 끈다");
+                string date = System.DateTime.Now.ToString("MMMM d yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.That(ritual.LabelShownText, Is.EqualTo(date), "봉인하면 꼬리표의 글이 오늘 날짜로 바뀐다");
+                local = ritual.Jar.root.InverseTransformPoint(ritual.LabelRoot.position);
+                Assert.That(local.y, Is.EqualTo(cfg.labelTagHeight).Within(0.005f), "봉인 뒤에도 꼬리표는 병목에");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
             }
         }
     }

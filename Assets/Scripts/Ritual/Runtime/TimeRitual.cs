@@ -93,10 +93,22 @@ namespace MoodPicker.Ritual
         IHandInput _input;
         IMicrogestureInput _micro;
         Microgesture _lastRightMicro;
+        Microgesture _lastLeftMicro;
         float _lastGuideToggleTime = -10f;
+        float _lastLabelToggleTime = -10f;
+        RitualLightField _lightField;
+        float _light = 1f;
+        Color _jarGlow = Color.clear;
+        float _jarFill;
+        float _labelTag = 1f;
+        string _labelShownText = "";
+        MeshRenderer _labelBorderTag;
+        Mesh _labelBorderTagMesh;
         RitualJar _jar;
         RitualWax _wax;
         RitualDeskGlow _glow;
+        RitualDeskPool _pool;
+        float _tableY;
         RitualGuideTrails _guideTrails;
         Color _pourPreviewGlow;
         Mesh _labelTextMesh;
@@ -155,6 +167,8 @@ namespace MoodPicker.Ritual
         public RitualJar Jar => _jar;
         public RitualWax Wax => _wax;
         public RitualDeskGlow Glow => _glow;
+        public RitualDeskPool DeskPool => _pool;
+        public float TableY => _tableY;
         public RitualGuideTrails GuideTrails => _guideTrails;
         public bool GuideTrailsEnabled => _config != null && _config.guideTrails;
         public bool Sealed => _sealed;
@@ -168,6 +182,11 @@ namespace MoodPicker.Ritual
         public int Crumples { get; private set; }
         public int Compactions { get; private set; }
         public float PassthroughDim => _dim;
+        public float PassthroughLight => _light;
+        public RitualLightField LightField => _lightField;
+        public bool TimeLabels => _config != null && _config.timeLabels;
+        public string LabelShownText => _labelShownText;
+        public Transform LabelRoot => _labelRoot;
         public float HoldProgress => _press.progress;
         public bool Ready => _ready;
 
@@ -213,7 +232,10 @@ namespace MoodPicker.Ritual
                 _roomNote = MakeRoomNote(labelFont);
                 _heapNote = MakeHeapNote(labelFont);
             }
-            _dim = _config.baseDim;
+            _dim = _config.roomDarkFromStart ? 0f : _config.baseDim;
+            _light = 1f;
+            _labelTag = _config.timeLabels ? 0f : 1f;
+            _lightField = new RitualLightField(_config, glowMaterial);
             Debug.Log($"{Tag} ritual ready categories={count} heaps={(pull != null && pull.Heaps != null ? pull.Heaps.Length : 0)} capacity={_jar.Capacity}u");
         }
 
@@ -226,6 +248,7 @@ namespace MoodPicker.Ritual
             _wax = new RitualWax(_jar.root, _config, waxMaterial, glowMaterial);
             _wax.Landed += OnWaxLanded;
             _glow = new RitualDeskGlow(piecesRoot, _config, glowMaterial);
+            _pool = new RitualDeskPool(piecesRoot, _config, glowMaterial);
             PlaceJar();
         }
 
@@ -333,6 +356,9 @@ namespace MoodPicker.Ritual
             Vector2[] innerRing = OctagonRing(halfW - 0.0038f, halfH - 0.0038f, chamfer * 0.85f);
             AddClosedLoopRibbon(borderPos, borderNorm, borderUv0, borderUv1, borderUv2, borderUv3, borderIdx,
                 innerRing, 0.0010f, 10, -0.0006f, cylR, halfH);
+
+            _labelBorderTagMesh = BuildSurfaceMesh("BottleTagBorder", halfH * 1.6f, borderPos, borderNorm, borderUv0, borderUv1, borderUv2, borderUv3, borderIdx);
+            _labelBorderTag = RitualStaticSplats.Spawn("TagBorder", _labelRoot, _labelBorderTagMesh, material);
 
             float divX = halfW - 0.0085f;
             AddRibbonSegment(borderPos, borderNorm, borderUv0, borderUv1, borderUv2, borderUv3, borderIdx,
@@ -545,6 +571,7 @@ namespace MoodPicker.Ritual
             _lastJarRot = yaw;
             _twoHandJarActive = false;
             _deskY = p.y;
+            _tableY = p.y;
         }
 
         void Update()
@@ -594,6 +621,8 @@ namespace MoodPicker.Ritual
             _jar.Tick(now, dt);
             _wax.Tick(dt);
             _glow.Tick(dt);
+            _pool.Tick(dt, _jar.root.position, _tableY);
+            StepLight();
             if (pull != null && pull.Heaps != null)
                 for (int i = 0; i < pull.Heaps.Length; i++)
                     if (pull.Heaps[i] != null) pull.Heaps[i].Tick(now, dt);
@@ -781,7 +810,7 @@ namespace MoodPicker.Ritual
             if (sound != null) sound.Cancel(mouth);
             Refusals++;
             int room = _jar.Room;
-            ShowRoomNote(room > 0 ? "Room Left · " + TimeUnits.LabelEn(room) : "Vessel is Full");
+            if (_config.timeLabels) ShowRoomNote(room > 0 ? "Room Left · " + TimeUnits.LabelEn(room) : "Vessel is Full");
             Debug.Log($"{Tag} ritual pour refused {piece.data.category} units={piece.Units} room={room}u total={_jar.TotalUnits}u");
         }
 
@@ -815,7 +844,7 @@ namespace MoodPicker.Ritual
         {
             if (_heapNote == null) return;
             bool pulling = pull != null && (pull.IsPulling(0) || pull.IsPulling(1));
-            bool show = !_sealed && _hoveredHeap != null && _hoveredHeap.Category != null && !pulling;
+            bool show = _config.timeLabels && !_sealed && _hoveredHeap != null && _hoveredHeap.Category != null && !pulling;
             if (show)
             {
                 _heapNoteAlpha = Mathf.MoveTowards(_heapNoteAlpha, 0.92f, dt * 6f);
@@ -907,6 +936,16 @@ namespace MoodPicker.Ritual
                         Anchor(ref g, hand);
                         break;
                     }
+                    if (other.state == PieceState.Floating && d < _config.mergeMagnetRange)
+                    {
+                        if (d < _config.mergeTouchDistance)
+                        {
+                            Merge(piece, other);
+                            Anchor(ref g, hand);
+                            break;
+                        }
+                        Attract(other, piece, d, dt);
+                    }
                     continue;
                 }
                 if (other.state == PieceState.Floating && d < _config.repelDistance)
@@ -933,6 +972,20 @@ namespace MoodPicker.Ritual
                     g = default;
                 }
             }
+        }
+
+        void Attract(TimePieceView loose, TimePieceView toward, float gap, float dt)
+        {
+            loose.Segment(out Vector3 a, out Vector3 b);
+            toward.Segment(out Vector3 c, out Vector3 e);
+            RitualUtil.SegmentDistance(a, b, c, e, out Unity.Mathematics.float3 from, out Unity.Mathematics.float3 to);
+            Vector3 dir = (Vector3)to - (Vector3)from;
+            if (dir.sqrMagnitude < 1e-8f) dir = toward.Center - loose.Center;
+            if (dir.sqrMagnitude < 1e-8f) return;
+            float k = 1f - Mathf.Clamp01(gap / Mathf.Max(1e-4f, _config.mergeMagnetRange));
+            Vector3 want = dir.normalized * (_config.mergeMagnetSpeed * (0.35f + 0.65f * k));
+            loose.Nudge((want - loose.drift) * (1f - Mathf.Exp(-dt * 10f)));
+            if (_config.mergeMagnetGlow > 0f) loose.AddGlow(_config.mergeMagnetGlow * k);
         }
 
         void Merge(TimePieceView keeper, TimePieceView absorbed)
@@ -1033,12 +1086,30 @@ namespace MoodPicker.Ritual
                 _jar.SetLevel(level);
                 float wave = Mathf.Clamp01(_sealTime / 1.35f);
                 _jar.SetPulse(wave < 1f ? wave : 0f);
-                _dim = Mathf.MoveTowards(_dim, _config.baseDim + _config.sealDim, dt * 0.12f);
+                if (_config.roomDarkFromStart)
+                {
+                    _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
+                    _light = Mathf.MoveTowards(_light, _config.roomLightSealed, dt * _config.roomLightRate);
+                }
+                else
+                {
+                    _dim = Mathf.MoveTowards(_dim, _config.baseDim + _config.sealDim, dt * 0.12f);
+                    _light = Mathf.MoveTowards(_light, 1f, dt * 0.5f);
+                }
                 return;
             }
-            float gathered = Mathf.Clamp01(_pieces.Count * 0.12f + _jar.TotalUnits / 36f * 0.55f);
-            float targetDim = _config.baseDim + _config.sealDim * (0.55f * gathered);
-            _dim = Mathf.MoveTowards(_dim, targetDim, dt * 0.18f);
+            if (_config.roomDarkFromStart)
+            {
+                _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
+                _light = Mathf.MoveTowards(_light, _config.roomLight, dt * _config.roomLightRate);
+            }
+            else
+            {
+                float gathered = Mathf.Clamp01(_pieces.Count * 0.12f + _jar.TotalUnits / 36f * 0.55f);
+                float targetDim = _config.baseDim + _config.sealDim * (0.55f * gathered);
+                _dim = Mathf.MoveTowards(_dim, targetDim, dt * 0.18f);
+                _light = Mathf.MoveTowards(_light, 1f, dt * 0.5f);
+            }
             if (_jar.TotalUnits > 0 && !_jar.Pouring)
             {
                 _waxTimer += dt;
@@ -1101,6 +1172,7 @@ namespace MoodPicker.Ritual
             _deskY = _jar.root.position.y;
             _glowDominant = dominant;
             _glow.Bloom(_jar.root.position, _jar.root.rotation, _glowColors, _glowUnits, dominant);
+            _pool.Bloom(_jar.root.position, _jar.root.rotation, _tableY, _glowColors, _glowUnits, dominant, _config.breathSeconds * 0.25f, 1f, 0.4f);
             _jar.SetInnerGlow(dominant * 0.1f);
             Debug.Log($"{Tag} ritual sealed units={_jar.TotalUnits} layers={layers.Count} grains={_jar.TotalGrains} dominant={(d >= 0 ? categories[d].id : "-")}");
         }
@@ -1122,12 +1194,18 @@ namespace MoodPicker.Ritual
             }
             _wax.Dispose();
             _glow.Dispose();
+            _pool.Dispose();
             _jar.Dispose();
             RitualUtil.Kill(_labelCardMesh);
             RitualUtil.Kill(_labelBorderMesh);
+            RitualUtil.Kill(_labelBorderTagMesh);
             RitualUtil.Kill(_labelTextMesh);
             _labelCardMesh = null;
             _labelBorderMesh = null;
+            _labelBorderTagMesh = null;
+            _labelBorderTag = null;
+            _jarGlow = Color.clear;
+            _jarFill = 0f;
             _labelTextMesh = null;
             _labelRoot = null;
             _labelCard = null;
@@ -1194,6 +1272,7 @@ namespace MoodPicker.Ritual
         {
             if (sound != null) sound.PourStop();
             _panelTimer = 0f;
+            FeedJarLight();
             Debug.Log($"{Tag} ritual pour done {layer.category?.id} total={_jar.TotalUnits}u grains={_jar.TotalGrains} surface={_jar.SurfaceMean:0.000}");
         }
 
@@ -1203,6 +1282,70 @@ namespace MoodPicker.Ritual
             _labelGlow = Mathf.Max(_labelGlow, 0.65f);
             _panelTimer = 0f;
             if (_jar.Pouring && sound != null && layer.landedCount >= layer.cloud.Count) sound.PourStop();
+        }
+
+        void FeedJarLight()
+        {
+            _glowColors.Clear();
+            _glowUnits.Clear();
+            IReadOnlyList<RitualJar.Layer> layers = _jar.Layers;
+            Color sum = Color.clear;
+            int total = 0;
+            for (int i = 0; i < layers.Count; i++)
+            {
+                Color c = layers[i].category != null ? layers[i].category.glowColor : Color.white;
+                _glowColors.Add(c);
+                _glowUnits.Add(layers[i].units);
+                sum += c * Mathf.Max(1, layers[i].units);
+                total += Mathf.Max(1, layers[i].units);
+            }
+            _jarGlow = total > 0 ? sum / total : Color.clear;
+            _jarGlow.a = 1f;
+            _jarFill = Mathf.Clamp01(_jar.TotalUnits / Mathf.Max(1f, _config.hoursWhenFull * RitualFill.UnitsPerHour));
+            if (_sealed || layers.Count == 0) return;
+            int d = DominantIndex();
+            Color dominant = d >= 0 && categories[d] != null ? categories[d].glowColor : _jarGlow;
+            float gain = Mathf.Lerp(_config.deskPoolOpenMin, _config.deskPoolOpenMax, _jarFill);
+            _pool.Bloom(_jar.root.position, _jar.root.rotation, _tableY, _glowColors, _glowUnits, dominant, 0f, gain);
+        }
+
+        void StepLight()
+        {
+            if (_lightField == null) return;
+            _lightField.BeginFrame();
+            if (!_sealed && pull != null && pull.Heaps != null)
+            {
+                for (int i = 0; i < pull.Heaps.Length; i++)
+                {
+                    TimeHeap heap = pull.Heaps[i];
+                    if (heap == null || !heap.Present || heap.Category == null) continue;
+                    _lightField.AddSource(heap.transform.position, Vector3.up, 0f, heap.Radius, heap.Category.glowColor, 1f);
+                }
+            }
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                TimePieceView piece = _pieces[i];
+                if (piece.category == null || piece.Transform == null) continue;
+                if (piece.state != PieceState.Floating && piece.state != PieceState.Held && piece.state != PieceState.Pulling) continue;
+                if (piece.shape == PieceShape.Blob)
+                {
+                    _lightField.AddSource(piece.Center, Vector3.up, 0f, piece.BlobRadiusNow, piece.category.glowColor, 1f);
+                    continue;
+                }
+                piece.Segment(out Vector3 a, out Vector3 b);
+                Vector3 ab = b - a;
+                float len = ab.magnitude;
+                _lightField.AddSource((a + b) * 0.5f, len > 1e-5f ? ab / len : Vector3.up, len, piece.Radius, piece.category.glowColor, 1f);
+            }
+            if (_jar.TotalUnits > 0 && _jarGlow.a > 0f)
+            {
+                float surface = Mathf.Max(_config.jar.floor + 0.01f, _jar.SurfaceMean);
+                Vector3 center = _jar.root.TransformPoint(new Vector3(0f, (_config.jar.floor + surface) * 0.5f, 0f));
+                float weight = _config.haloJar * Mathf.Lerp(0.5f, 1f, _jarFill);
+                _lightField.AddSource(center, _jar.root.up, Mathf.Max(0f, surface - _config.jar.floor), _config.jar.bodyRadius, _jarGlow, weight, !_sealed);
+            }
+            Vector3 eye = (head != null && head.position.sqrMagnitude > 1e-4f) ? head.position : transform.position + new Vector3(0f, 0.14f, -0.42f);
+            _lightField.EndFrame(eye, _hands);
         }
 
         void Tally()
@@ -1259,8 +1402,18 @@ namespace MoodPicker.Ritual
             float hoverBob = (1f - s) * 0.002f * Mathf.Sin(Time.time * 1.3f + 1.7f);
             Vector3 arcLift = Vector3.up * (hoverBob + 0.035f * Mathf.Sin(s * Mathf.PI)) - _jar.root.forward * (0.04f * Mathf.Sin(s * Mathf.PI));
             float scale = Mathf.Lerp(1f, LabelAttachScale, s);
-            _labelRoot.SetPositionAndRotation(Vector3.Lerp(floatPos, attachPos, s) + arcLift, Quaternion.Slerp(floatRot, attachRot, s));
-            _labelRoot.localScale = Vector3.one * scale;
+            Vector3 numbersPos = Vector3.Lerp(floatPos, attachPos, s) + arcLift;
+            Quaternion numbersRot = Quaternion.Slerp(floatRot, attachRot, s);
+
+            _labelTag = Mathf.MoveTowards(_labelTag, _config.timeLabels ? 0f : 1f, dt / Mathf.Max(0.05f, _config.labelSwitchSeconds));
+            float tag = RitualUtil.Smooth(_labelTag);
+            Vector3 tagPos = _jar.root.TransformPoint(new Vector3(_config.labelTagSide, _config.labelTagHeight, -(_config.jar.bodyRadius + 0.006f)));
+            Quaternion tagRot = attachRot * Quaternion.AngleAxis(_config.labelTagTilt, Vector3.forward);
+            _labelRoot.SetPositionAndRotation(Vector3.Lerp(numbersPos, tagPos, tag), Quaternion.Slerp(numbersRot, tagRot, tag));
+            _labelRoot.localScale = Vector3.one * Mathf.Lerp(scale, _config.labelTagScale, tag);
+            s *= 1f - tag;
+            if (_labelBorder != null && _labelBorder.enabled != tag < 0.5f) _labelBorder.enabled = tag < 0.5f;
+            if (_labelBorderTag != null && _labelBorderTag.enabled != tag >= 0.5f) _labelBorderTag.enabled = tag >= 0.5f;
 
             if (_labelCard != null)
             {
@@ -1269,12 +1422,12 @@ namespace MoodPicker.Ritual
                 Color cardLight = Color.Lerp(new Color(0.85f, 0.74f, 0.55f, 1f), _labelAccent, 0.35f);
                 PushLabelMaterial(_labelCard, _labelCardBlock, cardCol, cardDeep, cardLight, 0.08f + _labelGlow * 0.25f, 0.14f, 0.001f, s, _labelAppear, 0f);
             }
-            if (_labelBorder != null)
             {
                 Color borderCol = Color.Lerp(new Color(0.94f, 0.78f, 0.46f, 1f), _labelAccent, 0.45f);
                 Color borderDeep = new Color(0.42f, 0.30f, 0.14f, 1f);
                 Color borderLight = new Color(1f, 0.96f, 0.86f, 1f);
-                PushLabelMaterial(_labelBorder, _labelBorderBlock, borderCol, borderDeep, borderLight, 0.38f + _labelGlow * 0.85f, 0.55f, 0.001f, s, _labelAppear, 0f);
+                if (_labelBorder != null) PushLabelMaterial(_labelBorder, _labelBorderBlock, borderCol, borderDeep, borderLight, 0.38f + _labelGlow * 0.85f, 0.55f, 0.001f, s, _labelAppear, 0f);
+                if (_labelBorderTag != null) PushLabelMaterial(_labelBorderTag, _labelBorderBlock, borderCol, borderDeep, borderLight, 0.38f + _labelGlow * 0.85f, 0.55f, 0.001f, s, _labelAppear, 0f);
             }
 
             _panelTimer -= dt;
@@ -1283,7 +1436,7 @@ namespace MoodPicker.Ritual
                 _panelTimer = 0.25f;
                 Tally();
                 _text.Length = 0;
-                _text.Append(_jar.TotalUnits);
+                _text.Append(_config.timeLabels ? 'n' : 't').Append(_sealed ? 's' : 'o').Append(_jar.TotalUnits);
                 for (int i = 0; i < _jarUnits.Length; i++) _text.Append('|').Append(_jarUnits[i]);
                 string stateKey = _text.ToString();
                 if (_labelTextDirty || _labelCachedState != stateKey)
@@ -1305,8 +1458,55 @@ namespace MoodPicker.Ritual
             }
         }
 
+        static string TagDate()
+        {
+            return System.DateTime.Now.ToString("MMMM d\nyyyy", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        void RebuildTagGlyphs()
+        {
+            int count;
+            if (_sealed)
+            {
+                string[] parts = TagDate().Split('\n');
+                count = Mathf.Min(parts.Length, _labelBodyLines.Length);
+                for (int i = 0; i < count; i++) _labelBodyLines[i] = parts[i];
+            }
+            else
+            {
+                _labelBodyLines[0] = "Pour your day";
+                _labelBodyLines[1] = "into the vessel";
+                count = 2;
+            }
+            for (int i = 0; i < count; i++)
+                labelFont.RequestCharactersInTexture(_labelBodyLines[i], LabelFontPixelSize, FontStyle.Normal);
+            _labelGlyphVerts.Clear();
+            _labelTextUv.Clear();
+            _labelTextCol.Clear();
+            _labelTextShadowIdx.Clear();
+            _labelTextFgIdx.Clear();
+            _labelTextIdx.Clear();
+            AppendTextBlockGlyphs(_labelBodyLines, count, 0.00205f, 0.09f, 0.36f, 1.22f,
+                0f, false, true, LabelMaxWidth, LabelMaxBodyHeight,
+                new Color32(252, 245, 224, 255), new Color32(10, 8, 5, 195));
+            _labelShownText = string.Join(" ", _labelBodyLines, 0, count);
+            for (int i = 0; i < _labelGlyphVerts.Count; i++)
+            {
+                LabelGlyphVert v = _labelGlyphVerts[i];
+                _labelTextUv.Add(v.uv);
+                _labelTextCol.Add(v.color);
+            }
+            for (int i = 0; i < _labelTextShadowIdx.Count; i++) _labelTextIdx.Add(_labelTextShadowIdx[i]);
+            for (int i = 0; i < _labelTextFgIdx.Count; i++) _labelTextIdx.Add(_labelTextFgIdx[i]);
+        }
+
         void RebuildLabelTextGlyphs()
         {
+            if (!_config.timeLabels)
+            {
+                RebuildTagGlyphs();
+                return;
+            }
             const string titleLine = "TODAY'S TIME";
             string totalLine = TimeUnits.LabelEn(_jar.TotalUnits);
             int bodyCount = 0;
@@ -1374,6 +1574,8 @@ namespace MoodPicker.Ritual
             }
             for (int i = 0; i < _labelTextShadowIdx.Count; i++) _labelTextIdx.Add(_labelTextShadowIdx[i]);
             for (int i = 0; i < _labelTextFgIdx.Count; i++) _labelTextIdx.Add(_labelTextFgIdx[i]);
+            _labelShownText = titleLine + " " + totalLine;
+            for (int i = 0; i < bodyCount; i++) _labelShownText += " " + _labelBodyLines[i];
         }
 
         void AppendTextBlockGlyphs(string[] lines, int lineCount, float charSize, float trackingEm, float wordSpaceEm, float lineSpacing,
@@ -1643,13 +1845,14 @@ namespace MoodPicker.Ritual
 
         string GlowSignature()
         {
-            return $"{_config.glowStyle}|{_config.glowSeepSplats}|{_config.glowSeepGain}|{_config.glowSeepMotes}|{_config.glowPetals}|{_config.glowMotes}|{_config.glowRadius}";
+            return $"{_config.glowStyle}|{_config.glowSeepSplats}|{_config.glowSeepGain}|{_config.glowSeepMotes}|{_config.glowPetals}|{_config.glowMotes}|{_config.glowRadius}|{_config.deskPool}|{_config.deskPoolGain}";
         }
 
         public void RebloomGlow()
         {
             if (!_sealed || _glowColors.Count == 0) return;
             _glow.Bloom(_jar.root.position, _jar.root.rotation, _glowColors, _glowUnits, _glowDominant);
+            _pool.Bloom(_jar.root.position, _jar.root.rotation, _tableY, _glowColors, _glowUnits, _glowDominant, 0f);
             Debug.Log($"{Tag} ritual glow rebloom style={_config.glowStyle}");
         }
 
@@ -1663,6 +1866,9 @@ namespace MoodPicker.Ritual
             RitualUtil.Kill(_labelTextMesh);
             _wax?.Dispose();
             _glow?.Dispose();
+            _pool?.Dispose();
+            _lightField?.Dispose();
+            RitualUtil.Kill(_labelBorderTagMesh);
             _guideTrails?.Dispose();
             _jar?.Dispose();
         }
@@ -1670,6 +1876,7 @@ namespace MoodPicker.Ritual
         void StepMicrogesture(float now)
         {
             if (_micro == null) _micro = microgestureSource as IMicrogestureInput;
+            StepLabelGesture(now);
             Microgesture g = _micro != null ? _micro.Current(Handedness.Right) : Microgesture.None;
             bool fresh = g != Microgesture.None && g != _lastRightMicro && now - _lastGuideToggleTime >= 0.35f;
             _lastRightMicro = g;
@@ -1681,8 +1888,30 @@ namespace MoodPicker.Ritual
                 Vector3 anchor = _jar != null ? _jar.Spout : transform.position;
                 sound.Unit(anchor, _config.guideTrails ? 6 : 2, _config.guideTrails, true);
             }
-            ShowRoomNote(_config.guideTrails ? "Light Guide · On" : "Light Guide · Off");
+            if (_config.timeLabels) ShowRoomNote(_config.guideTrails ? "Light Guide · On" : "Light Guide · Off");
             Debug.Log($"{Tag} ritual guide trails enabled={_config.guideTrails} gesture={g}");
+        }
+
+        void StepLabelGesture(float now)
+        {
+            Microgesture g = _micro != null ? _micro.Current(Handedness.Left) : Microgesture.None;
+            bool fresh = g != Microgesture.None && g != _lastLeftMicro && now - _lastLabelToggleTime >= 0.35f;
+            _lastLeftMicro = g;
+            if (!fresh || _config == null) return;
+            _lastLabelToggleTime = now;
+            _config.timeLabels = !_config.timeLabels;
+            _labelTextDirty = true;
+            if (!_config.timeLabels)
+            {
+                _roomTimer = 0f;
+                if (_roomNote != null) _roomNote.gameObject.SetActive(false);
+            }
+            if (sound != null)
+            {
+                Vector3 anchor = _labelRoot != null ? _labelRoot.position : (_jar != null ? _jar.Spout : transform.position);
+                sound.Unit(anchor, _config.timeLabels ? 6 : 3, _config.timeLabels, false);
+            }
+            Debug.Log($"{Tag} ritual time labels {(_config.timeLabels ? "on" : "off")} gesture={g}");
         }
 
         void StepGuideTrails(float dt)

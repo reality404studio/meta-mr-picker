@@ -27,6 +27,7 @@ Material:
     m_Floats:
     - _AlphaShare: 0.18
     - _Breath: 0.12
+    - _Flat: 0
     - _Intensity: 0.5
     - _Reveal: 0
     - _Swirl: 0.025

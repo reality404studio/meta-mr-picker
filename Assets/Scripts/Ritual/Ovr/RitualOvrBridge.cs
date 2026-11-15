@@ -17,6 +17,7 @@ namespace MoodPicker.Ritual
         [SerializeField] bool handOcclusion = true;
 
         float _dim = float.NaN;
+        float _light = float.NaN;
         bool _gpuMetric;
         bool _cpuMetric;
         float _probe = 5f;
@@ -72,6 +73,12 @@ namespace MoodPicker.Ritual
         void LateUpdate()
         {
             if (ritual == null || passthroughLayer == null || !ritual.Ready) return;
+            float light = Mathf.Clamp01(ritual.PassthroughLight);
+            if (float.IsNaN(_light) || Mathf.Abs(light - _light) >= 0.004f)
+            {
+                _light = light;
+                passthroughLayer.textureOpacity = light;
+            }
             float dim = Mathf.Clamp(ritual.PassthroughDim, -1f, 0f);
             if (!float.IsNaN(_dim) && Mathf.Abs(dim - _dim) < 0.004f) return;
             _dim = dim;
