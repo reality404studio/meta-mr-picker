@@ -86,6 +86,7 @@ public static class TimeRitualSceneSetup
         Material glassMat = EnsureMaterial("RitualGlass", "MoodPicker/RitualGlassSplat");
         Material waxMat = EnsureMaterial("RitualWax", "MoodPicker/RitualWaxSplat");
         Material glowMat = EnsureMaterial("RitualGlow", "MoodPicker/RitualGlowSplat");
+        Material glyphMat = EnsureMaterial("RitualGlyph", "MoodPicker/RitualGlyph");
         SplatPigmentSlotAsset[] presets = SplatterSceneSetup.EnsureRealVideoSlotAssets();
         TimeCategoryAsset[] categories = Categories.Select(c => EnsureCategory(c, presets)).ToArray();
         Mesh heapMesh = SplatterSceneSetup.EnsureShapeMesh("RitualHeap", SplatShapeMeshes.Sphere("RitualHeap", config.heapDiameter * 0.5f, 40, 30));
@@ -147,7 +148,7 @@ public static class TimeRitualSceneSetup
         pso.ApplyModifiedPropertiesWithoutUndo();
 
         var sound = root.AddComponent<RitualAudio>();
-        AudioClip bgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Ritual/Audio/리추얼앱용힐링로파이음악.mp3");
+        AudioClip bgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Ritual/Audio/Before_the_Morning_Wakes.mp3");
         if (bgmClip == null)
         {
             foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Ritual/Audio" }))
@@ -178,6 +179,7 @@ public static class TimeRitualSceneSetup
         rso.FindProperty("glassMaterial").objectReferenceValue = glassMat;
         rso.FindProperty("waxMaterial").objectReferenceValue = waxMat;
         rso.FindProperty("glowMaterial").objectReferenceValue = glowMat;
+        rso.FindProperty("glyphMaterial").objectReferenceValue = glyphMat;
         rso.FindProperty("labelFont").objectReferenceValue = font;
         rso.FindProperty("piecesRoot").objectReferenceValue = pieces.transform;
         var catsProp = rso.FindProperty("categories");

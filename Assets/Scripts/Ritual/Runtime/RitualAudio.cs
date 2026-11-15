@@ -35,6 +35,7 @@ namespace MoodPicker.Ritual
         [Header("Seal")]
         [SerializeField, Range(0f, 1f)] float sealVolume = 0.75f;
         [SerializeField, Range(0f, 1f)] float bowlVolume = 0.4f;
+        [SerializeField, Range(0f, 1f)] float clockVolume = 0.45f;
         [SerializeField] float sealHz = 92f;
         [SerializeField, Range(0f, 1f)] float pressVolume = 0.14f;
 
@@ -49,7 +50,10 @@ namespace MoodPicker.Ritual
         AudioSource _press;
         AudioSource _bowlVoice;
         AudioClip _bowl;
+        AudioClip _clockTick;
+        AudioClip _clockTock;
         float _hush;
+        bool _bgmHeld;
         AudioSource _bgm;
         AudioClip _tick;
         AudioClip _mark30;
@@ -212,6 +216,8 @@ namespace MoodPicker.Ritual
             _press = Voice("Press", true);
             _press.clip = Bake("ritual-press", rate, 1f, (t, n) => (Mathf.Sin(2f * Mathf.PI * 132f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * 198f * t)) * 0.32f);
             _bowl = BakeBowl(rate);
+            _clockTick = BakeClockTick(rate, false);
+            _clockTock = BakeClockTick(rate, true);
             _bowlVoice = Voice("Bowl", false);
             _bowlVoice.spatialBlend = spatialBlend * 0.5f;
             _bowlVoice.maxDistance = 6f;
@@ -241,6 +247,32 @@ namespace MoodPicker.Ritual
                 a += 0.012f * Mathf.Exp(-t / 1.5f) * n * swell;
                 return a * 0.2f * swell;
             });
+        }
+
+        public static AudioClip BakeClockTick(int rate, bool tock)
+        {
+            const float Tau = 6.2831853f;
+            float f = tock ? 2350f : 3050f;
+            return Bake(tock ? "ritual-clock-tock" : "ritual-clock-tick", rate, 0.09f, (t, n) =>
+            {
+                float click = Mathf.Exp(-t / 0.0045f);
+                float body = Mathf.Exp(-t / 0.018f) * Mathf.Sin(Tau * f * 0.42f * t);
+                return (0.55f * Mathf.Sin(Tau * f * t) * click + 0.35f * n * click + 0.3f * body) * 0.5f;
+            });
+        }
+
+        public void ClockTick(Vector3 position, bool tock)
+        {
+            if (!_ready) return;
+            Play(tock ? _clockTock : _clockTick, position, clockVolume, 1f);
+        }
+
+        public bool BgmHeld => _bgmHeld;
+
+        public void HoldBgm(bool held)
+        {
+            _bgmHeld = held;
+            if (held && _bgm != null) _bgm.volume = 0f;
         }
 
         public float BowlLength => _bowl != null ? _bowl.length : 0f;
@@ -661,7 +693,7 @@ namespace MoodPicker.Ritual
             float press = Mathf.MoveTowards(_press.volume, _pressTarget * _master, dt * 1.2f);
             _press.volume = press;
             if (press <= 0.0005f && _pressTarget <= 0f && _press.isPlaying) _press.Stop();
-            if (_hush > 0f)
+            if (_hush > 0f || _bgmHeld)
             {
                 if (_bgm != null) _bgm.volume = 0f;
             }

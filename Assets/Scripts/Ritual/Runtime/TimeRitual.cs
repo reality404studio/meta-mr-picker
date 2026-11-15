@@ -66,6 +66,7 @@ namespace MoodPicker.Ritual
         [SerializeField] Material glassMaterial;
         [SerializeField] Material waxMaterial;
         [SerializeField] Material glowMaterial;
+        [SerializeField] Material glyphMaterial;
         [SerializeField] Font labelFont;
         [SerializeField] Transform piecesRoot;
         [SerializeField] bool autoPlace = true;
@@ -105,6 +106,14 @@ namespace MoodPicker.Ritual
         MeshRenderer _labelBorderTag;
         int _floatSlots;
         RitualSealWave _sealWave;
+        RitualClock _clock;
+        bool _clockDone = true;
+        bool _clockSand;
+        readonly Vector3[] _springPos = new Vector3[5];
+        readonly System.Diagnostics.Stopwatch _watch = new System.Diagnostics.Stopwatch();
+        float _lastTickMs;
+        int _hitches;
+        readonly Color[] _springCol = new Color[5];
         bool _lidClosed;
         float _lidCloseAge;
         Vector3 _lidLocal;
@@ -203,6 +212,8 @@ namespace MoodPicker.Ritual
         public bool LidClosed => _lidClosed;
         public Vector3 LidPosition => _wax != null ? _wax.lidRoot.position : Vector3.zero;
         public RitualSealWave SealWave => _sealWave;
+        public RitualClock Clock => _clock;
+        public bool ClockDone => _clockDone;
         public bool PressFull => _press.full;
         public bool Melting => _meltAge >= 0f && !_materialized;
         public float IdleSeconds => _idle;
@@ -250,6 +261,14 @@ namespace MoodPicker.Ritual
                 MakePanel(labelFont);
                 _roomNote = MakeRoomNote(labelFont);
                 _heapNote = MakeHeapNote(labelFont);
+            }
+            if (_config.clockIntro && labelFont != null)
+            {
+                _clock = new RitualClock(_config, labelFont, glyphMaterial);
+                _clock.Ticked += OnClockTicked;
+                _clockDone = false;
+                HideSprings();
+                if (sound != null) sound.HoldBgm(true);
             }
             _dim = _config.roomDarkFromStart ? 0f : _config.baseDim;
             _light = 1f;
@@ -578,6 +597,7 @@ namespace MoodPicker.Ritual
             transform.SetPositionAndRotation(position, rotation);
             _placed = true;
             PlaceJar();
+            if (_clock != null && !_clockDone) PlaceClock(true);
         }
 
         void PlaceJar()
@@ -610,7 +630,16 @@ namespace MoodPicker.Ritual
             }
             HandFrame frame = default;
             if (_input != null) _input.TryGetFrame(out frame);
+            float gapMs = Time.unscaledDeltaTime * 1000f;
+            if (gapMs > 60f && _ready && Time.frameCount > 120)
+            {
+                _hitches++;
+                Debug.Log($"{Tag} ritual hitch gap={gapMs:0}ms lastTick={_lastTickMs:0.0}ms sealed={_sealed} sealT={_sealTime:0.00} clock={(_clock != null ? _clock.Phase.ToString() : "-")} pouring={(_jar != null && _jar.Pouring)} pieces={_pieces.Count} n={_hitches}");
+            }
+            _watch.Restart();
             Tick(Time.time, Time.deltaTime, frame);
+            _watch.Stop();
+            _lastTickMs = (float)_watch.Elapsed.TotalMilliseconds;
             Govern(Time.unscaledDeltaTime);
             PollLive(Time.unscaledDeltaTime);
         }
@@ -622,6 +651,7 @@ namespace MoodPicker.Ritual
             _pourPreviewGlow = Color.clear;
             _hoveredHeap = null;
             _hands.Update(frame, trackingSpace, _config, dt);
+            StepClock(dt);
             for (int h = 0; h < 2; h++) StepHand(h, now, dt);
             StepHint(dt);
             StepJarPose(dt);
@@ -1380,6 +1410,18 @@ namespace MoodPicker.Ritual
             _sealTime = 0f;
             BuildJar();
             if (labelFont != null) MakePanel(labelFont);
+            if (_clock != null && _config.clockIntro)
+            {
+                _clockDone = false;
+                _clockSand = false;
+                _clock.Ticked -= OnClockTicked;
+                _clock.Dispose();
+                _clock = new RitualClock(_config, labelFont, glyphMaterial);
+                _clock.Ticked += OnClockTicked;
+                HideSprings();
+                PlaceClock(true);
+                if (sound != null) sound.HoldBgm(true);
+            }
             Debug.Log($"{Tag} ritual reset");
         }
 
@@ -1437,9 +1479,78 @@ namespace MoodPicker.Ritual
             return slot;
         }
 
+        void HideSprings()
+        {
+            if (pull == null || pull.Heaps == null) return;
+            for (int i = 0; i < pull.Heaps.Length; i++)
+                if (pull.Heaps[i] != null) pull.Heaps[i].HideNow();
+        }
+
+        void SetClockSprings()
+        {
+            if (pull == null || pull.Heaps == null) return;
+            for (int i = 0; i < _springPos.Length; i++)
+            {
+                TimeHeap heap = i < pull.Heaps.Length ? pull.Heaps[i] : null;
+                _springPos[i] = heap != null ? heap.transform.position : transform.position;
+                _springCol[i] = heap != null && heap.Category != null ? heap.Category.glowColor : Color.white;
+            }
+            _clock.SetSprings(_springPos, _springCol);
+        }
+
+        void PlaceClock(bool show)
+        {
+            Vector3 eye = EyePosition();
+            Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.forward;
+            fwd.Normalize();
+            _clock.Place(eye + fwd * _config.clockDistance + Vector3.up * _config.clockHeight, Quaternion.LookRotation(fwd, Vector3.up));
+            SetClockSprings();
+            if (show) _clock.Show(System.DateTime.Now, _config.clockDelay);
+        }
+
+        void OnClockTicked(Vector3 position, bool tock)
+        {
+            if (sound != null) sound.ClockTick(position, tock);
+        }
+
+        void StepClock(float dt)
+        {
+            if (_clockDone || _clock == null) return;
+            ClockPhase before = _clock.Phase;
+            if (before == ClockPhase.Showing || before == ClockPhase.Frozen) SetClockSprings();
+            _clock.Tick(dt, System.DateTime.Now, _hands, EyePosition());
+            ClockPhase after = _clock.Phase;
+            if (after != before) Debug.Log($"{Tag} ritual clock {after}");
+            if (after == ClockPhase.Collapsing && pull != null && pull.Heaps != null)
+            {
+                if (!_clockSand)
+                {
+                    _clockSand = true;
+                    if (sound != null) sound.PourStart(_clock.Center);
+                }
+                for (int i = 0; i < pull.Heaps.Length; i++)
+                    if (pull.Heaps[i] != null) pull.Heaps[i].GrowTo(_clock.ArrivalShare(i));
+            }
+            if (after == ClockPhase.Done)
+            {
+                _clockDone = true;
+                if (pull != null && pull.Heaps != null)
+                    for (int i = 0; i < pull.Heaps.Length; i++)
+                        if (pull.Heaps[i] != null) pull.Heaps[i].GrowTo(1f);
+                if (sound != null)
+                {
+                    if (_clockSand) sound.PourStop();
+                    sound.HoldBgm(false);
+                }
+                _clockSand = false;
+                _idle = 0f;
+            }
+        }
+
         void StepHint(float dt)
         {
-            if (!_config.pullHint || _everPulled || _sealed || pull == null || pull.Heaps == null) return;
+            if (!_config.pullHint || !_clockDone || _everPulled || _sealed || pull == null || pull.Heaps == null) return;
             bool busy = _grips[0].mode != GripNone || _grips[1].mode != GripNone || _hands[0].pinching || _hands[1].pinching;
             _idle = busy ? 0f : _idle + dt;
             if (_idle < _config.hintIdleSeconds) return;
@@ -2086,6 +2197,7 @@ namespace MoodPicker.Ritual
             _pool?.Dispose();
             _lightField?.Dispose();
             _sealWave?.Dispose();
+            _clock?.Dispose();
             RitualUtil.Kill(_labelBorderTagMesh);
             _guideTrails?.Dispose();
             _jar?.Dispose();

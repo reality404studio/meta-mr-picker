@@ -156,6 +156,18 @@ MonoBehaviour:
   waxDrawLength: 0.035
   waxDropRadius: 0.009
   waxDripHeight: 0.14
+  clockIntro: 1
+  clockDistance: 0.55
+  clockHeight: -0.04
+  clockDigitHeight: 0.135
+  clockGlyphsPerDigit: 135
+  clockGlyphSize: 0.0078
+  clockDelay: 2.5
+  clockTouchDepth: 0.035
+  clockSilence: 0.8
+  clockCollapse: 0
+  clockCollapseSeconds: 4.2
+  clockSpread: 1.6
   waxStick: 0
   sealOnRelease: 1
   emblemStyle: 1

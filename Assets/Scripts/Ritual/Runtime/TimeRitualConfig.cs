@@ -6,6 +6,7 @@ namespace MoodPicker.Ritual
     public enum GlowStyle { Seep = 0, Petals = 1 }
     public enum FormStyle { Gather = 0, Flow = 1 }
     public enum ClimaxStyle { Ring = 0, Shell = 1, Bloom = 2 }
+    public enum ClockCollapse { Crumble = 0, Burst = 1 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Ritual Config")]
     public sealed class TimeRitualConfig : ScriptableObject
@@ -167,6 +168,20 @@ namespace MoodPicker.Ritual
         public float waxDrawLength = 0.035f;
         public float waxDropRadius = 0.009f;
         public float waxDripHeight = 0.14f;
+
+        [Header("Clock")]
+        public bool clockIntro = true;
+        public float clockDistance = 0.55f;
+        public float clockHeight = -0.04f;
+        public float clockDigitHeight = 0.135f;
+        public int clockGlyphsPerDigit = 135;
+        public float clockGlyphSize = 0.0078f;
+        public float clockDelay = 2.5f;
+        public float clockTouchDepth = 0.035f;
+        public float clockSilence = 0.8f;
+        public ClockCollapse clockCollapse = ClockCollapse.Crumble;
+        public float clockCollapseSeconds = 4.2f;
+        public float clockSpread = 1.6f;
 
         [Header("Seal Flow")]
         public bool waxStick = false;

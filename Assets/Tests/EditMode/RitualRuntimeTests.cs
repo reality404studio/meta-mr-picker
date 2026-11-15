@@ -1498,7 +1498,7 @@ namespace MoodPicker.Tests
         }
 
 
-        TimeRitual RitualWithHeaps(TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat, out TimeHeap[] heaps, Material waxMat = null)
+        TimeRitual RitualWithHeaps(TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat, out TimeHeap[] heaps, Material waxMat = null, Font font = null)
         {
             var go = new GameObject("SealRitual");
             go.transform.SetParent(_root.transform, false);
@@ -1530,6 +1530,7 @@ namespace MoodPicker.Tests
             rso.FindProperty("pull").objectReferenceValue = pull;
             rso.FindProperty("glowMaterial").objectReferenceValue = glowMat;
             rso.FindProperty("waxMaterial").objectReferenceValue = waxMat;
+            rso.FindProperty("labelFont").objectReferenceValue = font;
             rso.FindProperty("piecesRoot").objectReferenceValue = go.transform;
             rso.FindProperty("autoPlace").boolValue = false;
             var cp = rso.FindProperty("categories");
@@ -1734,6 +1735,156 @@ namespace MoodPicker.Tests
             finally
             {
                 swarm.Dispose();
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+
+        [Test]
+        public void TheClockFontDrawsEveryDigitWithItsOwnShape()
+        {
+            var pts = new Vector2[80];
+            float Wide(char c)
+            {
+                RitualClockFont.Sample(c, 80, pts, 0, 0f, 1);
+                float lo = 9f, hi = -9f;
+                foreach (Vector2 p in pts)
+                {
+                    Assert.That(p.x, Is.InRange(-0.05f, 0.7f));
+                    Assert.That(p.y, Is.InRange(-0.05f, 1.05f));
+                    lo = Mathf.Min(lo, p.x);
+                    hi = Mathf.Max(hi, p.x);
+                }
+                return hi - lo;
+            }
+            foreach (char c in "0123456789:.") Assert.That(RitualClockFont.Strokes(c).Count, Is.GreaterThan(0), c + " 는 획이 있다");
+            Assert.That(Wide('1'), Is.LessThan(Wide('0') * 0.5f), "1 은 좁다");
+            Assert.That(Wide(':'), Is.LessThan(0.15f));
+            RitualClockFont.Sample('0', 80, pts, 0, 0f, 1);
+            var zero = (Vector2[])pts.Clone();
+            RitualClockFont.Sample('8', 80, pts, 0, 0f, 1);
+            float diff = 0f;
+            for (int i = 0; i < 80; i++) diff += Vector2.Distance(zero[i], pts[i]);
+            Assert.That(diff / 80f, Is.GreaterThan(0.05f), "0 과 8 은 모양이 다르다");
+        }
+
+        [Test]
+        public void TheClockShowsTheRealTimeAtEyeLevelAndTheSecondsFlow()
+        {
+            Font fraunces = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            var clock = new RitualClock(_config, fraunces, null);
+            try
+            {
+                Vector3 center = new Vector3(0f, 1.16f, 0.55f);
+                clock.Place(center, Quaternion.identity);
+                var t0 = new System.DateTime(2026, 11, 15, 19, 52, 7);
+                clock.Show(t0);
+                Assert.That(clock.Text, Is.EqualTo("19:52:07"), "실제 시각");
+                Assert.That(clock.DateText, Is.EqualTo("11.15"), "오늘 날짜 MM.DD");
+                Assert.That(clock.Count, Is.GreaterThan(300), "큰 숫자는 작은 숫자 글리프 수백 개로 되어 있다");
+                Assert.That(clock.Width, Is.InRange(0.35f, 0.7f), "눈높이에 크게");
+                int ticks = 0;
+                clock.Ticked += (p, tock) => ticks++;
+                var before = new Vector3[clock.Count];
+                for (int i = 0; i < clock.Count; i++) before[i] = clock.ParticlePosition(i);
+                for (int i = 0; i < 40; i++) clock.Tick(Dt, t0.AddSeconds(1), null, Vector3.zero);
+                Assert.That(clock.Text, Is.EqualTo("19:52:08"), "초가 흐른다");
+                Assert.That(ticks, Is.EqualTo(1), "초마다 째깍");
+                float moved = 0f;
+                for (int i = 0; i < clock.Count; i++) moved = Mathf.Max(moved, Vector3.Distance(before[i], clock.ParticlePosition(i)));
+                Assert.That(moved, Is.GreaterThan(0.001f), "바뀐 숫자의 알갱이가 새 모양으로 흐른다");
+                for (int i = 0; i < clock.Count; i++) Assert.That(Vector3.Distance(clock.ParticlePosition(i), center), Is.LessThan(clock.Width * 0.6f));
+            }
+            finally
+            {
+                clock.Dispose();
+            }
+        }
+
+        [TestCase(ClockCollapse.Crumble)]
+        [TestCase(ClockCollapse.Burst)]
+        public void TouchingTheClockStopsItThenItsGrainsFillTheRoomAndGatherIntoTheFiveSprings(ClockCollapse style)
+        {
+            Font fraunces = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            var cfg = Object.Instantiate(_config);
+            cfg.clockCollapse = style;
+            var clock = new RitualClock(cfg, fraunces, null);
+            try
+            {
+                Vector3 center = new Vector3(0f, 1.16f, 0.55f);
+                clock.Place(center, Quaternion.identity);
+                var springs = new Vector3[5];
+                for (int i = 0; i < 5; i++) springs[i] = new Vector3((i - 2) * 0.12f, 1.02f, 0.42f);
+                clock.SetSprings(springs, null);
+                var t0 = new System.DateTime(2026, 11, 15, 19, 52, 7);
+                clock.Show(t0);
+                for (int i = 0; i < 30; i++) clock.Tick(Dt, t0, null, Vector3.zero);
+                var hands = new RitualHands();
+                hands.Update(new HandFrame { t = 0f, right = PinchPose(center, false) }, null, cfg, Dt);
+                clock.Tick(Dt, t0, hands, Vector3.zero);
+                Assert.That(clock.Phase, Is.EqualTo(ClockPhase.Frozen), "손이 닿으면 시계가 멈춘다");
+                int ticks = 0;
+                clock.Ticked += (p, tock) => ticks++;
+                var empty = new RitualHands();
+                int silence = Mathf.FloorToInt(cfg.clockSilence / Dt) - 2;
+                for (int i = 0; i < silence; i++) clock.Tick(Dt, t0.AddSeconds(1), empty, Vector3.zero);
+                Assert.That(ticks, Is.EqualTo(0), "소리도 멈추고 짧은 정적");
+                Assert.That(clock.Phase, Is.EqualTo(ClockPhase.Frozen));
+                for (int i = 0; i < 4; i++) clock.Tick(Dt, t0.AddSeconds(1), empty, Vector3.zero);
+                Assert.That(clock.Phase, Is.EqualTo(ClockPhase.Collapsing), "정적 뒤에 무너진다");
+                float far = 0f;
+                int frames = Mathf.CeilToInt(cfg.clockCollapseSeconds / Dt) + 4;
+                for (int i = 0; i < frames && clock.Phase == ClockPhase.Collapsing; i++)
+                {
+                    clock.Tick(Dt, t0.AddSeconds(2), empty, Vector3.zero);
+                    far = Mathf.Max(far, clock.Farthest);
+                }
+                Assert.That(far, Is.GreaterThan(1.0f), "알갱이가 방 크기로 퍼진다");
+                Assert.That(clock.Phase, Is.EqualTo(ClockPhase.Done));
+                for (int i = 0; i < 5; i++) Assert.That(clock.ArrivalShare(i), Is.EqualTo(1f), "다섯 샘으로 모인다");
+                int near = 0;
+                for (int i = 0; i < clock.Count; i++)
+                {
+                    float best = float.MaxValue;
+                    foreach (Vector3 sp in springs) best = Mathf.Min(best, Vector3.Distance(clock.ParticlePosition(i), sp));
+                    if (best < 0.02f) near++;
+                }
+                Assert.That(near, Is.EqualTo(clock.Count), "모든 글리프가 샘 자리에 닿는다");
+            }
+            finally
+            {
+                clock.Dispose();
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void TheRitualOpensWithTheClockAndTheSpringsGrowFromItsGrains()
+        {
+            Font fraunces = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.hintIdleSeconds = 1f;
+            try
+            {
+                TimeRitual ritual = RitualWithHeaps(cfg, cats, null, out TimeHeap[] heaps, null, fraunces);
+                Assert.That(ritual.ClockDone, Is.False, "시작하면 시계가 먼저");
+                float now = 1f;
+                Run(ritual, ref now, 3f, default);
+                foreach (TimeHeap h in heaps) Assert.That(h.Present, Is.False, "시계가 있는 동안 샘은 없다");
+                foreach (TimeHeap h in heaps) Assert.That(h.Invitation, Is.EqualTo(0f), "당기기 힌트도 아직");
+                Vector3 c = ritual.Clock.Center;
+                Run(ritual, ref now, 2 * Dt, new HandFrame { right = PinchPose(c, false) });
+                Assert.That(ritual.Clock.Phase, Is.Not.EqualTo(ClockPhase.Showing), "손이 닿으면 멈춘다");
+                Run(ritual, ref now, cfg.clockSilence + cfg.clockCollapseSeconds * 0.75f, default);
+                float growing = 0f;
+                foreach (TimeHeap h in heaps) growing = Mathf.Max(growing, h.Melt + (h.Present ? 1f : 0f));
+                Run(ritual, ref now, cfg.clockCollapseSeconds * 0.5f + 2f, default);
+                Assert.That(ritual.ClockDone, Is.True);
+                foreach (TimeHeap h in heaps) Assert.That(h.Present, Is.True, "글리프가 닿은 자리에 샘이 생긴다");
+            }
+            finally
+            {
                 Object.DestroyImmediate(cfg);
             }
         }

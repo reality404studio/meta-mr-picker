@@ -88,6 +88,20 @@ namespace MoodPicker.Ritual
             if (present) _meltAge = -1f;
         }
 
+        public void HideNow()
+        {
+            _presence = 0f;
+            _presenceTarget = 0f;
+            _meltAge = -1f;
+            transform.localScale = _baseScale * 1e-4f;
+        }
+
+        public void GrowTo(float level)
+        {
+            _meltAge = -1f;
+            _presenceTarget = Mathf.Clamp01(level);
+        }
+
         public void MeltInto(Vector3 targetWS, float seconds)
         {
             _meltTarget = targetWS;
