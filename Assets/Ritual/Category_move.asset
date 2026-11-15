@@ -19,6 +19,7 @@ MonoBehaviour:
   memoryEn: Fresh Breath
   beadShape: 0
   initialFeel: 1
+  swarmMotion: 2
   look: {fileID: 11400000, guid: 20e1860ca26aa4eac97a3a28ebbb4d66, type: 2}
   nodeSqueeze: 1
   nodeGlow: 0.9

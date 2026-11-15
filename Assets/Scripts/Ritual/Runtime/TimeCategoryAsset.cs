@@ -5,6 +5,7 @@ namespace MoodPicker.Ritual
 {
     public enum BeadShape { Droplet = 0, Heart = 1, Star = 2, Diamond = 3, Crescent = 4, Feather = 7 }
     public enum PieceFeel { Jelly = 0, Water = 1, Fur = 2 }
+    public enum SwarmMotion { Orbit = 0, Settle = 1, Ripple = 2, Wander = 3, Bounce = 4 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Category")]
     public sealed class TimeCategoryAsset : ScriptableObject
@@ -16,6 +17,7 @@ namespace MoodPicker.Ritual
         public string memoryEn = "Deep Dive";
         public BeadShape beadShape = BeadShape.Star;
         public PieceFeel initialFeel = PieceFeel.Jelly;
+        public SwarmMotion swarmMotion = SwarmMotion.Orbit;
         public SplatPigmentSlotAsset look;
 
         [Header("Node")]

@@ -19,6 +19,7 @@ MonoBehaviour:
   memoryEn: Trial & Wonder
   beadShape: 3
   initialFeel: 0
+  swarmMotion: 3
   look: {fileID: 11400000, guid: 4e0663fc67bff4efb9be4f901438bdc9, type: 2}
   nodeSqueeze: 0.9
   nodeGlow: 0.65

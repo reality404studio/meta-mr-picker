@@ -19,6 +19,7 @@ MonoBehaviour:
   memoryEn: Quiet Rest
   beadShape: 4
   initialFeel: 1
+  swarmMotion: 1
   look: {fileID: 11400000, guid: 3b89157bb18a7471abbf3cf232dfa26b, type: 2}
   nodeSqueeze: 0.7
   nodeGlow: 0.35

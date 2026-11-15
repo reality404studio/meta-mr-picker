@@ -1404,5 +1404,97 @@ namespace MoodPicker.Tests
                 Object.DestroyImmediate(cfg);
             }
         }
+
+        struct SwarmSignature
+        {
+            public float fallSpeed;
+            public float spreadSpeed;
+            public float alignment;
+            public float verticalRms;
+            public float speed;
+        }
+
+        static SwarmSignature Measure(RitualSpringSwarm swarm, Transform host, float seconds)
+        {
+            float now = 0f;
+            for (int i = 0; i < 72; i++)
+            {
+                now += Dt;
+                swarm.Tick(now, Dt, 1f, 0f, 0f, 0f, Vector3.zero, 0f);
+            }
+            double vy = 0, vr = 0, wsum = 0, vy2 = 0, sp = 0, lmag = 0;
+            Vector3 lsum = Vector3.zero;
+            int frames = Mathf.RoundToInt(seconds / Dt);
+            for (int f = 0; f < frames; f++)
+            {
+                now += Dt;
+                swarm.Tick(now, Dt, 1f, 0f, 0f, 0f, Vector3.zero, 0f);
+                RitualSplatCloud c = swarm.Cloud;
+                for (int i = 0; i < c.Count; i++)
+                {
+                    float w = c.scale[i];
+                    if (w < 0.05f) continue;
+                    Vector3 p = (Vector3)c.disp[i];
+                    Vector3 v = (Vector3)c.vel[i];
+                    Vector3 flat = new Vector3(p.x, 0f, p.z);
+                    float radial = flat.sqrMagnitude > 1e-8f ? Vector3.Dot(new Vector3(v.x, 0f, v.z), flat.normalized) : 0f;
+                    vy += v.y * w;
+                    vy2 += v.y * v.y * w;
+                    vr += radial * w;
+                    sp += v.magnitude * w;
+                    Vector3 l = Vector3.Cross(p, v);
+                    lsum += l * w;
+                    lmag += l.magnitude * w;
+                    wsum += w;
+                }
+            }
+            return new SwarmSignature
+            {
+                fallSpeed = (float)(-vy / wsum),
+                spreadSpeed = (float)(vr / wsum),
+                alignment = lmag > 1e-9 ? lsum.magnitude / (float)lmag : 0f,
+                verticalRms = Mathf.Sqrt((float)(vy2 / wsum)),
+                speed = (float)(sp / wsum)
+            };
+        }
+
+        [Test]
+        public void TheFiveSpringsStayFormlessButMoveEachInTheirOwnWay()
+        {
+            Material splatMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Splatter/LetterSplat.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.springSplats = 240;
+            cfg.springMotion = 1f;
+            var sig = new System.Collections.Generic.Dictionary<SwarmMotion, SwarmSignature>();
+            var made = new System.Collections.Generic.List<RitualSpringSwarm>();
+            try
+            {
+                foreach (TimeCategoryAsset cat in cats)
+                {
+                    var host = new GameObject("Host_" + cat.id).transform;
+                    host.SetParent(_root.transform, false);
+                    var swarm = new RitualSpringSwarm(host, cfg, null, splatMat, _look, cat);
+                    made.Add(swarm);
+                    Assert.That(sig.ContainsKey(swarm.Motion), Is.False, "샘마다 움직임이 다르다");
+                    sig[swarm.Motion] = Measure(swarm, host, 3f);
+                    float loose = cfg.heapDiameter * 0.5f * cfg.springLoose;
+                    Assert.That(swarm.MaxReach, Is.LessThan(loose * 1.25f), cat.id + " 무리는 성긴 공 안에 머문다");
+                }
+                Assert.That(cats[0].swarmMotion, Is.EqualTo(SwarmMotion.Settle));
+                Assert.That(sig[SwarmMotion.Settle].fallSpeed, Is.GreaterThan(0.003f), "Rested 는 눈처럼 천천히 가라앉는다");
+                Assert.That(sig[SwarmMotion.Ripple].spreadSpeed, Is.GreaterThan(0.004f), "Moved 는 잔물결처럼 퍼진다");
+                Assert.That(sig[SwarmMotion.Orbit].alignment, Is.GreaterThan(0.7f), "Focused 는 한 방향으로 촘촘히 맴돈다");
+                foreach (SwarmMotion m in new[] { SwarmMotion.Settle, SwarmMotion.Ripple, SwarmMotion.Wander, SwarmMotion.Bounce })
+                    Assert.That(sig[m].alignment, Is.LessThan(sig[SwarmMotion.Orbit].alignment - 0.25f), m + " 는 한 방향으로 돌지 않는다");
+                Assert.That(sig[SwarmMotion.Bounce].verticalRms, Is.GreaterThan(sig[SwarmMotion.Orbit].verticalRms * 2f), "Enjoyed 는 통통 튄다");
+                Assert.That(sig[SwarmMotion.Wander].speed, Is.LessThan(sig[SwarmMotion.Orbit].speed * 0.6f), "Explored 는 느리게 떠돈다");
+            }
+            finally
+            {
+                foreach (RitualSpringSwarm s in made) s.Dispose();
+                Object.DestroyImmediate(cfg);
+            }
+        }
     }
 }

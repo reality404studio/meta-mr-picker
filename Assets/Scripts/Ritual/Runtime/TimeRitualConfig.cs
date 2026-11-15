@@ -202,7 +202,7 @@ namespace MoodPicker.Ritual
 
         [Header("Pull Out")]
         [Range(0f, 0.3f)] public float threadSag = 0.06f;
-        public FormStyle formStyle = FormStyle.Flow;
+        public FormStyle formStyle = FormStyle.Gather;
         public float formFlowSeconds = 0.6f;
         public float formMinRadius = 0.022f;
         public bool floatAway = false;
@@ -216,6 +216,7 @@ namespace MoodPicker.Ritual
         public float springSpin = 0.9f;
         public float springLoose = 1.35f;
         public float springGrain = 0.0024f;
+        [Range(0f, 1f)] public float springMotion = 1f;
         public bool pullHint = true;
         public float hintIdleSeconds = 4.5f;
         public float hintLean = 0.02f;

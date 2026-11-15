@@ -23,6 +23,7 @@ public static class TimeRitualSceneSetup
         public string id, ko, en, symbol, memory, slotAsset;
         public BeadShape shape;
         public PieceFeel feel;
+        public SwarmMotion motion;
         public float squeeze, nodeGlow, nodeGrain, twinkle, twinkleSpeed;
         public float glint, glintSpeed, sandIntensity, sparkle;
         public Color wax, glow;
@@ -30,19 +31,19 @@ public static class TimeRitualSceneSetup
 
     static readonly CategorySpec[] Categories =
     {
-        new CategorySpec { id = "sleep", ko = "여백", en = "Rested", symbol = "°", memory = "Quiet Rest", shape = BeadShape.Crescent, feel = PieceFeel.Water,
+        new CategorySpec { id = "sleep", ko = "여백", en = "Rested", symbol = "°", memory = "Quiet Rest", shape = BeadShape.Crescent, feel = PieceFeel.Water, motion = SwarmMotion.Settle,
             slotAsset = "Slot4_IMG4565", squeeze = 0.7f, nodeGlow = 0.35f, nodeGrain = 1.15f, twinkle = 0f, twinkleSpeed = 2f,
             glint = 0.55f, glintSpeed = 0.4f, sandIntensity = 1.1f, sparkle = 0.6f, wax = new Color(0.38f, 0.48f, 0.82f), glow = new Color(0.55f, 0.76f, 1f) },
-        new CategorySpec { id = "move", ko = "환기", en = "Moved", symbol = "•", memory = "Fresh Breath", shape = BeadShape.Droplet, feel = PieceFeel.Water,
+        new CategorySpec { id = "move", ko = "환기", en = "Moved", symbol = "•", memory = "Fresh Breath", shape = BeadShape.Droplet, feel = PieceFeel.Water, motion = SwarmMotion.Ripple,
             slotAsset = "Slot0_IMG4392", squeeze = 1f, nodeGlow = 0.9f, nodeGrain = 0.65f, twinkle = 0.7f, twinkleSpeed = 7f,
             glint = 1.4f, glintSpeed = 0.8f, sandIntensity = 1.2f, sparkle = 1.3f, wax = new Color(0.36f, 0.68f, 0.76f), glow = new Color(0.68f, 0.92f, 1f) },
-        new CategorySpec { id = "work", ko = "몰입", en = "Focused", symbol = "*", memory = "Deep Dive", shape = BeadShape.Star, feel = PieceFeel.Jelly,
+        new CategorySpec { id = "work", ko = "몰입", en = "Focused", symbol = "*", memory = "Deep Dive", shape = BeadShape.Star, feel = PieceFeel.Jelly, motion = SwarmMotion.Orbit,
             slotAsset = "Slot1_IMG4398", squeeze = 1.1f, nodeGlow = 0.55f, nodeGrain = 0.85f, twinkle = 0.25f, twinkleSpeed = 2.5f,
             glint = 0.8f, glintSpeed = 0.5f, sandIntensity = 1.15f, sparkle = 0.9f, wax = new Color(0.82f, 0.52f, 0.28f), glow = new Color(1f, 0.76f, 0.52f) },
-        new CategorySpec { id = "drift", ko = "탐색", en = "Explored", symbol = "·", memory = "Trial & Wonder", shape = BeadShape.Diamond, feel = PieceFeel.Jelly,
+        new CategorySpec { id = "drift", ko = "탐색", en = "Explored", symbol = "·", memory = "Trial & Wonder", shape = BeadShape.Diamond, feel = PieceFeel.Jelly, motion = SwarmMotion.Wander,
             slotAsset = "Slot2_IMG4543", squeeze = 0.9f, nodeGlow = 0.65f, nodeGrain = 0.85f, twinkle = 0.3f, twinkleSpeed = 3.5f,
             glint = 1f, glintSpeed = 0.6f, sandIntensity = 1.1f, sparkle = 1f, wax = new Color(0.86f, 0.64f, 0.18f), glow = new Color(1f, 0.84f, 0.36f) },
-        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Feather, feel = PieceFeel.Jelly,
+        new CategorySpec { id = "play", ko = "유희", en = "Enjoyed", symbol = "+", memory = "Warm Joy", shape = BeadShape.Feather, feel = PieceFeel.Jelly, motion = SwarmMotion.Bounce,
             slotAsset = "Slot3_IMG4566", squeeze = 0.9f, nodeGlow = 0.7f, nodeGrain = 0.8f, twinkle = 0.45f, twinkleSpeed = 5f,
             glint = 0.95f, glintSpeed = 0.7f, sandIntensity = 1.15f, sparkle = 1.05f, wax = new Color(0.84f, 0.24f, 0.22f), glow = new Color(1f, 0.48f, 0.30f) },
     };
@@ -301,6 +302,7 @@ public static class TimeRitualSceneSetup
         asset.memoryEn = spec.memory;
         asset.beadShape = spec.shape;
         asset.initialFeel = spec.feel;
+        asset.swarmMotion = spec.motion;
         asset.waxColor = spec.wax;
         EditorUtility.SetDirty(asset);
         return asset;

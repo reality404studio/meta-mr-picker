@@ -186,7 +186,7 @@ MonoBehaviour:
   roomLightSealed: 0.32
   roomLightRate: 0.22
   threadSag: 0.06
-  formStyle: 1
+  formStyle: 0
   formFlowSeconds: 0.6
   formMinRadius: 0.022
   floatAway: 0
@@ -200,6 +200,7 @@ MonoBehaviour:
   springSpin: 0.9
   springLoose: 1.35
   springGrain: 0.0024
+  springMotion: 1
   pullHint: 1
   hintIdleSeconds: 4.5
   hintLean: 0.02
