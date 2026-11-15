@@ -175,8 +175,9 @@ namespace MoodPicker.Ritual
         public float progress;
         public bool pressing;
         public bool sealedShut;
+        public bool full;
 
-        public void Step(float depth, float dt, float pressDepth, float holdSeconds, float recoverSeconds)
+        public void Step(float depth, float dt, float pressDepth, float holdSeconds, float recoverSeconds, bool sealOnRelease = false)
         {
             if (sealedShut) return;
             pressing = pressing ? depth >= pressDepth * 0.5f : depth >= pressDepth;
@@ -186,9 +187,17 @@ namespace MoodPicker.Ritual
                 if (progress >= 1f)
                 {
                     progress = 1f;
-                    sealedShut = true;
-                    pressing = false;
+                    full = true;
+                    if (!sealOnRelease)
+                    {
+                        sealedShut = true;
+                        pressing = false;
+                    }
                 }
+            }
+            else if (full && sealOnRelease)
+            {
+                sealedShut = true;
             }
             else
             {
@@ -251,6 +260,8 @@ namespace MoodPicker.Ritual
         }
     }
 
+    public enum EmblemStyle { Sun = 0, Whorl = 1 }
+
     public static class SealEmblem
     {
         public const float FieldRadius = 0.86f;
@@ -299,6 +310,28 @@ namespace MoodPicker.Ritual
             float r = (float)Math.Sqrt(x * x + y * y);
             float field = 1f - Smooth(FieldRadius - 0.05f, FieldRadius + 0.03f, r);
             return 1f - field * (1f - Motif(x, y));
+        }
+
+        public static float Whorl(float x, float y)
+        {
+            float ex = x, ey = y * 1.12f;
+            float r = (float)Math.Sqrt(ex * ex + ey * ey);
+            float a = (float)Math.Atan2(ey, ex);
+            float warp = 0.035f * (float)Math.Sin(3f * a + r * 7f) + 0.02f * (float)Math.Sin(5f * a - r * 4f);
+            float phase = (r + warp) / 0.074f + a / 6.2831853f;
+            float ridge = 0.5f + 0.5f * (float)Math.Cos(phase * 6.2831853f);
+            float lines = Smooth(0.52f, 0.78f, ridge) * Smooth(0.05f, 0.11f, r);
+            float core = 1f - Smooth(0.035f, 0.06f, r);
+            float border = Band(r - 0.79f, 0.026f, 0.022f);
+            return Math.Max(Math.Max(lines * (1f - Smooth(0.72f, 0.76f, r)), core), border);
+        }
+
+        public static float HeightOf(EmblemStyle style, float x, float y)
+        {
+            if (style != EmblemStyle.Whorl) return Height(x, y);
+            float r = (float)Math.Sqrt(x * x + y * y);
+            float field = 1f - Smooth(FieldRadius - 0.05f, FieldRadius + 0.03f, r);
+            return 1f - field * (1f - Whorl(x, y));
         }
     }
 }

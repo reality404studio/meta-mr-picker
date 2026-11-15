@@ -1496,5 +1496,246 @@ namespace MoodPicker.Tests
                 Object.DestroyImmediate(cfg);
             }
         }
+
+
+        TimeRitual RitualWithHeaps(TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat, out TimeHeap[] heaps, Material waxMat = null)
+        {
+            var go = new GameObject("SealRitual");
+            go.transform.SetParent(_root.transform, false);
+            heaps = new TimeHeap[cats.Length];
+            for (int i = 0; i < cats.Length; i++)
+            {
+                var hgo = new GameObject("Heap_" + cats[i].id);
+                hgo.transform.SetParent(go.transform, false);
+                hgo.transform.localPosition = new Vector3((i - 2) * 0.12f, 0f, 0f);
+                hgo.AddComponent<MeshFilter>();
+                hgo.AddComponent<MeshRenderer>();
+                hgo.AddComponent<SplatLetterRenderer>();
+                var heap = hgo.AddComponent<TimeHeap>();
+                var hso = new UnityEditor.SerializedObject(heap);
+                hso.FindProperty("category").objectReferenceValue = cats[i];
+                hso.FindProperty("config").objectReferenceValue = cfg;
+                hso.ApplyModifiedPropertiesWithoutUndo();
+                heaps[i] = heap;
+            }
+            var pull = go.AddComponent<TimePullController>();
+            var pso = new UnityEditor.SerializedObject(pull);
+            var hp = pso.FindProperty("heaps");
+            hp.arraySize = heaps.Length;
+            for (int i = 0; i < heaps.Length; i++) hp.GetArrayElementAtIndex(i).objectReferenceValue = heaps[i];
+            pso.ApplyModifiedPropertiesWithoutUndo();
+            var ritual = go.AddComponent<TimeRitual>();
+            var rso = new UnityEditor.SerializedObject(ritual);
+            rso.FindProperty("config").objectReferenceValue = cfg;
+            rso.FindProperty("pull").objectReferenceValue = pull;
+            rso.FindProperty("glowMaterial").objectReferenceValue = glowMat;
+            rso.FindProperty("waxMaterial").objectReferenceValue = waxMat;
+            rso.FindProperty("piecesRoot").objectReferenceValue = go.transform;
+            rso.FindProperty("autoPlace").boolValue = false;
+            var cp = rso.FindProperty("categories");
+            cp.arraySize = cats.Length;
+            for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+            rso.ApplyModifiedPropertiesWithoutUndo();
+            ritual.Init();
+            ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+            return ritual;
+        }
+
+        void Run(TimeRitual ritual, ref float now, float seconds, HandFrame frame)
+        {
+            int n = Mathf.RoundToInt(seconds / Dt);
+            for (int i = 0; i < n; i++)
+            {
+                now += Dt;
+                frame.t = now;
+                ritual.Tick(now, Dt, frame);
+            }
+        }
+
+        void CloseTheLid(TimeRitual ritual, TimeCategoryAsset[] cats, ref float now)
+        {
+            TimePieceView piece = Pulled(cats[1], 1, 6, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+            Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+            Run(ritual, ref now, 4f, default);
+            Assert.That(ritual.LidShown, Is.True, "다 부으면 병 옆에 뚜껑이 떠 있다");
+            Vector3 lid = ritual.LidPosition;
+            Assert.That(Vector3.Distance(lid, ritual.Jar.MouthCenter), Is.GreaterThan(0.08f), "뚜껑은 병 옆에 떠 있다");
+            Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(lid, false) });
+            Run(ritual, ref now, 8 * Dt, new HandFrame { right = PinchPose(lid, true) });
+            Vector3 mouth = ritual.Jar.MouthCenter;
+            for (int i = 1; i <= 40 && !ritual.LidClosed; i++)
+                Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(Vector3.Lerp(lid, mouth, i / 40f), true) });
+            Run(ritual, ref now, 4 * Dt, new HandFrame { right = PinchPose(mouth + Vector3.up * 0.3f, false) });
+            Assert.That(ritual.LidClosed, Is.True, "뚜껑을 병에 얹으면 닫힌다");
+        }
+
+        [Test]
+        public void PuttingTheLidOnMeltsTheSpringsIntoOneWaxDropAboveIt()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.waxAppearDelay = 0.5f;
+            try
+            {
+                TimeRitual ritual = RitualWithHeaps(cfg, cats, null, out TimeHeap[] heaps);
+                float now = 1f;
+                CloseTheLid(ritual, cats, ref now);
+                Run(ritual, ref now, cfg.meltSeconds + 0.6f, default);
+                Assert.That(Vector3.Distance(ritual.LidPosition, ritual.Jar.MouthCenter), Is.LessThan(0.005f), "뚜껑이 입구에 앉는다");
+                foreach (TimeHeap h in heaps) Assert.That(h.Present, Is.False, "남은 샘이 녹아 사라진다");
+                Assert.That(ritual.Wax.Ready, Is.True, "샘이 녹아 하나의 밀랍 방울이 된다");
+                Assert.That(ritual.Wax.StickShown, Is.False, "밀랍 막대 소품은 없다");
+                Assert.That(ritual.Wax.Color, Is.EqualTo(cats[1].waxColor), "방울 색은 그날 담긴 색에서 온다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [TestCase(ClimaxStyle.Ring)]
+        [TestCase(ClimaxStyle.Shell)]
+        [TestCase(ClimaxStyle.Bloom)]
+        public void PressingSpreadsTheWaxAndTheDaySealsWhenTheThumbLifts(ClimaxStyle style)
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            Material waxMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualWax.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.waxAppearDelay = 0.5f;
+            cfg.climaxStyle = style;
+            try
+            {
+                TimeRitual ritual = RitualWithHeaps(cfg, cats, glowMat, out _, waxMat);
+                float now = 1f;
+                CloseTheLid(ritual, cats, ref now);
+                Run(ritual, ref now, cfg.meltSeconds + 0.6f, default);
+                Assert.That(ritual.Wax.Ready, Is.True);
+
+                HandPose Thumb(float below)
+                {
+                    float top = ritual.Wax.TopY(ritual.HoldProgress);
+                    Vector3 p = ritual.Wax.root.TransformPoint(new Vector3(0f, top - below, 0f));
+                    return new HandPose { tracked = true, thumbTip = p, indexTip = p + new Vector3(0.06f, 0.04f, 0f), middleTip = p + new Vector3(0.07f, 0.05f, 0.02f), ringTip = p + new Vector3(0.08f, 0.05f, 0.03f), littleTip = p + new Vector3(0.09f, 0.04f, 0.04f), palm = p + new Vector3(0.05f, 0.08f, 0.02f), palmNormal = Vector3.down };
+                }
+                HandPose Away() => PinchPose(ritual.Jar.MouthCenter + new Vector3(0f, 0.35f, 0f), false);
+
+                for (int i = 0; i < 30; i++) Run(ritual, ref now, Dt, new HandFrame { right = Thumb(0.012f) });
+                Run(ritual, ref now, 60 * Dt, new HandFrame { right = Away() });
+                Assert.That(ritual.Sealed, Is.False, "도중에 떼면 닫히지 않는다");
+                Assert.That(ritual.HoldProgress, Is.EqualTo(0f).Within(1e-3f), "밀랍이 다시 오므라든다");
+
+                float light0 = ritual.PassthroughLight;
+                int frames = Mathf.CeilToInt((cfg.holdSeconds + 0.4f) / Dt);
+                for (int i = 0; i < frames; i++) Run(ritual, ref now, Dt, new HandFrame { right = Thumb(0.012f) });
+                Assert.That(ritual.PressFull, Is.True, "누르고 있으면 뚜껑 가장자리까지 번진다");
+                Assert.That(ritual.Sealed, Is.False, "누르는 동안은 아직");
+                Assert.That(ritual.Wax.Press, Is.GreaterThan(0.8f), "누르는 손에 가려도 보일 만큼 번져 있다");
+                Assert.That(ritual.PassthroughLight, Is.LessThan(light0 - 0.05f), "누르는 동안 방의 빛이 병으로 모인다");
+
+                Run(ritual, ref now, 2 * Dt, new HandFrame { right = Away() });
+                Assert.That(ritual.Sealed, Is.True, "엄지를 떼는 순간 봉인");
+                Assert.That(ritual.SealWave.Active, Is.True);
+                Assert.That(ritual.SealWave.Style, Is.EqualTo(style));
+                if (style == ClimaxStyle.Bloom)
+                {
+                    float dur = cfg.bloomSeconds;
+                    Run(ritual, ref now, dur * 0.08f, default);
+                    Assert.That(ritual.SealWave.JarGlow, Is.GreaterThan(0.8f), "병 자체가 발광한다");
+                    Run(ritual, ref now, dur * 0.3f, default);
+                    Assert.That(ritual.SealWave.MoteSpread, Is.GreaterThan(0.6f), "파티클이 병 근처 2미터 공간으로 퍼진다");
+                    Assert.That(ritual.SealWave.Radius, Is.LessThanOrEqualTo(cfg.climaxReach * 1.1f));
+                    Assert.That(ritual.SealWave.FogCount, Is.GreaterThanOrEqualTo(5), "구름 안개 발광이 함께 퍼진다");
+                    Run(ritual, ref now, dur * 0.56f, default);
+                    Assert.That(ritual.SealWave.MoteSpread, Is.LessThan(0.3f), "다시 병으로 흡수된다");
+                    Run(ritual, ref now, dur * 0.2f, default);
+                }
+                else
+                {
+                    Run(ritual, ref now, cfg.climaxSeconds * 0.6f, default);
+                    Assert.That(ritual.SealWave.Radius, Is.GreaterThan(cfg.climaxReach * 0.8f), "빛이 방으로 퍼진다");
+                    Assert.That(ritual.SealWave.SplatCount, Is.GreaterThan(100));
+                    Run(ritual, ref now, cfg.climaxSeconds, default);
+                }
+                Assert.That(ritual.SealWave.Active, Is.False, "큰 순간은 한 번 지나간다");
+                Run(ritual, ref now, cfg.coolSeconds, default);
+                Assert.That(ritual.Wax.Cool, Is.GreaterThan(0.95f), "밀랍은 몇 초에 걸쳐 식는다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void TheSingingBowlRingsLongAndTheRoomFallsSilentForAMoment()
+        {
+            var go = new GameObject("BowlAudio");
+            go.transform.SetParent(_root.transform, false);
+            var audio = go.AddComponent<RitualAudio>();
+            AudioClip bowl = RitualAudio.BakeBowl(24000);
+            Assert.That(bowl.length, Is.GreaterThan(5f), "싱잉볼은 길게 울린다");
+            Object.DestroyImmediate(bowl);
+            audio.Hush(1f);
+            Assert.That(audio.Hushed, Is.True);
+            for (int i = 0; i < 36; i++) audio.Tick(Dt, 0.7f);
+            Assert.That(audio.Hushed, Is.True, "약 1초 정적");
+            for (int i = 0; i < 48; i++) audio.Tick(Dt, 0.7f);
+            Assert.That(audio.Hushed, Is.False);
+        }
+
+
+        [Test]
+        public void MeltingSpringsSpreadIntoTheSpaceThenCurlIntoTheWaxLikeSmoke()
+        {
+            Material splatMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Splatter/LetterSplat.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.springSplats = 200;
+            var host = new GameObject("MeltHost").transform;
+            host.SetParent(_root.transform, false);
+            host.position = new Vector3(0f, 1f, 0.4f);
+            var swarm = new RitualSpringSwarm(host, cfg, null, splatMat, _look, cats[2]);
+            try
+            {
+                Vector3 target = new Vector3(0.25f, 0.8f, 0.35f);
+                float now = 0f;
+                for (int i = 0; i < 20; i++) swarm.Tick(now += Dt, Dt, 1f, 0f, 0f, 0f, Vector3.zero, 0f);
+                int frames = 240;
+                float farthest = 0f;
+                float swept = 0f;
+                float prevAngle = float.NaN;
+                Vector3 start = host.position + (Vector3)swarm.Cloud.disp[3];
+                float bend = 0f;
+                Vector3 spreadPoint = start;
+                for (int f = 1; f <= frames; f++)
+                {
+                    float m = f / (float)frames;
+                    swarm.Tick(now += Dt, Dt, 1f, 0f, 0f, 0f, Vector3.zero, 0f, m, target);
+                    Vector3 p = host.position + (Vector3)swarm.Cloud.disp[3];
+                    farthest = Mathf.Max(farthest, Vector3.Distance(p, host.position));
+                    if (m < 0.4f) spreadPoint = p;
+                    if (m > 0.62f && m < 0.9f)
+                    {
+                        float a = Mathf.Atan2(p.z - target.z, p.x - target.x);
+                        if (!float.IsNaN(prevAngle)) swept += Mathf.Abs(Mathf.DeltaAngle(prevAngle * Mathf.Rad2Deg, a * Mathf.Rad2Deg)) * Mathf.Deg2Rad;
+                        prevAngle = a;
+                        Vector3 line = target - spreadPoint;
+                        float along = Mathf.Clamp01(Vector3.Dot(p - spreadPoint, line) / Mathf.Max(1e-6f, line.sqrMagnitude));
+                        bend = Mathf.Max(bend, Vector3.Distance(p, spreadPoint + line * along));
+                    }
+                }
+                Vector3 end = host.position + (Vector3)swarm.Cloud.disp[3];
+                Assert.That(farthest, Is.GreaterThan(0.2f), "샘의 알갱이가 먼저 공간으로 퍼진다");
+                Assert.That(swept, Is.GreaterThan(1.2f), "연기가 빨려 들듯 소용돌이치며 들어간다");
+                Assert.That(bend, Is.GreaterThan(0.03f), "직선이 아니라 곡선으로 모인다");
+                Assert.That(Vector3.Distance(end, target), Is.LessThan(0.02f), "밀랍 자리로 수렴한다");
+            }
+            finally
+            {
+                swarm.Dispose();
+                Object.DestroyImmediate(cfg);
+            }
+        }
     }
 }

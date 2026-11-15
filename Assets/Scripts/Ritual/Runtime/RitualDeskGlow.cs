@@ -20,6 +20,7 @@ namespace MoodPicker.Ritual
         Mesh _mesh;
         float _reveal;
         float _spinBoost;
+        float _boost;
         float _pushedReveal = -1f;
         float _pushedIntensity = -1f;
         float _pushedSwirl = -1f;
@@ -146,6 +147,11 @@ namespace MoodPicker.Ritual
         {
         }
 
+        public void SetBoost(float boost)
+        {
+            _boost = Mathf.Max(0f, boost);
+        }
+
         public void TrackVessel(Vector3 jarPos, Quaternion jarRot, float angularSpeed, float dt)
         {
             if (!_blooming) return;
@@ -159,7 +165,7 @@ namespace MoodPicker.Ritual
             if (!_blooming || _renderer == null) return;
             float reach = _config.glowRadius * 1.15f;
             _reveal = Mathf.MoveTowards(_reveal, reach, dt * reach / Mathf.Max(0.1f, _config.glowBloomSeconds));
-            float intensity = _config.glowIntensity * (1f + 0.38f * _spinBoost);
+            float intensity = _config.glowIntensity * (1f + 0.38f * _spinBoost) * (1f + 1.6f * _boost);
             float swirl = 0.035f + 0.16f * _spinBoost;
             if (Mathf.Abs(_reveal - _pushedReveal) < 1e-5f
                 && Mathf.Abs(intensity - _pushedIntensity) < 1e-4f

@@ -1,23 +1,24 @@
 # HANDOFF — 시간 채집 리추얼 (Time Ritual)
-updated: 2026-11-15 15:15 KST · branch: `ritual` (앱 레포 `unity/mood-picker`) · 보드: `studio/apps/time-ritual/` (`--app time-ritual`)
+updated: 2026-11-15 19:50 KST · branch: `ritual` (앱 레포 `unity/mood-picker`) · 보드: `studio/apps/time-ritual/` (`--app time-ritual`)
 
 ## 1. 프로젝트 한 줄 정의 & 목표
 - **작품 한 줄**: 형태 없이 흘러가 버린 오늘을, 그 시간을 보낸 책상 위에 빛의 병으로 남기는 하루 마무리 의식.
 - **배경/타깃**: Meta VR Start Developer Competition 2026 생산성 트랙(마감 `2026-11-19 05:00 KST`). 컨트롤러 없이 **핸드트래킹만**으로 처음부터 끝까지 조작. **구현 기준(명세): `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/Time Ritual 구현 명세 (Claude Code용).md` (2026-11-15, 7장면·작업 순서 9단계, 단계마다 멈추고 보고 → 사람 헤드셋 확인).** 이 HANDOFF 는 현황 파악용. 옛 `../studio/apps/time-ritual/source/ritual-guide-1112.md` 는 11-12 실험 빌드 가이드
 - **핵심 원칙**: 압박/스트릭/점수/알림 없음("성취가 아니라 안도감"). 아름다움 + Quest 3S 72fps/발열 안정.
-- **다음 메인 작업**: 명세 **3단계 꺼내기** (아래 0절). 기억보관대는 명세 6단계 「선반」으로 대체됨
+- **다음 메인 작업**: 명세 **5단계 시계** (아래 0절). 기억보관대는 명세 6단계 「선반」으로 대체됨
 
 ---
 
-## 0. 지금 카드 (2026-11-15 15:15)
-- **명세 1단계(조사·기준선)** 보고 `evidence/time-ritual-spec-1115/stage1-report.md`
-- **명세 2단계(빛과 정리)** 보드 `build-c5b8` done · 커밋 `d62aab6` · 증거 L4 `evidence/spec1115-s2/7c4cee9-dirty-1115-145342/` (보고 `evidence/time-ritual-spec-1115/stage2-report.md`)
-  - 방 패스스루 `textureOpacity` 0.38/봉인 뒤 0.32 · 후광·손 빛 `RitualLightField` · 책상 웅덩이 첫 붓기부터 `RitualDeskPool` · 빛 궤적 끔 · 라벨 왼손 마이크로제스처 온오프(기본 끔=꼬리표) · 같은 종류 6cm 끌림 · 흩어진 스플랫 길이/폭 상한 1.6 (`LetterSplatURP _AspectMax`, 리추얼만)
-  - 실기: 72fps 유지, GPU 최대 10.2ms(약 73%). 사람: 방 "딱 좋았다", 후광 "빛나는 물체로 보였다", 라벨 "왼손 마이크로제스쳐 온오프로 컨펌"
-- **다음: 3단계 꺼내기** — 샘을 형태 없는 무리로, 당기기 = **지금 구조 유지**(사람: 핀치해 당기면 이 오브제 모습의 작은 구슬이 실에 꿰인 염주처럼), 놓으면 알갱이가 흘러 형상, 조각이 방에 천천히 떠다니기. 이어서 4 봉인 · 5 시계 · 6 선반 · 7 손의 물성 · 8 붓기 · 9 가이드·소리
-- 사람 결정 (DECIDED 11-15): 카테고리 이름 지금 그대로(Rested·Moved·Focused·Explored·Enjoyed), 굵기 지금 값(`barRadius` 0.014), 라벨 온오프, **60fps 아래로 떨어지면 안 됨**
-- 미확인: 흩어진 스플랫 상한 1.6 체감, 꼬리표 끈(없음)·글자 크기
-- 도구 주의: `mr preflight` 오판(LESSONS 11-10), `mr logcat` 실패 → adb 직접, `.harness/device.env` PACKAGE 가 moodpicker → `com.DefaultCompany.timeritual` 명시, 커밋은 보드 done 카드 id (LESSONS 11-15). 빌드 메서드가 `TimeRitual.unity` 를 다시 만들어 fileID 만 바뀜 → 커밋에서 빼고 `git checkout`
+## 0. 지금 카드 (2026-11-15 19:50)
+- 구현 기준: `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/Time Ritual 구현 명세 (Claude Code용).md` (7장면·9단계, 단계마다 멈추고 보고 → 사람 헤드셋 확인). 단계 보고서 `evidence/time-ritual-spec-1115/stage{1,2,3,4}-report.md`
+- **끝난 단계** (보드 card · 커밋)
+  - 2 빛과 정리 `build-c5b8` · `d62aab6` — 방 38%(textureOpacity), 후광·손 빛, 책상 웅덩이, 라벨 왼손 마이크로제스처 온오프(기본 끔)
+  - 3 꺼내기 `build-ef75` `build-ed43` · `5656173` `b243977` — 샘 = 알갱이 무리(움직임으로 구분: Rested 가라앉음·Moved 잔물결·Focused 소용돌이·Explored 떠돎·Enjoyed 통통), 사슬 처짐, 놓으면 모임(A), Enjoyed 깃털, 당기기 힌트, 떠다님은 끔
+  - 4 봉인 `build-452f` · (이 커밋) — 뚜껑 얹기 → 샘이 연기처럼 밀랍으로 → 엄지 누르고 떼면 지문 문양·병 발광·빛 알갱이와 구름안개가 2m 공간에 퍼졌다 흡수(Bloom)·작은 싱잉볼·1초 정적·밀랍 식기
+- **다음: 5단계 시계** — 눈높이 실제 시각+째깍, 손이 닿으면 멈춤 → 숫자 글리프 알갱이로 무너져 다섯 샘으로 (큰 순간 1). 그다음 6 선반 · 7 손의 물성 · 8 붓기와 병 · 9 가이드·소리
+- 사람 결정 (DECIDED 11-15 여러 항목): 카테고리 이름·굵기 지금 값, 라벨 온오프, 형상 = Enjoyed 만 깃털(조약돌·조개·클로버·사각별 버림, REJECTED), 떠다님 끔, 놓을 때 모임, 봉인 연출 Bloom. **60fps 아래로 떨어지면 안 됨**
+- 남은 리스크: 봉인 1~2초 뒤 1회 ~0.26초 메인 스레드 정지(로그 Stale max=19, 사람은 체감 못 함) → 다음 빌드에 50ms 넘는 프레임 계측. 붓기 시작 3프레임
+- 도구 주의: `mr preflight` 오판·`mr logcat` 실패 → adb 직접(빌드가 adb 를 죽이니 빌드 뒤 스트림 재시작), device.env PACKAGE 옛 값 → `com.DefaultCompany.timeritual` 명시, 커밋은 보드 done 카드 id, 빌드가 `TimeRitual.unity`(fileID만 바뀜)와 카테고리 에셋을 다시 씀 → 카테고리 값은 `TimeRitualSceneSetup.Categories` 에서, 장면은 `git checkout`. 기기 라이브 설정 `ritual.json` 은 재실행 뒤에도 남음 → 비교 끝나면 지움
 
 ## 2. 현재 구현 완료 상태 (2026-11-15 00:45 기준)
 직전 커밋(`e2b1685`) 이후 이번 세션까지 구현·검증·Quest 3S 배포된 전체 루프:
@@ -117,4 +118,4 @@ updated: 2026-11-15 15:15 KST · branch: `ritual` (앱 레포 `unity/mood-picker
 ---
 
 ## 6. 다음 세션 첫 발화 추천
-`HANDOFF 0절 확인. 「Time Ritual 구현 명세 (Claude Code용).md」 3단계 꺼내기(형태 없는 샘, 지금 구슬-실 구조 유지, 놓으면 흘러 형상, 조각이 방에 떠다님)부터 이어 갑니다. 단계 끝에 멈추고 보고 형식으로 보고합니다.`
+`HANDOFF 0절 확인. 「Time Ritual 구현 명세 (Claude Code용).md」 5단계 시계부터 이어 갑니다(먼저 봉인 직후 정지 계측). 단계 끝에 멈추고 보고 형식으로 보고합니다.`

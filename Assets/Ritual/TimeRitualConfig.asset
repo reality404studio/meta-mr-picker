@@ -156,6 +156,28 @@ MonoBehaviour:
   waxDrawLength: 0.035
   waxDropRadius: 0.009
   waxDripHeight: 0.14
+  waxStick: 0
+  sealOnRelease: 1
+  emblemStyle: 1
+  lidOffset: {x: -0.12, y: 0.16, z: -0.03}
+  lidGrabRadius: 0.05
+  lidSnapDistance: 0.05
+  lidCloseSeconds: 0.35
+  meltSeconds: 3.4
+  meltSpread: 0.8
+  waxLift: 0.012
+  pressGather: 0.55
+  climaxStyle: 2
+  climaxSeconds: 1.8
+  climaxReach: 2
+  climaxIntensity: 0.9
+  hushSeconds: 1
+  bloomSeconds: 5
+  bloomMotes: 640
+  bloomFog: 14
+  bloomFogIntensity: 0.12
+  bloomJarGlow: 0.6
+  coolSeconds: 4
   breathRise: 0.65
   breathSeconds: 2.6
   sealedIntensity: 0.96
@@ -221,8 +243,8 @@ MonoBehaviour:
   labelTagSide: 0.022
   labelTagTilt: 7
   labelSwitchSeconds: 0.45
-  cpuLevel: 1
-  gpuLevel: 1
+  cpuLevel: 2
+  gpuLevel: 2
   dynamicResolution: 1
   minResolutionScale: 0.8
   maxResolutionScale: 1

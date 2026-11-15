@@ -5,6 +5,7 @@ namespace MoodPicker.Ritual
     public enum MergedShape { Rod = 0, Blob = 1 }
     public enum GlowStyle { Seep = 0, Petals = 1 }
     public enum FormStyle { Gather = 0, Flow = 1 }
+    public enum ClimaxStyle { Ring = 0, Shell = 1, Bloom = 2 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Ritual Config")]
     public sealed class TimeRitualConfig : ScriptableObject
@@ -167,6 +168,30 @@ namespace MoodPicker.Ritual
         public float waxDropRadius = 0.009f;
         public float waxDripHeight = 0.14f;
 
+        [Header("Seal Flow")]
+        public bool waxStick = false;
+        public bool sealOnRelease = true;
+        public EmblemStyle emblemStyle = EmblemStyle.Whorl;
+        public Vector3 lidOffset = new Vector3(-0.12f, 0.16f, -0.03f);
+        public float lidGrabRadius = 0.05f;
+        public float lidSnapDistance = 0.05f;
+        public float lidCloseSeconds = 0.35f;
+        public float meltSeconds = 3.4f;
+        public float meltSpread = 0.8f;
+        public float waxLift = 0.012f;
+        [Range(0.2f, 1f)] public float pressGather = 0.55f;
+        public ClimaxStyle climaxStyle = ClimaxStyle.Bloom;
+        public float climaxSeconds = 1.8f;
+        public float climaxReach = 2.0f;
+        [Range(0f, 2f)] public float climaxIntensity = 0.9f;
+        public float hushSeconds = 1.0f;
+        public float bloomSeconds = 5f;
+        public int bloomMotes = 640;
+        public int bloomFog = 14;
+        [Range(0f, 0.5f)] public float bloomFogIntensity = 0.12f;
+        [Range(0f, 2f)] public float bloomJarGlow = 0.6f;
+        public float coolSeconds = 4f;
+
         [Header("Close")]
         public float breathRise = 0.65f;
         public float breathSeconds = 2.6f;
@@ -245,8 +270,8 @@ namespace MoodPicker.Ritual
         public float labelSwitchSeconds = 0.45f;
 
         [Header("Performance")]
-        public int cpuLevel = 1;
-        public int gpuLevel = 1;
+        public int cpuLevel = 2;
+        public int gpuLevel = 2;
         public bool dynamicResolution = true;
         public float minResolutionScale = 0.8f;
         public float maxResolutionScale = 1f;

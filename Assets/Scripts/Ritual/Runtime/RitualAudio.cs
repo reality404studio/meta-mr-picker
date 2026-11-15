@@ -34,6 +34,7 @@ namespace MoodPicker.Ritual
 
         [Header("Seal")]
         [SerializeField, Range(0f, 1f)] float sealVolume = 0.75f;
+        [SerializeField, Range(0f, 1f)] float bowlVolume = 0.4f;
         [SerializeField] float sealHz = 92f;
         [SerializeField, Range(0f, 1f)] float pressVolume = 0.14f;
 
@@ -46,6 +47,9 @@ namespace MoodPicker.Ritual
         AudioSource[] _pool;
         AudioSource _sand;
         AudioSource _press;
+        AudioSource _bowlVoice;
+        AudioClip _bowl;
+        float _hush;
         AudioSource _bgm;
         AudioClip _tick;
         AudioClip _mark30;
@@ -207,11 +211,56 @@ namespace MoodPicker.Ritual
             _sand.clip = BakeSand(rate);
             _press = Voice("Press", true);
             _press.clip = Bake("ritual-press", rate, 1f, (t, n) => (Mathf.Sin(2f * Mathf.PI * 132f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * 198f * t)) * 0.32f);
+            _bowl = BakeBowl(rate);
+            _bowlVoice = Voice("Bowl", false);
+            _bowlVoice.spatialBlend = spatialBlend * 0.5f;
+            _bowlVoice.maxDistance = 6f;
             _bgm = Voice("Bgm", true);
             _bgm.spatialBlend = 0f;
             _bgm.clip = bgmClip != null ? bgmClip : BakeBgm(rate);
             _bgm.volume = Mathf.Clamp01(bgmVolume * _master);
             _bgm.Play();
+        }
+
+        public static AudioClip BakeBowl(int rate)
+        {
+            const float Tau = 6.2831853f;
+            return Bake("ritual-bowl", rate, 9f, (t, n) =>
+            {
+                float swell = 1f - Mathf.Exp(-t / 0.18f);
+                const float f0 = 174.6f;
+                float wob = 1f + 0.0025f * Mathf.Sin(Tau * 0.31f * t);
+                float a = Mathf.Exp(-t / 4.2f) * Mathf.Sin(Tau * f0 * wob * t) * (0.8f + 0.2f * Mathf.Sin(Tau * 0.9f * t));
+                a += 0.42f * Mathf.Exp(-t / 3.0f) * Mathf.Sin(Tau * f0 * 2.76f * t + 0.3f) * (0.85f + 0.15f * Mathf.Sin(Tau * 1.3f * t));
+                a += 0.18f * Mathf.Exp(-t / 2.0f) * Mathf.Sin(Tau * f0 * 5.40f * t + 1.1f);
+                float shimmerEnv = Mathf.Clamp01((t - 0.3f) / 1.2f) * Mathf.Exp(-t / 3.2f);
+                float shimmer = Mathf.Sin(Tau * 1318.5f * t) * (0.5f + 0.5f * Mathf.Sin(Tau * 0.37f * t))
+                    + Mathf.Sin(Tau * 1975.5f * t + 0.7f) * (0.5f + 0.5f * Mathf.Sin(Tau * 0.53f * t + 1f))
+                    + 0.6f * Mathf.Sin(Tau * 2637f * t + 2f) * (0.5f + 0.5f * Mathf.Sin(Tau * 0.71f * t + 2f));
+                a += 0.05f * shimmerEnv * shimmer;
+                a += 0.012f * Mathf.Exp(-t / 1.5f) * n * swell;
+                return a * 0.2f * swell;
+            });
+        }
+
+        public float BowlLength => _bowl != null ? _bowl.length : 0f;
+        public bool Hushed => _hush > 0f;
+
+        public void Bowl(Vector3 position)
+        {
+            if (!_ready || _bowlVoice == null) return;
+            _bowlVoice.transform.position = position;
+            _bowlVoice.clip = _bowl;
+            _bowlVoice.volume = Mathf.Clamp01(bowlVolume * _master);
+            _bowlVoice.Play();
+        }
+
+        public void Hush(float seconds)
+        {
+            _hush = Mathf.Max(_hush, seconds);
+            _pressTarget = 0f;
+            _sandTarget = 0f;
+            if (_bgm != null) _bgm.volume = 0f;
         }
 
         AudioSource Voice(string label, bool loop)
@@ -588,6 +637,7 @@ namespace MoodPicker.Ritual
         {
             _master = master;
             _clock += dt;
+            if (_hush > 0f) _hush = Mathf.Max(0f, _hush - dt);
             if (!_ready) return;
             for (int i = _queue.Count - 1; i >= 0; i--)
             {
@@ -611,7 +661,15 @@ namespace MoodPicker.Ritual
             float press = Mathf.MoveTowards(_press.volume, _pressTarget * _master, dt * 1.2f);
             _press.volume = press;
             if (press <= 0.0005f && _pressTarget <= 0f && _press.isPlaying) _press.Stop();
-            if (_bgm != null) _bgm.volume = Mathf.MoveTowards(_bgm.volume, bgmVolume * _master, dt * 0.25f);
+            if (_hush > 0f)
+            {
+                if (_bgm != null) _bgm.volume = 0f;
+            }
+            else if (_bgm != null)
+            {
+                float target = bgmVolume * _master;
+                _bgm.volume = Mathf.MoveTowards(_bgm.volume, target, dt * (_bgm.volume < target ? 0.1f : 0.25f));
+            }
         }
     }
 }

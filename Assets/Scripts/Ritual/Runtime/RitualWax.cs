@@ -30,6 +30,7 @@ namespace MoodPicker.Ritual
         static readonly int GrowId = Shader.PropertyToID("_GrowWithPress");
 
         public readonly Transform root;
+        public readonly Transform lidRoot;
         public readonly Transform stickRoot;
         public readonly Transform dropRoot;
         public event Action<Vector3> Landed;
@@ -83,6 +84,7 @@ namespace MoodPicker.Ritual
         float _glow;
         float _sealedFor = -1f;
         bool _dirty = true;
+        float _lift;
 
         public bool Shown => _appearTarget > 0.5f;
         public bool Ready => _dripped && _appear > 0.85f && _sealedFor < 0f;
@@ -96,6 +98,10 @@ namespace MoodPicker.Ritual
         public float DropSize => _dropSize;
         public Vector3 DropPosition => _dropPos;
         public Color Color => _color;
+        public bool LidShown => _coverTarget > 0.5f;
+        public Vector3 LidHomeLocal => new Vector3(0f, _shape.height, 0f);
+        public float Cool => Sealed ? RitualUtil.Smooth(_sealedFor / Mathf.Max(0.1f, _config.coolSeconds)) : 0f;
+        public float Lift => _lift;
 
         public RitualWax(Transform jarRoot, TimeRitualConfig config, Material waxMaterial, Material glowMaterial = null)
         {
@@ -105,6 +111,10 @@ namespace MoodPicker.Ritual
             root = go.transform;
             root.SetParent(jarRoot, false);
             root.localPosition = new Vector3(0f, _shape.height, 0f);
+            var lidGo = new GameObject("Lid");
+            lidRoot = lidGo.transform;
+            lidRoot.SetParent(jarRoot, false);
+            lidRoot.localPosition = new Vector3(0f, _shape.height, 0f);
             var stickGo = new GameObject("WaxStick");
             stickRoot = stickGo.transform;
             stickRoot.SetParent(jarRoot, false);
@@ -193,10 +203,11 @@ namespace MoodPicker.Ritual
                     float tilt = RitualUtil.Smooth((rn - 0.9f) / 0.1f) * 1.15f - 0.45f * bulge * (1f - RitualUtil.Smooth((rn - 0.9f) / 0.05f));
                     normal = (Vector3.up * Mathf.Cos(tilt) + radial * Mathf.Sin(tilt)).normalized;
                     float u = pos.x / rs, v = pos.z / rs;
-                    relief = 1f - SealEmblem.Height(u, v);
+                    EmblemStyle style = _config.emblemStyle;
+                    relief = 1f - SealEmblem.HeightOf(style, u, v);
                     const float e = 0.02f;
-                    float gx = (SealEmblem.Height(u + e, v) - SealEmblem.Height(u - e, v)) / (2f * e);
-                    float gz = (SealEmblem.Height(u, v + e) - SealEmblem.Height(u, v - e)) / (2f * e);
+                    float gx = (SealEmblem.HeightOf(style, u + e, v) - SealEmblem.HeightOf(style, u - e, v)) / (2f * e);
+                    float gz = (SealEmblem.HeightOf(style, u, v + e) - SealEmblem.HeightOf(style, u, v - e)) / (2f * e);
                     float gain = _config.stampDepth / rs * 1.6f;
                     stamped = Vector3.Lerp(normal, new Vector3(-gx * gain, 1f, -gz * gain).normalized, Mathf.Clamp01(1f - bulge * 2f)).normalized;
                     delay = rn * 0.45f;
@@ -298,7 +309,7 @@ namespace MoodPicker.Ritual
             float area = Mathf.PI * rc * rc + 2f * Mathf.PI * rc * 0.02f;
             _coverRadius = Mathf.Sqrt(area / n) * 1.05f;
             _coverMesh = b.ToMesh("WaxCover", 0.2f);
-            _cover = RitualStaticSplats.Spawn("Cover", root, _coverMesh, material);
+            _cover = RitualStaticSplats.Spawn("Cover", lidRoot, _coverMesh, material);
         }
 
         void BuildTwine(Material material)
@@ -344,7 +355,7 @@ namespace MoodPicker.Ritual
                 b.Add(a, normal, new Vector4(pos.x, pos.y, pos.z, delay), new Vector4(normal.x, normal.y, normal.z, 0f), new Vector4(normal.x, normal.y, normal.z, rnd));
             }
             _twineMesh = b.ToMesh("WaxTwine", 0.2f);
-            _twine = RitualStaticSplats.Spawn("Twine", root, _twineMesh, material);
+            _twine = RitualStaticSplats.Spawn("Twine", lidRoot, _twineMesh, material);
         }
 
         void BuildStick(Material material)
@@ -516,6 +527,28 @@ namespace MoodPicker.Ritual
             }
         }
 
+        public void ShowLid()
+        {
+            if (Sealed) return;
+            if (_coverTarget < 0.5f) _dirty = true;
+            _coverTarget = 1f;
+        }
+
+        public void PlaceLid(Vector3 localPosition, Quaternion localRotation)
+        {
+            lidRoot.localPosition = localPosition;
+            lidRoot.localRotation = localRotation;
+        }
+
+        public void Materialize(Color color)
+        {
+            if (Sealed) return;
+            _dripped = true;
+            _draw = WaxDraw.None;
+            HideStick();
+            Show(color);
+        }
+
         public void Show(Color color)
         {
             if (Sealed) return;
@@ -594,15 +627,18 @@ namespace MoodPicker.Ritual
             PushStickAndDrop(stickChanged);
             float appear = Mathf.MoveTowards(_appear, _appearTarget, dt / 0.7f);
             float coverAppear = Mathf.MoveTowards(_coverAppear, _coverTarget, dt / 0.55f);
-            float pressGoal = Sealed ? 1f : _hold * HoldShare;
+            float liftGoal = Ready && !Sealed ? _config.waxLift * (1f - Mathf.Clamp01(_hold * 3f)) : 0f;
+            _lift = Mathf.Lerp(_lift, liftGoal, 1f - Mathf.Exp(-dt * 10f));
+            root.localPosition = new Vector3(0f, _shape.height + _lift, 0f);
+            float pressGoal = Sealed ? 1f : _hold * (_config.sealOnRelease ? 0.92f : HoldShare);
             float press = Sealed ? Mathf.MoveTowards(_press, 1f, dt * (1f - HoldShare) / 1.5f) : Mathf.Lerp(_press, pressGoal, 1f - Mathf.Exp(-dt * 14f));
-            float stampGoal = Sealed ? 1f : _hold * 0.78f;
+            float stampGoal = Sealed ? 1f : _hold * (_config.sealOnRelease ? 0.12f : 0.78f);
             float stamp = Sealed ? Mathf.MoveTowards(_stamp, 1f, dt / Mathf.Max(0.05f, _config.stampSeconds)) : Mathf.Lerp(_stamp, stampGoal, 1f - Mathf.Exp(-dt * 12f));
             float glowGoal = _config.waxGlow * (1f + 0.55f * _hold);
             if (Sealed)
             {
                 _sealedFor += dt;
-                glowGoal = Mathf.Lerp(_config.waxGlow * 1.65f, 0.16f, RitualUtil.Smooth(_sealedFor / 3.2f));
+                glowGoal = Mathf.Lerp(_config.waxGlow * 1.65f, 0.16f, RitualUtil.Smooth(_sealedFor / Mathf.Max(0.1f, _config.coolSeconds)));
             }
             float glow = Mathf.Lerp(_glow, glowGoal, 1f - Mathf.Exp(-dt * 6f));
             bool changed = _dirty || Mathf.Abs(appear - _appear) > 1e-5f || Mathf.Abs(coverAppear - _coverAppear) > 1e-5f || Mathf.Abs(press - _press) > 1e-5f || Mathf.Abs(stamp - _stamp) > 1e-5f || Mathf.Abs(glow - _glow) > 1e-4f;
@@ -667,8 +703,14 @@ namespace MoodPicker.Ritual
         {
             _dirty = false;
             Vector4 origin = new Vector4(0f, 0f, 0f, 0f);
-            Color deep = new Color(_color.r * 0.42f, _color.g * 0.34f, _color.b * 0.32f, 1f);
-            Fill(_waxBlock, _color, deep, new Color(1f, 0.94f, 0.85f, 1f), _glow, 0.55f, _waxRadius, _press, _stamp, _appear, origin, 0f, 0f);
+            float cool = Cool;
+            float grey = (_color.r + _color.g + _color.b) / 3f;
+            Color matte = Color.Lerp(_color, new Color(grey, grey, grey, 1f), 0.35f) * 0.62f;
+            matte.a = 1f;
+            Color body = Color.Lerp(_color, matte, cool);
+            Color deep = new Color(body.r * 0.42f, body.g * 0.34f, body.b * 0.32f, 1f);
+            Color light = Color.Lerp(new Color(1f, 0.94f, 0.85f, 1f), new Color(0.72f, 0.68f, 0.62f, 1f), cool);
+            Fill(_waxBlock, body, deep, light, _glow, Mathf.Lerp(0.55f, 0.12f, cool), _waxRadius, _press, _stamp, _appear, origin, 0f, 0f);
             _wax.SetPropertyBlock(_waxBlock);
             float cinch = Mathf.Lerp(0.75f, 1f, Mathf.Max(_appear, _press));
             Fill(_coverBlock, new Color(0.78f, 0.72f, 0.61f, 1f), new Color(0.35f, 0.30f, 0.24f, 1f), new Color(0.92f, 0.88f, 0.80f, 1f), 0f, 0.04f, _coverRadius, cinch, 0f, _coverAppear, origin, 0f, 0f);
@@ -703,6 +745,7 @@ namespace MoodPicker.Ritual
             RitualUtil.Kill(_dropMesh);
             RitualUtil.Kill(_sparksMesh);
             if (root != null) RitualUtil.Kill(root.gameObject);
+            if (lidRoot != null) RitualUtil.Kill(lidRoot.gameObject);
             if (stickRoot != null) RitualUtil.Kill(stickRoot.gameObject);
             if (dropRoot != null) RitualUtil.Kill(dropRoot.gameObject);
         }

@@ -12,7 +12,7 @@ namespace MoodPicker.Ritual
         const string Tag = "[MP]";
         public const string LiveFile = "ritual.json";
 
-        const int GripNone = 0, GripPull = 1, GripHold = 2, GripJar = 3, GripSqueeze = 4, GripWax = 5;
+        const int GripNone = 0, GripPull = 1, GripHold = 2, GripJar = 3, GripSqueeze = 4, GripWax = 5, GripLid = 6;
         const float LabelAttachScale = 0.56f;
         const float LabelDividerY = 0.024f;
         const float LabelMaxWidth = 0.084f;
@@ -104,6 +104,14 @@ namespace MoodPicker.Ritual
         string _labelShownText = "";
         MeshRenderer _labelBorderTag;
         int _floatSlots;
+        RitualSealWave _sealWave;
+        bool _lidClosed;
+        float _lidCloseAge;
+        Vector3 _lidLocal;
+        Vector3 _lidFrom;
+        Vector3 _lidGrabOffset;
+        float _meltAge = -1f;
+        bool _materialized;
         bool _everPulled;
         float _idle;
         Mesh _labelBorderTagMesh;
@@ -191,6 +199,12 @@ namespace MoodPicker.Ritual
         public string LabelShownText => _labelShownText;
         public Transform LabelRoot => _labelRoot;
         public bool EverPulled => _everPulled;
+        public bool LidShown => _wax != null && _wax.LidShown;
+        public bool LidClosed => _lidClosed;
+        public Vector3 LidPosition => _wax != null ? _wax.lidRoot.position : Vector3.zero;
+        public RitualSealWave SealWave => _sealWave;
+        public bool PressFull => _press.full;
+        public bool Melting => _meltAge >= 0f && !_materialized;
         public float IdleSeconds => _idle;
         public float HoldProgress => _press.progress;
         public bool Ready => _ready;
@@ -241,6 +255,7 @@ namespace MoodPicker.Ritual
             _light = 1f;
             _labelTag = _config.timeLabels ? 0f : 1f;
             _lightField = new RitualLightField(_config, glowMaterial);
+            _sealWave = new RitualSealWave(_config, glowMaterial);
             Debug.Log($"{Tag} ritual ready categories={count} heaps={(pull != null && pull.Heaps != null ? pull.Heaps.Length : 0)} capacity={_jar.Capacity}u");
         }
 
@@ -629,6 +644,7 @@ namespace MoodPicker.Ritual
             _glow.Tick(dt);
             _pool.Tick(dt, _jar.root.position, _tableY);
             StepLight();
+            _sealWave?.Tick(dt, EyePosition());
             if (pull != null && pull.Heaps != null)
                 for (int i = 0; i < pull.Heaps.Length; i++)
                     if (pull.Heaps[i] != null) pull.Heaps[i].Tick(now, dt);
@@ -666,6 +682,16 @@ namespace MoodPicker.Ritual
                 StepSqueeze(h, ref g, hand, now, dt);
                 return;
             }
+            if (g.mode == GripLid)
+            {
+                if (!hand.tracked || !hand.pinching)
+                {
+                    ReleaseLid();
+                    g = default;
+                }
+                else MoveLid(hand.pinch);
+                return;
+            }
             if (g.mode == GripWax)
             {
                 if (!hand.tracked || !hand.pinching)
@@ -679,7 +705,7 @@ namespace MoodPicker.Ritual
                 return;
             }
             if (!hand.tracked) return;
-            if (!_sealed && pull != null)
+            if (!_sealed && !_lidClosed && pull != null)
             {
                 TimeHeap near = pull.HeapAt(hand.pinch, _config.heapHoverRange * 1.35f, out float d);
                 if (near != null)
@@ -689,10 +715,19 @@ namespace MoodPicker.Ritual
                 }
             }
             if (!hand.pinchStarted) return;
+            if (!_sealed && !_lidClosed && !_jar.Pouring && _wax.LidShown && !_config.waxStick
+                && Vector3.Distance(hand.pinch, _wax.lidRoot.position) < _config.lidGrabRadius
+                && _grips[1 - h].mode != GripLid)
+            {
+                g.mode = GripLid;
+                _lidGrabOffset = _wax.lidRoot.position - hand.pinch;
+                Debug.Log($"{Tag} ritual lid grab hand={h}");
+                return;
+            }
             if (!_sealed)
             {
                 float heapDistance = float.MaxValue;
-                TimeHeap heap = pull != null ? pull.HeapAt(hand.pinch, _config.grabRadius, out heapDistance) : null;
+                TimeHeap heap = pull != null && !_lidClosed ? pull.HeapAt(hand.pinch, _config.grabRadius, out heapDistance) : null;
                 TimePieceView piece = NearestPiece(hand.pinch, _config.holdReach, out float pieceDistance);
                 float stickDistance = _wax.StickDistance(hand.pinch);
                 if (stickDistance < _config.grabRadius && (heap == null || stickDistance < heapDistance) && (piece == null || stickDistance < pieceDistance))
@@ -914,7 +949,7 @@ namespace MoodPicker.Ritual
             Vector3 target = hand.pinch - rotation * g.local;
             Vector3 position = Vector3.Lerp(t.position, target, 1f - Mathf.Exp(-dt * _config.holdFollow));
 
-            bool magnetSpout = !_sealed && !_press.pressing && !_jar.Pouring && _jar.CanAccept(piece.Units);
+            bool magnetSpout = !_sealed && !_lidClosed && !_press.pressing && !_jar.Pouring && _jar.CanAccept(piece.Units);
             if (magnetSpout)
             {
                 float dSpout = Vector3.Distance(piece.Center, _jar.Spout);
@@ -964,7 +999,7 @@ namespace MoodPicker.Ritual
                 }
             }
 
-            if (!_sealed && !_press.pressing && _jar.InPourZone(piece))
+            if (!_sealed && !_lidClosed && !_press.pressing && _jar.InPourZone(piece))
             {
                 if (_jar.CanAccept(piece.Units))
                 {
@@ -1091,6 +1126,9 @@ namespace MoodPicker.Ritual
                 else if (t < 1f) level = Mathf.Lerp(1f + _config.breathRise, _config.sealedIntensity, RitualUtil.Smooth((t - 0.25f) / 0.75f));
                 else level = _config.sealedIntensity * (1f + _config.idleBreath * Mathf.Sin((_sealTime - _config.breathSeconds) * 6.2831853f / Mathf.Max(0.5f, _config.idleBreathSeconds)));
                 _jar.SetLevel(level);
+                float surge = _sealWave != null ? _sealWave.JarGlow : 0f;
+                _jar.SetInnerGlow(_glowDominant * (0.1f + _config.bloomJarGlow * surge));
+                _glow.SetBoost(surge);
                 float wave = Mathf.Clamp01(_sealTime / 1.35f);
                 _jar.SetPulse(wave < 1f ? wave : 0f);
                 if (_config.roomDarkFromStart)
@@ -1107,8 +1145,10 @@ namespace MoodPicker.Ritual
             }
             if (_config.roomDarkFromStart)
             {
+                float hold = _press.pressing || _press.full ? _press.progress : 0f;
+                float target = _config.roomLight * Mathf.Lerp(1f, _config.pressGather, hold);
                 _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
-                _light = Mathf.MoveTowards(_light, _config.roomLight, dt * _config.roomLightRate);
+                _light = Mathf.MoveTowards(_light, target, dt * (hold > 0f ? 0.6f : _config.roomLightRate));
             }
             else
             {
@@ -1120,18 +1160,103 @@ namespace MoodPicker.Ritual
             if (_jar.TotalUnits > 0 && !_jar.Pouring)
             {
                 _waxTimer += dt;
-                if (_waxTimer >= _config.waxAppearDelay) _wax.ShowStick(DominantWax());
+                if (_waxTimer >= _config.waxAppearDelay)
+                {
+                    if (_config.waxStick) _wax.ShowStick(DominantWax());
+                    else if (!_lidClosed) _wax.ShowLid();
+                }
             }
             else _waxTimer = 0f;
+            StepLid(now, dt);
+            StepMelt(dt);
 
             float depth = 0f;
             for (int h = 0; h < 2; h++)
                 if (_grips[h].mode == GripNone) depth = Mathf.Max(depth, _wax.Depth(_hands[h]));
             if (!_wax.Ready) depth = 0f;
-            _press.Step(depth, dt, _config.pressDepth, _config.holdSeconds, _config.recoverSeconds);
+            _press.Step(depth, dt, _config.pressDepth, _config.holdSeconds, _config.recoverSeconds, _config.sealOnRelease);
             _wax.SetHold(_press.progress);
+            float pressing = _press.pressing || _press.full ? _press.progress : 0f;
+            if (pressing > 0f)
+            {
+                Color gather = DominantGlow();
+                _jar.SetInnerGlow(_pourPreviewGlow + gather * (0.28f * pressing));
+            }
             if (sound != null) sound.Press(_wax.DropCenter, _press.pressing ? _press.progress : 0f);
             if (_press.sealedShut) Seal();
+        }
+
+        Color DominantGlow()
+        {
+            int d = DominantIndex();
+            return d >= 0 && categories[d] != null ? categories[d].glowColor : new Color(1f, 0.85f, 0.6f, 1f);
+        }
+
+        void StepLid(float now, float dt)
+        {
+            if (_config.waxStick || _wax == null) return;
+            bool held = _grips[0].mode == GripLid || _grips[1].mode == GripLid;
+            if (held) return;
+            Vector3 home = _wax.LidHomeLocal;
+            if (_lidClosed)
+            {
+                _lidCloseAge += dt;
+                float u = RitualUtil.Smooth(Mathf.Clamp01(_lidCloseAge / Mathf.Max(0.05f, _config.lidCloseSeconds)));
+                float dip = (_press.pressing || _press.full ? _press.progress : 0f) * 0.0025f;
+                _lidLocal = Vector3.Lerp(_lidFrom, home, u) + Vector3.down * dip;
+                _wax.PlaceLid(_lidLocal, Quaternion.identity);
+                return;
+            }
+            Vector3 float_ = _config.lidOffset + Vector3.up * (0.004f * Mathf.Sin(now * 1.3f));
+            if (_lidLocal == Vector3.zero) _lidLocal = float_;
+            _lidLocal = Vector3.Lerp(_lidLocal, float_, 1f - Mathf.Exp(-dt * 3f));
+            _wax.PlaceLid(_lidLocal, Quaternion.Euler(7f * Mathf.Sin(now * 0.8f), now * 12f, 4f * Mathf.Cos(now * 0.7f)));
+        }
+
+        void MoveLid(Vector3 pinch)
+        {
+            Vector3 world = pinch + _lidGrabOffset;
+            _lidLocal = _jar.root.InverseTransformPoint(world);
+            _wax.PlaceLid(_lidLocal, Quaternion.Slerp(_wax.lidRoot.localRotation, Quaternion.identity, 0.2f));
+            if (Vector3.Distance(_lidLocal, _wax.LidHomeLocal) < _config.lidSnapDistance * 0.4f) CloseLid();
+        }
+
+        void ReleaseLid()
+        {
+            if (_lidClosed) return;
+            if (Vector3.Distance(_lidLocal, _wax.LidHomeLocal) < _config.lidSnapDistance) CloseLid();
+            else Debug.Log($"{Tag} ritual lid released away from the mouth");
+        }
+
+        void CloseLid()
+        {
+            if (_lidClosed) return;
+            _lidClosed = true;
+            _lidCloseAge = 0f;
+            _lidFrom = _lidLocal;
+            for (int h = 0; h < 2; h++)
+                if (_grips[h].mode == GripLid) _grips[h] = default;
+            _meltAge = 0f;
+            _materialized = false;
+            Vector3 drop = _wax.DropCenter + Vector3.up * _config.waxLift;
+            if (pull != null)
+            {
+                pull.Abort();
+                for (int i = 0; pull.Heaps != null && i < pull.Heaps.Length; i++)
+                    if (pull.Heaps[i] != null) pull.Heaps[i].MeltInto(drop, _config.meltSeconds * (0.85f + 0.06f * i));
+            }
+            if (sound != null) sound.Landed(_jar.MouthCenter, 40);
+            Debug.Log($"{Tag} ritual lid closed units={_jar.TotalUnits}");
+        }
+
+        void StepMelt(float dt)
+        {
+            if (_meltAge < 0f || _materialized) return;
+            _meltAge += dt;
+            if (_meltAge < _config.meltSeconds * 0.78f) return;
+            _materialized = true;
+            _wax.Materialize(DominantWax());
+            Debug.Log($"{Tag} ritual springs melted into wax color={_wax.Color}");
         }
 
         int DominantIndex()
@@ -1151,7 +1276,15 @@ namespace MoodPicker.Ritual
             _sealed = true;
             _sealTime = 0f;
             _wax.Seal();
-            if (sound != null) sound.Seal(_jar.MouthCenter);
+            if (sound != null)
+            {
+                if (_config.sealOnRelease)
+                {
+                    sound.Hush(_config.hushSeconds);
+                    sound.Bowl(_jar.MouthCenter);
+                }
+                else sound.Seal(_jar.MouthCenter);
+            }
             if (pull != null)
             {
                 pull.Abort();
@@ -1179,6 +1312,7 @@ namespace MoodPicker.Ritual
             _deskY = _jar.root.position.y;
             _glowDominant = dominant;
             _glow.Bloom(_jar.root.position, _jar.root.rotation, _glowColors, _glowUnits, dominant);
+            if (_config.sealOnRelease && _sealWave != null) _sealWave.Begin(_jar.BodyCenter, dominant, _glowColors);
             _pool.Bloom(_jar.root.position, _jar.root.rotation, _tableY, _glowColors, _glowUnits, dominant, _config.breathSeconds * 0.25f, 1f, 0.4f);
             _jar.SetInnerGlow(dominant * 0.1f);
             Debug.Log($"{Tag} ritual sealed units={_jar.TotalUnits} layers={layers.Count} grains={_jar.TotalGrains} dominant={(d >= 0 ? categories[d].id : "-")}");
@@ -1233,6 +1367,11 @@ namespace MoodPicker.Ritual
             if (_heapNote != null) _heapNote.gameObject.SetActive(false);
             _labelAppear = 0f;
             _floatSlots = 0;
+            _lidClosed = false;
+            _lidCloseAge = 0f;
+            _lidLocal = Vector3.zero;
+            _meltAge = -1f;
+            _materialized = false;
             _everPulled = false;
             _idle = 0f;
             _labelAttach = 0f;
@@ -1397,7 +1536,7 @@ namespace MoodPicker.Ritual
                 {
                     TimeHeap heap = pull.Heaps[i];
                     if (heap == null || !heap.Present || heap.Category == null) continue;
-                    _lightField.AddSource(heap.transform.position, Vector3.up, 0f, heap.Radius, heap.Category.glowColor, 1f);
+                    _lightField.AddSource(heap.transform.position, Vector3.up, 0f, heap.Radius, heap.Category.glowColor, 1f - heap.Melt);
                 }
             }
             for (int i = 0; i < _pieces.Count; i++)
@@ -1946,6 +2085,7 @@ namespace MoodPicker.Ritual
             _glow?.Dispose();
             _pool?.Dispose();
             _lightField?.Dispose();
+            _sealWave?.Dispose();
             RitualUtil.Kill(_labelBorderTagMesh);
             _guideTrails?.Dispose();
             _jar?.Dispose();

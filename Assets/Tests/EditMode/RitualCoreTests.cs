@@ -152,5 +152,46 @@ namespace MoodPicker.Tests
             Assert.That(SealEmblem.Height(0.7f, 0f), Is.EqualTo(1f).Within(1e-3f), "테두리 고리는 솟아 있다");
             Assert.That(SealEmblem.Height(0.97f, 0f), Is.EqualTo(1f).Within(1e-3f), "도장 밖 밀랍은 눌리지 않는다");
         }
+
+
+        [Test]
+        public void WithSealOnReleaseTheSealComesOnlyWhenTheThumbLiftsAfterAFullPress()
+        {
+            var press = new SealPress();
+            for (int i = 0; i < 30; i++) press.Step(0.01f, 0.05f, 0.008f, 1.0f, 0.6f, true);
+            Assert.That(press.full, Is.True, "1초 넘게 누르면 가장자리까지 번진다");
+            Assert.That(press.sealedShut, Is.False, "누르고 있는 동안은 아직 닫히지 않는다");
+            press.Step(0f, 0.05f, 0.008f, 1.0f, 0.6f, true);
+            Assert.That(press.sealedShut, Is.True, "엄지를 떼는 순간 닫힌다");
+
+            var early = new SealPress();
+            for (int i = 0; i < 8; i++) early.Step(0.01f, 0.05f, 0.008f, 1.0f, 0.6f, true);
+            for (int i = 0; i < 40; i++) early.Step(0f, 0.05f, 0.008f, 1.0f, 0.6f, true);
+            Assert.That(early.sealedShut, Is.False, "도중에 떼면 닫히지 않는다");
+            Assert.That(early.progress, Is.EqualTo(0f), "밀랍이 다시 오므라든다");
+
+            var old = new SealPress();
+            for (int i = 0; i < 30; i++) old.Step(0.01f, 0.05f, 0.008f, 1.0f, 0.6f);
+            Assert.That(old.sealedShut, Is.True, "플래그를 끄면 이전처럼 누르는 중에 닫힌다");
+        }
+
+        [Test]
+        public void TheWhorlSealHasFingerprintRidgesARaisedCoreAndARim()
+        {
+            int transitions = 0;
+            bool up = SealEmblem.HeightOf(EmblemStyle.Whorl, 0.12f, 0f) > 0.5f;
+            for (int i = 1; i <= 120; i++)
+            {
+                float x = 0.12f + 0.58f * i / 120f;
+                bool now = SealEmblem.HeightOf(EmblemStyle.Whorl, x, 0f) > 0.5f;
+                if (now != up) transitions++;
+                up = now;
+            }
+            Assert.That(transitions, Is.GreaterThanOrEqualTo(12), "지문처럼 촘촘한 골이 여러 겹");
+            Assert.That(SealEmblem.HeightOf(EmblemStyle.Whorl, 0f, 0f), Is.GreaterThan(0.9f), "가운데 심이 솟아 있다");
+            Assert.That(SealEmblem.HeightOf(EmblemStyle.Whorl, 0.79f, 0f), Is.GreaterThan(0.9f), "테두리");
+            Assert.That(SealEmblem.HeightOf(EmblemStyle.Whorl, 0.97f, 0f), Is.EqualTo(1f).Within(1e-3f), "도장 밖은 눌리지 않는다");
+            Assert.That(SealEmblem.HeightOf(EmblemStyle.Sun, 0f, 0.3f), Is.EqualTo(SealEmblem.Height(0f, 0.3f)), "이전 문양은 그대로 고를 수 있다");
+        }
     }
 }

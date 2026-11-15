@@ -30,6 +30,9 @@ namespace MoodPicker.Ritual
         float _invite;
         float _inviteTarget;
         Vector3 _inviteToward;
+        Vector3 _meltTarget;
+        float _meltAge = -1f;
+        float _meltSeconds = 1.6f;
 
         public TimeCategoryAsset Category => category;
         public SplatSurfaceMaterial Look => _look;
@@ -39,6 +42,8 @@ namespace MoodPicker.Ritual
         public bool Swarming => _swarm != null;
         public RitualSpringSwarm Swarm => _swarm;
         public float Invitation => _invite;
+        public float Melt => _meltAge < 0f ? 0f : Mathf.Clamp01(_meltAge / Mathf.Max(0.05f, _meltSeconds));
+        public bool Melting => _meltAge >= 0f && Melt < 1f;
 
         public void Init(SplatSurfaceMaterial look, TimeRitualConfig liveConfig)
         {
@@ -80,6 +85,15 @@ namespace MoodPicker.Ritual
         public void SetPresent(bool present)
         {
             _presenceTarget = present ? 1f : 0f;
+            if (present) _meltAge = -1f;
+        }
+
+        public void MeltInto(Vector3 targetWS, float seconds)
+        {
+            _meltTarget = targetWS;
+            _meltSeconds = Mathf.Max(0.05f, seconds);
+            _meltAge = 0f;
+            if (_swarm == null) _presenceTarget = 0f;
         }
 
         public void Spin(float pulledLength, Vector3 pullDirection, float dt)
@@ -126,6 +140,16 @@ namespace MoodPicker.Ritual
             _hoverTarget = 0f;
             _invite = Mathf.MoveTowards(_invite, _inviteTarget, dt * 1.5f);
             _inviteTarget = 0f;
+            if (_meltAge >= 0f && _meltAge < _meltSeconds)
+            {
+                _meltAge += dt;
+                if (_meltAge >= _meltSeconds)
+                {
+                    _presenceTarget = 0f;
+                    _presence = 0f;
+                    transform.localScale = _baseScale * 1e-4f;
+                }
+            }
             float fade = config != null ? config.heapFadeSeconds : 1.6f;
             float before = _presence;
             _presence = Mathf.MoveTowards(_presence, _presenceTarget, dt / Mathf.Max(0.05f, fade));
@@ -139,7 +163,7 @@ namespace MoodPicker.Ritual
             {
                 Vector3 to = _inviteToward - transform.position;
                 Vector3 lean = to.sqrMagnitude > 1e-8f ? to.normalized * (config != null ? config.hintLean : 0.02f) : Vector3.zero;
-                _swarm.Tick(now, dt, _presence, _pulse, _hover, _spinRate, lean, _invite);
+                _swarm.Tick(now, dt, _presence, _pulse, _hover, _spinRate, lean, _invite, Melt, _meltTarget);
                 return;
             }
             if (_renderer.enabled != visible) _renderer.enabled = visible;

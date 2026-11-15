@@ -22,6 +22,11 @@ namespace MoodPicker.Ritual
         readonly float[] _hash;
         readonly float[] _hash2;
         readonly Vector3[] _freq;
+        readonly Vector3[] _outDir;
+        readonly float[] _outR;
+        readonly float[] _sign;
+        readonly Vector3[] _meltFrom;
+        bool _meltCaptured;
         Vector3 _lean;
         float _clock;
         float _maxReach;
@@ -38,7 +43,7 @@ namespace MoodPicker.Ritual
             _config = config;
             _motion = category != null ? category.swarmMotion : SwarmMotion.Orbit;
             int n = Mathf.Clamp(config.springSplats, 32, 4000);
-            _cloud = new RitualSplatCloud("Swarm " + (category != null ? category.id : ""), owner, material, n, 0.2f);
+            _cloud = new RitualSplatCloud("Swarm " + (category != null ? category.id : ""), owner, material, n, 2.5f);
             _u = new Vector3[n];
             _v = new Vector3[n];
             _cu = new Vector3[n];
@@ -50,6 +55,10 @@ namespace MoodPicker.Ritual
             _hash = new float[n];
             _hash2 = new float[n];
             _freq = new Vector3[n];
+            _outDir = new Vector3[n];
+            _outR = new float[n];
+            _sign = new float[n];
+            _meltFrom = new Vector3[n];
             float half = Mathf.Max(0.0008f, config.springGrain);
             Vector3 common = new Vector3(0.22f, 1f, 0.12f).normalized;
             for (int i = 0; i < n; i++)
@@ -77,6 +86,12 @@ namespace MoodPicker.Ritual
                 _hash[i] = h3;
                 _hash2[i] = h4;
                 _freq[i] = new Vector3(0.22f + 0.4f * h1, 0.18f + 0.36f * h3, 0.2f + 0.38f * h4);
+                float oz = 1f - 2f * h4;
+                float or_ = Mathf.Sqrt(Mathf.Max(0f, 1f - oz * oz));
+                float oa = h2 * 6.2831853f + h0 * 2.1f;
+                _outDir[i] = new Vector3(or_ * Mathf.Cos(oa), oz * 0.55f + 0.18f, or_ * Mathf.Sin(oa)).normalized;
+                _outR[i] = Mathf.Lerp(0.35f, 1f, Mathf.Sqrt(h3));
+                _sign[i] = h1 > 0.18f ? 1f : -1f;
                 int s = _cloud.Add(float3.zero, (float3)axis, half * Mathf.Lerp(0.7f, 1.25f, h2));
                 if (s >= 0)
                 {
@@ -160,7 +175,7 @@ namespace MoodPicker.Ritual
             }
         }
 
-        public void Tick(float now, float dt, float presence, float pulse, float hover, float spinRate, Vector3 leanWS, float invite)
+        public void Tick(float now, float dt, float presence, float pulse, float hover, float spinRate, Vector3 leanWS, float invite, float melt = 0f, Vector3 meltTargetWS = default)
         {
             if (_cloud == null || _cloud.Disposed) return;
             bool visible = presence > 0.002f;
@@ -193,6 +208,7 @@ namespace MoodPicker.Ritual
                 Vector3 local = (_u[i] * c + _v[i] * s) * r;
                 local.y += 0.18f * r * Mathf.Sin(ph * 2f + _hash[i] * 4f);
                 float fade = 1f;
+                float extraGlow = 0f;
                 if (character > 0.001f)
                 {
                     Vector3 shaped = Shaped(i, baseR * wobble, _clock, out float shapedFade);
@@ -201,15 +217,39 @@ namespace MoodPicker.Ritual
                 }
                 local *= contract;
                 Vector3 world = _owner.TransformVector(local) + _lean * (0.4f + 0.6f * _radius[i]);
+                if (melt > 0f)
+                {
+                    Vector3 heap = _owner.position;
+                    if (!_meltCaptured) _meltFrom[i] = heap + world;
+                    float spreadR = _outR[i] * _config.meltSpread;
+                    float spread = RitualVortex.Smooth01(melt / 0.4f);
+                    float start = 0.34f + 0.24f * _hash[i];
+                    float q = RitualVortex.Smooth01((melt - start) / (1f - start));
+                    Vector3 pos;
+                    if (q <= 0f)
+                    {
+                        pos = RitualVortex.Spread(_meltFrom[i], heap, _outDir[i], spreadR, spread, _sign[i], _hash[i]);
+                        pos = RitualVortex.Drift(pos, now, _hash[i], 0.03f * spread);
+                    }
+                    else
+                    {
+                        Vector3 outPos = RitualVortex.Drift(RitualVortex.OutPoint(heap, _outDir[i], spreadR, _sign[i]), now, _hash[i], 0.03f * (1f - q));
+                        pos = RitualVortex.Spiral(outPos, meltTargetWS, q, _sign[i], 1.1f, _hash[i]);
+                    }
+                    world = pos - heap;
+                    fade *= 1f - 0.9f * q * q * q * q;
+                    extraGlow = 0.35f * spread * (1f - q);
+                }
                 float3 next = (float3)world;
                 vel[i] = _primed ? (float3)Vector3.ClampMagnitude((Vector3)(next - disp[i]) * invDt, 0.6f) : float3.zero;
                 disp[i] = next;
                 scale[i] = fade;
-                glow[i] = Mathf.Min(1f, glowBase * (0.6f + 0.8f * _hash[i]));
+                glow[i] = Mathf.Min(1f, glowBase * (0.6f + 0.8f * _hash[i]) + extraGlow);
                 float m = world.magnitude;
                 if (m > reach) reach = m;
             }
             _primed = true;
+            if (melt > 0f) _meltCaptured = true;
             _maxReach = reach;
             _cloud.MarkSim();
             _cloud.Flush();
