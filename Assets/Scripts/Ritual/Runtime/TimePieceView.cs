@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MoodPicker.Splatter;
 using MoodPicker.Splatter.Sim;
 using Unity.Mathematics;
@@ -11,6 +12,28 @@ namespace MoodPicker.Ritual
     public sealed class TimePieceView
     {
         const float GoldenAngle = 2.39996323f;
+
+        struct Seam
+        {
+            public float3 axis;
+            public float z0;
+            public float seed;
+            public bool fresh;
+        }
+
+        static readonly int SeamColorId = Shader.PropertyToID("_Color");
+        static readonly int SeamDeepId = Shader.PropertyToID("_Deep");
+        static readonly int SeamLightId = Shader.PropertyToID("_Light");
+        static readonly int SeamGlowId = Shader.PropertyToID("_Glow");
+        static readonly int SeamSheenId = Shader.PropertyToID("_Sheen");
+        static readonly int SeamRadiusId = Shader.PropertyToID("_Radius");
+        static readonly int SeamPressId = Shader.PropertyToID("_Press");
+        static readonly int SeamStaggerId = Shader.PropertyToID("_Stagger");
+        static readonly int SeamStampId = Shader.PropertyToID("_Stamp");
+        static readonly int SeamAppearId = Shader.PropertyToID("_Appear");
+        static readonly int SeamOriginId = Shader.PropertyToID("_Origin");
+        static readonly int SeamBobId = Shader.PropertyToID("_Bob");
+        static readonly int SeamGrowId = Shader.PropertyToID("_GrowWithPress");
 
         public readonly TimeCategoryAsset category;
         public readonly int categoryIndex;
@@ -92,7 +115,29 @@ namespace MoodPicker.Ritual
         Vector3 _rest;
         Vector3 _dissolveTo;
 
+        float[] _loose;
+        float[] _soft;
+        int _looseCount;
+        int _lastScattered;
+        Vector3 _bridgePoint;
+        float _bridgeAmount;
+        bool _bridgeHeld;
+
+        readonly Material _seamMaterial;
+        readonly List<Seam> _seams = new List<Seam>();
+        MeshRenderer _seamRenderer;
+        Mesh _seamMesh;
+        MaterialPropertyBlock _seamBlock;
+        float _seamAge = -1f;
+        float _seamPresence = 1f;
+
         public int Units => data.units;
+        public int LooseCount => _looseCount;
+        public int LastScattered => _lastScattered;
+        public float BridgeAmount => _bridgeAmount;
+        public int SeamCount => _seams.Count;
+        public bool SeamVisible => _seamRenderer != null && _seamRenderer.enabled;
+        public float SeamPress => _seamAge < 0f ? 1f : Mathf.Clamp01((_seamAge - _config.seamDelay) / Mathf.Max(0.05f, _config.seamSeconds));
         public Transform Transform => _cloud != null ? _cloud.transform : null;
         public bool Alive => state != PieceState.Dead;
         public float Length => data.units * _unitLength;
@@ -118,8 +163,9 @@ namespace MoodPicker.Ritual
         }
 
         public TimePieceView(Transform parent, TimeCategoryAsset category, int categoryIndex, SplatSurfaceMaterial look, Material splatMaterial,
-            TimeRitualConfig config, SplatTuning tuning, Font font, Transform head, Material glowMaterial = null)
+            TimeRitualConfig config, SplatTuning tuning, Font font, Transform head, Material glowMaterial = null, Material seamMaterial = null)
         {
+            _seamMaterial = seamMaterial;
             _parent = parent;
             this.category = category;
             this.categoryIndex = categoryIndex;
@@ -152,7 +198,14 @@ namespace MoodPicker.Ritual
             _stiff = new float[capacity];
             _delay = new float[capacity];
             _order = new float[capacity];
-            for (int i = 0; i < capacity; i++) _stiff[i] = 1f + (RitualUtil.Hash(i * 13 + 7) - 0.5f) * 2f * _config.stiffnessJitter;
+            _loose = new float[capacity];
+            _soft = new float[capacity];
+            _looseCount = 0;
+            for (int i = 0; i < capacity; i++)
+            {
+                _stiff[i] = 1f + (RitualUtil.Hash(i * 13 + 7) - 0.5f) * 2f * _config.stiffnessJitter;
+                _loose[i] = -1f;
+            }
             _depth = new float[unitCapacity + 2];
             _strength = new float[unitCapacity + 2];
             _depth[0] = _config.node10;
@@ -424,7 +477,8 @@ namespace MoodPicker.Ritual
                 float3[] disp = _cloud.disp;
                 float3[] home = _cloud.home;
                 int n = _cloud.Count;
-                for (int i = 0; i < n; i++) disp[i] -= (math.mul(dr, home[i]) + dp) * keep;
+                float[] loose = _loose;
+                for (int i = 0; i < n; i++) disp[i] -= (math.mul(dr, home[i]) + dp) * (loose[i] >= 0f ? 1f : keep);
                 _cloud.MarkSim();
                 _awake = true;
             }
@@ -524,6 +578,7 @@ namespace MoodPicker.Ritual
             _flash = 1f;
             _awake = true;
             _surface.MarkDirty();
+            if (_seams.Count > 0) BuildSeamMesh();
             return true;
         }
 
@@ -617,6 +672,132 @@ namespace MoodPicker.Ritual
             return maxWeight;
         }
 
+        bool Gathering => _reformed && _age < _mergeWindow;
+
+        public float Field(Vector3[] probes, float[] radii, int count, Vector3 handVelWS, bool scatter, float dt)
+        {
+            _lastScattered = 0;
+            if (_cloud == null || _cloud.Count <= 0 || probes == null || radii == null) return 0f;
+            if (state != PieceState.Floating && state != PieceState.Held) return 0f;
+            if (Gathering) scatter = false;
+            float3 vH = handVelWS;
+            if (!math.all(math.isfinite(vH))) return 0f;
+            vH = ClampVec(vH, 2.5f);
+            count = Mathf.Min(count, Mathf.Min(probes.Length, radii.Length));
+            if (count <= 0) return 0f;
+
+            Transform tr = _cloud.transform;
+            float3 pos = tr.position;
+            float3x3 rot = new float3x3((quaternion)tr.rotation);
+            float reachScale = scatter ? 1.6f : 1f;
+            float part = _config.partStrength;
+            float carry = _config.scatterCarry;
+            float burst = _config.scatterBurst;
+            float3[] home = _cloud.home;
+            float3[] disp = _cloud.disp;
+            float3[] vel = _cloud.vel;
+            float[] scale = _cloud.scale;
+            float[] glow = _cloud.glow;
+            int n = _cloud.Count;
+            int seedTime = (int)(_age * 60f);
+            float contact = 0f;
+            int scattered = 0;
+
+            for (int i = 2 * _cap; i < n; i++)
+            {
+                if (scale[i] <= 0.01f) continue;
+                float3 w = pos + math.mul(rot, home[i]) + disp[i];
+                float best = 1f;
+                float bestDist = 0f;
+                float bestRadius = 0f;
+                float3 bestDiff = float3.zero;
+                bool hit = false;
+                for (int k = 0; k < count; k++)
+                {
+                    float rr = radii[k] * reachScale;
+                    if (rr <= 1e-5f) continue;
+                    float3 diff = w - (float3)probes[k];
+                    float d2 = math.lengthsq(diff);
+                    if (d2 >= rr * rr) continue;
+                    float d = math.sqrt(d2);
+                    float share = d / rr;
+                    if (share < best)
+                    {
+                        best = share;
+                        bestDist = d;
+                        bestRadius = radii[k];
+                        bestDiff = diff;
+                        hit = true;
+                    }
+                }
+                if (!hit) continue;
+                float3 dir = bestDist > 1e-5f ? bestDiff / bestDist : SplatSimKernel.HashDirection(RitualUtil.Hash(i * 29 + 5));
+                float weight = 1f - best;
+                contact = math.max(contact, weight);
+                if (scatter)
+                {
+                    float3 jitter = SplatSimKernel.HashDirection(RitualUtil.Hash(i * 41 + seedTime)) * 0.06f;
+                    float3 kick = vH * (carry * (0.5f + 0.5f * weight)) + dir * (burst * weight) + jitter;
+                    vel[i] = ClampVec(vel[i] * 0.3f + kick, 1.8f);
+                    _loose[i] = 0f;
+                    glow[i] = math.max(glow[i], 0.5f + 0.4f * weight);
+                    scattered++;
+                }
+                else if (bestDist < bestRadius)
+                {
+                    disp[i] = ClampVec(disp[i] + dir * ((bestRadius - bestDist) * part), 0.12f);
+                    vel[i] *= 0.6f;
+                    _soft[i] = 1f;
+                    glow[i] = math.max(glow[i], 0.35f + 0.3f * weight);
+                }
+            }
+
+            _lastScattered = scattered;
+            if (contact > 0f)
+            {
+                _awake = true;
+                _flash = Mathf.Max(_flash, contact * (scatter ? 0.6f : 0.35f));
+                _cloud.MarkSim();
+            }
+            return contact;
+        }
+
+        public void SetBridge(Vector3 pointWS, float amount)
+        {
+            if (_cloud == null) return;
+            _bridgePoint = pointWS;
+            _bridgeAmount = Mathf.Clamp01(amount);
+            _bridgeHeld = true;
+            _awake = true;
+        }
+
+        public void Snap()
+        {
+            _bridgeAmount = 0f;
+            _bridgeHeld = false;
+            _flash = 1f;
+            AddGlow(0.45f);
+        }
+
+        public float MaxDisplacement()
+        {
+            if (_cloud == null) return 0f;
+            float best = 0f;
+            float3[] disp = _cloud.disp;
+            float[] scale = _cloud.scale;
+            int n = _cloud.Count;
+            for (int i = 2 * _cap; i < n; i++)
+                if (scale[i] > 0.01f) best = math.max(best, math.lengthsq(disp[i]));
+            return math.sqrt(best);
+        }
+
+        void ClearLoose()
+        {
+            if (_loose == null) return;
+            for (int i = 0; i < _loose.Length; i++) _loose[i] = -1f;
+            _looseCount = 0;
+        }
+
         public void SetSqueeze(float amount)
         {
             amount = Mathf.Clamp01(amount);
@@ -650,6 +831,7 @@ namespace MoodPicker.Ritual
         {
             if (state == PieceState.Dead) return;
             state = PieceState.Dissolving;
+            ClearLoose();
             _dissolve = 0f;
             _dissolveTo = towardWS;
             _awake = true;
@@ -750,6 +932,10 @@ namespace MoodPicker.Ritual
             PieceShape oldShape = shape;
             float oldLength = Length;
             string name = _cloud.gameObject.name;
+            var carried = new List<Seam>();
+            CarrySeams(this, carried);
+            if (other != null) CarrySeams(other, carried);
+            DisposeSeam();
 
             if (_label != null) _label.transform.SetParent(null, false);
             _cloud.Dispose();
@@ -801,6 +987,30 @@ namespace MoodPicker.Ritual
             }
             _cloud.transform.SetPositionAndRotation(pos, rot);
             _axisWS = rot * Vector3.forward;
+            _seams.Clear();
+            _seamAge = -1f;
+            if (shape == PieceShape.Blob)
+            {
+                Quaternion toLocal = Quaternion.Inverse(rot);
+                for (int c = 0; c < carried.Count; c++)
+                {
+                    Seam s = carried[c];
+                    s.axis = math.normalizesafe((float3)(toLocal * (Vector3)s.axis), new float3(0f, 0f, 1f));
+                    s.fresh = false;
+                    _seams.Add(s);
+                }
+                if (other != null && _config.seam)
+                {
+                    _seams.Add(new Seam
+                    {
+                        axis = new float3(0f, 0f, 1f),
+                        z0 = SeamLevel(ub / (float)Mathf.Max(1, ua + ub)),
+                        seed = RitualUtil.Hash(data.units * 31 + data.mergedCount * 7 + categoryIndex),
+                        fresh = true
+                    });
+                    _seamAge = 0f;
+                }
+            }
 
             float3x3 r = new float3x3((quaternion)rot);
             float3 p = pos;
@@ -866,6 +1076,131 @@ namespace MoodPicker.Ritual
             _awake = true;
             if (state == PieceState.Pulling) state = PieceState.Floating;
             _surface.MarkDirty();
+            _seamPresence = 1f;
+            BuildSeamMesh();
+        }
+
+        static void CarrySeams(TimePieceView piece, List<Seam> into)
+        {
+            if (piece == null || piece._cloud == null || piece.shape != PieceShape.Blob) return;
+            Quaternion rot = piece._cloud.transform.rotation;
+            for (int i = 0; i < piece._seams.Count; i++)
+            {
+                Seam s = piece._seams[i];
+                s.axis = (float3)(rot * (Vector3)s.axis);
+                into.Add(s);
+            }
+        }
+
+        public static float SeamLevel(float share)
+        {
+            share = Mathf.Clamp01(share);
+            float lo = 0f, hi = 2f;
+            for (int it = 0; it < 24; it++)
+            {
+                float h = 0.5f * (lo + hi);
+                if (h * h * (3f - h) * 0.25f < share) lo = h;
+                else hi = h;
+            }
+            return 0.5f * (lo + hi) - 1f;
+        }
+
+        float3 SeamPoint(in Seam s, float3 tu, float3 tv, float phi, float radius, out float3 n)
+        {
+            float z = s.z0 + 0.07f * math.sin(3f * phi + s.seed * 6.2831853f) + 0.035f * math.sin(7f * phi + s.seed * 17.3f);
+            z = math.clamp(z, -0.93f, 0.93f);
+            float ring = math.sqrt(math.max(0f, 1f - z * z));
+            float3 d = s.axis * z + (tu * math.cos(phi) + tv * math.sin(phi)) * ring;
+            return ShapePoint(ShapeKind, d, radius, out n);
+        }
+
+        void BuildSeamMesh()
+        {
+            DisposeSeam();
+            if (_seams.Count == 0 || _seamMaterial == null || _cloud == null || shape != PieceShape.Blob) return;
+            int per = Mathf.Max(12, _config.seamSplats);
+            float radius = _blobRadius * Mathf.Max(1f, _config.seamLift);
+            var builder = RitualStaticSplats.Builder.Create(per * _seams.Count);
+            Vector3 headLocal = Vector3.forward;
+            if (_head != null && _head.position.sqrMagnitude > 1e-4f) headLocal = _cloud.transform.InverseTransformPoint(_head.position);
+            for (int si = 0; si < _seams.Count; si++)
+            {
+                Seam s = _seams[si];
+                RitualUtil.Basis(s.axis, out float3 tu, out float3 tv);
+                float3 hl = headLocal;
+                float phi0 = math.atan2(math.dot(hl, tv), math.dot(hl, tu));
+                int seedInt = (int)(s.seed * 9973f);
+                for (int j = 0; j < per; j++)
+                {
+                    float phi = 6.2831853f * j / per;
+                    float3 p = SeamPoint(s, tu, tv, phi, radius, out float3 nrm);
+                    float lane = (j % 3 == 1) ? 0.6f : (j % 3 == 2 ? -0.5f : 0f);
+                    float3 side = math.normalizesafe(math.cross(nrm, tu * -math.sin(phi) + tv * math.cos(phi)), s.axis);
+                    p += side * (lane * _config.seamRadius * 1.4f);
+                    float rnd = RitualUtil.Hash(j * 13 + seedInt);
+                    if (!s.fresh)
+                    {
+                        builder.Add((Vector3)p, (Vector3)nrm, new Vector4(p.x, p.y, p.z, 0f), new Vector4(nrm.x, nrm.y, nrm.z, 0f), new Vector4(nrm.x, nrm.y, nrm.z, rnd));
+                        continue;
+                    }
+                    float dphi = phi - phi0;
+                    dphi -= 6.2831853f * math.floor((dphi + math.PI) / 6.2831853f);
+                    float delay = math.abs(dphi) / math.PI;
+                    float3 start = SeamPoint(s, tu, tv, phi0, radius, out _);
+                    float3 via = SeamPoint(s, tu, tv, phi0 + dphi * 0.5f, radius, out _);
+                    builder.Add((Vector3)start, (Vector3)nrm, new Vector4(p.x, p.y, p.z, delay), new Vector4(nrm.x, nrm.y, nrm.z, -1f), new Vector4(via.x, via.y, via.z, rnd));
+                }
+            }
+            _seamMesh = builder.ToMesh("PieceSeam", radius * 1.6f + 0.02f);
+            _seamRenderer = RitualStaticSplats.Spawn("Seam", _cloud.transform, _seamMesh, _seamMaterial);
+            _seamBlock ??= new MaterialPropertyBlock();
+            ApplySeam(0f);
+        }
+
+        void ApplySeam(float dt)
+        {
+            if (_seamRenderer == null) return;
+            if (_seamAge >= 0f)
+            {
+                _seamAge += dt;
+                if (_seamAge > _config.seamDelay + _config.seamSeconds + 0.5f) _seamAge = -1f;
+            }
+            float press = SeamPress;
+            float flowing = _seamAge >= 0f && press < 1f ? Mathf.Sin(press * Mathf.PI) : 0f;
+            float target;
+            if (state == PieceState.Pouring) target = 1f - Mathf.Clamp01(_pourProgress * 2.5f);
+            else if (state == PieceState.Dissolving) target = 1f - Mathf.Clamp01(_dissolve * 2f);
+            else
+            {
+                int grains = Mathf.Max(1, _cloud.Count - 2 * _cap);
+                target = 1f - Mathf.Clamp01(_looseCount / (float)grains * 2.5f);
+            }
+            _seamPresence = dt > 0f ? Mathf.MoveTowards(_seamPresence, target, dt * 4f) : target;
+            bool show = _seamPresence > 0.01f;
+            if (_seamRenderer.enabled != show) _seamRenderer.enabled = show;
+            if (!show) return;
+            _seamBlock.SetColor(SeamColorId, new Color(0.96f, 0.78f, 0.42f, 1f));
+            _seamBlock.SetColor(SeamDeepId, new Color(0.42f, 0.28f, 0.10f, 1f));
+            _seamBlock.SetColor(SeamLightId, new Color(1f, 0.95f, 0.82f, 1f));
+            _seamBlock.SetFloat(SeamGlowId, _config.seamGlow * (0.55f + 1.1f * flowing));
+            _seamBlock.SetFloat(SeamSheenId, 0.6f);
+            _seamBlock.SetFloat(SeamRadiusId, _config.seamRadius);
+            _seamBlock.SetFloat(SeamPressId, press);
+            _seamBlock.SetFloat(SeamStaggerId, 1.5f);
+            _seamBlock.SetFloat(SeamStampId, 0f);
+            _seamBlock.SetFloat(SeamAppearId, _seamPresence);
+            _seamBlock.SetVector(SeamOriginId, Vector4.zero);
+            _seamBlock.SetFloat(SeamBobId, 0f);
+            _seamBlock.SetFloat(SeamGrowId, 0f);
+            _seamRenderer.SetPropertyBlock(_seamBlock);
+        }
+
+        void DisposeSeam()
+        {
+            if (_seamRenderer != null) RitualUtil.Kill(_seamRenderer.gameObject);
+            _seamRenderer = null;
+            if (_seamMesh != null) RitualUtil.Kill(_seamMesh);
+            _seamMesh = null;
         }
 
         static void Collect(TimePieceView piece, float3[] world, float3[] velocity, float[] glow, int offset, int count)
@@ -891,6 +1226,7 @@ namespace MoodPicker.Ritual
         public void BeginPour(Vector3 spoutWS)
         {
             state = PieceState.Pouring;
+            ClearLoose();
             _pourProgress = 0f;
             drift = Vector3.zero;
             int n = _cloud.Count;
@@ -953,6 +1289,8 @@ namespace MoodPicker.Ritual
             _shadow = null;
             if (_label != null) RitualUtil.Kill(_label.gameObject);
             _label = null;
+            DisposeSeam();
+            _seams.Clear();
             _cloud?.Dispose();
             _cloud = null;
         }
@@ -962,6 +1300,11 @@ namespace MoodPicker.Ritual
             if (_cloud == null || state == PieceState.Dead) return;
             dt = Mathf.Min(dt, 1f / 45f);
             _age += dt;
+            if (!_bridgeHeld && _bridgeAmount > 0f)
+            {
+                _bridgeAmount = 0f;
+                _awake = true;
+            }
 
             if (state == PieceState.Floating)
             {
@@ -1026,6 +1369,8 @@ namespace MoodPicker.Ritual
             _cloud.Flush();
             _surface.Apply(_cloud.renderer, _cloud.SimTexture, now, 1f + _flash * 0.25f);
             UpdateLabel();
+            ApplySeam(dt);
+            _bridgeHeld = false;
         }
 
         void Simulate(float now, float dt)
@@ -1087,6 +1432,20 @@ namespace MoodPicker.Ritual
                 _cloud.MarkSim();
                 return;
             }
+            bool bridging = _bridgeAmount > 0.001f && !pouring && !dissolving;
+            float3 bridgePoint = _bridgePoint;
+            float3 bridgeDir = math.normalizesafe(bridgePoint - pos, new float3(0f, 0f, 1f));
+            float bridgeAmount = _bridgeAmount;
+            float bridgeShare = _config.bridgeShare;
+            float bridgeReach = _config.bridgeReach;
+            float[] loose = _loose;
+            float[] soft = _soft;
+            float flight = Mathf.Max(0f, _config.scatterFlight);
+            float flightDrag = Mathf.Max(0f, _config.scatterDrag);
+            float returnSeconds = Mathf.Max(0.2f, _config.returnSeconds);
+            float returnSwirl = _config.returnSwirl;
+            float softRate = dt / Mathf.Max(0.05f, _config.partRecover);
+            int looseCount = 0;
             float energy = 0f;
             float glowMax = 0f;
             for (int i = 0; i < n; i++)
@@ -1143,6 +1502,23 @@ namespace MoodPicker.Ritual
                     float along = math.dot(hw, kneadAxis);
                     target += kneadAxis * (-along * knead) + (hw - kneadAxis * along) * (knead * 0.48f);
                 }
+                float stick = 0f;
+                if (bridging && i >= cap2)
+                {
+                    float3 hw = math.mul(rot, h);
+                    float hl = math.length(hw);
+                    if (hl > 1e-6f)
+                    {
+                        float facing = math.dot(hw / hl, bridgeDir);
+                        if (facing > 0.3f)
+                        {
+                            float strand = RitualUtil.Hash(i * 7 + 5) < bridgeShare ? 1f : 0.22f;
+                            float ft = math.saturate((facing - 0.3f) / 0.65f);
+                            stick = ft * ft * (3f - 2f * ft) * strand * bridgeAmount;
+                            target += (bridgePoint - (pos + hw)) * (stick * bridgeReach);
+                        }
+                    }
+                }
                 if (pouring && _order[i] < _pourProgress) want = 0f;
                 if (dissolving)
                 {
@@ -1188,14 +1564,49 @@ namespace MoodPicker.Ritual
                     if (gatherAge < 0.36f)
                         floor = math.max(floor, math.saturate(dist * 16f) * 0.85f);
                 }
+                else if (loose[i] >= 0f && !pouring && !dissolving)
+                {
+                    float age = loose[i] + dt;
+                    float3 to = target - d;
+                    float dist = math.length(to);
+                    if (age < flight)
+                    {
+                        v *= math.exp(-flightDrag * dt);
+                        d += v * dt;
+                    }
+                    else
+                    {
+                        float back = age - flight;
+                        float u = math.saturate(back / returnSeconds);
+                        float ease = math.saturate(back / (returnSeconds * 0.25f));
+                        ease = ease * ease * (3f - 2f * ease);
+                        float3 dir = dist > 1e-5f ? to / dist : float3.zero;
+                        float speedWant = math.min(0.45f, dist * (3f / returnSeconds)) * ease;
+                        float3 side = math.cross(dir, SplatSimKernel.HashDirection(RitualUtil.Hash(i * 19 + 3))) * (returnSwirl * (1f - u) * speedWant);
+                        float3 wantV = dir * speedWant + side;
+                        v += (wantV - v) * (1f - math.exp(-7f * dt));
+                        d += v * dt;
+                        if (u >= 1f || (dist < 0.003f && back > returnSeconds * 0.3f))
+                        {
+                            age = -1f;
+                            soft[i] = 1f;
+                        }
+                    }
+                    loose[i] = age;
+                    if (age >= 0f) looseCount++;
+                    energy = 1f;
+                }
                 else
                 {
-                    float3 spring = SplatSimKernel.ClampLength((target - d) * (k * _stiff[i]), maxAccel);
+                    float sf = soft[i];
+                    float kk = k * _stiff[i] * (1f - 0.85f * sf) * (1f - 0.6f * stick);
+                    float3 spring = SplatSimKernel.ClampLength((target - d) * kk, maxAccel);
                     v += spring * dt;
-                    v *= math.exp(-c * dt);
+                    v *= math.exp(-c * (1f - 0.5f * sf) * dt);
                     d += v * dt;
+                    if (sf > 0f) soft[i] = math.max(0f, sf - softRate);
                 }
-                float maxDisp = merging ? 0.35f : (feel == PieceFeel.Water ? 0.08f : 0.06f);
+                float maxDisp = merging || loose[i] >= 0f ? 0.35f : (stick > 0f ? 0.14f : (feel == PieceFeel.Water ? 0.08f : 0.06f));
                 if (!math.all(math.isfinite(v)) || !math.all(math.isfinite(d)))
                 {
                     d = float3.zero;
@@ -1214,8 +1625,9 @@ namespace MoodPicker.Ritual
                 float g = math.max(floor, glow[i] - decay);
                 glow[i] = g;
                 if (g > floor + 1e-3f) glowMax = math.max(glowMax, g);
-                energy = math.max(energy, math.lengthsq(target - d) * 2e4f + math.lengthsq(v) + math.abs(s - want));
+                energy = math.max(energy, math.lengthsq(target - d) * 2e4f + math.lengthsq(v) + math.abs(s - want) + soft[i] * 1e-3f);
             }
+            _looseCount = looseCount;
             _energy = energy + glowMax * 1e-3f;
             _cloud.MarkSim();
         }
@@ -1242,9 +1654,8 @@ namespace MoodPicker.Ritual
                 string title = category != null ? category.EffectiveTitleEn : "Time";
                 string mem = category != null ? category.EffectiveMemoryEn : "";
                 string dur = TimeUnits.LabelEn(data.units);
-                int pieces = data.mergedCount + 1;
-                string line1 = compact && pieces > 1 ? $"{sym} {title} · {dur} ({pieces})" : $"{sym} {title} · {dur}";
-                string line2 = compact ? "" : (pieces > 1 ? $"{pieces} fragments · {mem}" : mem);
+                string line1 = $"{sym} {title} · {dur}";
+                string line2 = compact ? "" : mem;
                 string formatted = !numbers ? title : string.IsNullOrEmpty(line2) ? line1 : $"{line1}\n{line2}";
                 _label.text = formatted;
                 if (_shadow != null) _shadow.text = formatted;

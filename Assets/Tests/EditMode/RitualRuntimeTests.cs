@@ -41,9 +41,9 @@ namespace MoodPicker.Tests
             Object.DestroyImmediate(_work);
         }
 
-        TimePieceView Pulled(TimeCategoryAsset category, int index, int units, Vector3 origin, Vector3 dir)
+        TimePieceView Pulled(TimeCategoryAsset category, int index, int units, Vector3 origin, Vector3 dir, Font font = null)
         {
-            var piece = new TimePieceView(_root.transform, category, index, _look, null, _config, null, null, null);
+            var piece = new TimePieceView(_root.transform, category, index, _look, null, _config, null, font, null);
             piece.BeginPull(origin, dir);
             float length = units * _config.unitLength + 0.001f;
             int current = 0;
@@ -842,6 +842,359 @@ namespace MoodPicker.Tests
             }
         }
 
+        TimePieceView Shaped(TimeCategoryAsset category, int index, int units, Vector3 origin, ref float now)
+        {
+            TimePieceView piece = Pulled(category, index, units, origin, Vector3.right);
+            piece.Crumple();
+            for (int i = 0; i < 120; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            return piece;
+        }
+
+        Vector3[] FarProbes(out float[] radii)
+        {
+            var probes = new Vector3[6];
+            radii = new float[6];
+            for (int k = 0; k < 6; k++)
+            {
+                probes[k] = Vector3.one * 10f;
+                radii[k] = k == 5 ? _config.fieldPalm : _config.fieldFinger;
+            }
+            return probes;
+        }
+
+        static HandPose GapPose(Vector3 pos, float gap)
+        {
+            HandPose pose = PinchPose(pos, true);
+            pose.indexTip = pos + new Vector3(gap, 0f, 0f);
+            return pose;
+        }
+
+        [Test]
+        public void SlowFingersPartTheGrainsAndTheyCloseBehindWithoutScattering()
+        {
+            float now = 0f;
+            TimePieceView piece = Shaped(_move, 0, 4, Vector3.zero, ref now);
+            Vector3 c = piece.Center;
+            Vector3[] probes = FarProbes(out float[] radii);
+            float parted = 0f;
+            for (int i = 0; i <= 48; i++)
+            {
+                probes[1] = c + new Vector3(-0.036f + 0.0015f * i, 0f, 0f);
+                piece.Field(probes, radii, 6, new Vector3(0.1f, 0f, 0f), false, Dt);
+                now += Dt;
+                piece.Tick(now, Dt);
+                parted = Mathf.Max(parted, piece.MaxDisplacement());
+                Assert.That(piece.LooseCount, Is.EqualTo(0), "천천히 넣은 손은 흩뜨리지 않는다");
+            }
+            Assert.That(parted, Is.GreaterThan(0.004f), "손가락 사이로 알갱이가 갈라진다");
+            for (int i = 0; i < 90; i++)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(piece.MaxDisplacement(), Is.LessThan(0.002f), "손가락이 지나가면 다시 닫힌다");
+            piece.Kill();
+        }
+
+        [Test]
+        public void AFastStirScattersGrainsThatDriftBackOverSecondsNotAtOnce()
+        {
+            float now = 0f;
+            TimePieceView piece = Shaped(_move, 0, 4, Vector3.zero, ref now);
+            Vector3 c = piece.Center;
+            Vector3[] probes = FarProbes(out float[] radii);
+            for (int i = 0; i < 4; i++)
+            {
+                probes[5] = c + new Vector3(-0.02f + 0.017f * i, 0f, 0f);
+                probes[1] = probes[5] + new Vector3(0f, 0.01f, 0.03f);
+                piece.Field(probes, radii, 6, new Vector3(1.2f, 0f, 0f), true, Dt);
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(piece.LooseCount, Is.GreaterThan(50), "빠르게 휘저으면 흩어진다");
+            float t = 0f;
+            for (; t < 0.8f; t += Dt)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+            }
+            Assert.That(piece.MaxDisplacement(), Is.GreaterThan(0.03f), "흩어진 알갱이는 바로 붙지 않는다");
+            Assert.That(piece.LooseCount, Is.GreaterThan(0));
+            float back = -1f;
+            for (; t < 8f; t += Dt)
+            {
+                now += Dt;
+                piece.Tick(now, Dt);
+                if (piece.LooseCount == 0 && piece.MaxDisplacement() < 0.004f)
+                {
+                    back = t;
+                    break;
+                }
+            }
+            Assert.That(back, Is.InRange(1.5f, _config.scatterFlight + _config.returnSeconds + 1.5f), "몇 초에 걸쳐 원래 조각으로 돌아온다");
+            piece.Kill();
+        }
+
+        [Test]
+        public void AHandShapingAPinchOrJustLettingGoNeverScatters()
+        {
+            var open = new RitualHand
+            {
+                tracked = true,
+                thumb = Vector3.zero,
+                index = new Vector3(0.09f, 0f, 0f),
+                palm = new Vector3(0.04f, -0.02f, -0.06f),
+                palmVelocity = new Vector3(1.2f, 0f, 0f)
+            };
+            Assert.That(TimeRitual.WouldScatter(_config, open, 5f), Is.True, "빠르게 휘저으면 흩어진다");
+            RitualHand shaping = open;
+            shaping.index = new Vector3(0.03f, 0f, 0f);
+            Assert.That(TimeRitual.WouldScatter(_config, shaping, 5f), Is.False, "핀치 자세가 만들어지는 동안은 꺼진다");
+            RitualHand pinching = open;
+            pinching.pinching = true;
+            Assert.That(TimeRitual.WouldScatter(_config, pinching, 5f), Is.False);
+            Assert.That(TimeRitual.WouldScatter(_config, open, 0.1f), Is.False, "막 놓은 손은 흩뜨리지 않는다");
+            RitualHand slow = open;
+            slow.palmVelocity = new Vector3(0.35f, 0f, 0f);
+            Assert.That(TimeRitual.WouldScatter(_config, slow, 5f), Is.False, "천천히 넣은 손은 흩뜨리지 않는다");
+        }
+
+        [TestCase(0.03f, false)]
+        [TestCase(0.09f, true)]
+        public void ReachingFastToPinchAPieceDoesNotScatterButAnOpenSwipeDoes(float gap, bool scatters)
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("ReachRitual", cfg, cats, null);
+                float now = 1f;
+                TimePieceView piece = Shaped(cats[2], 2, 4, new Vector3(-0.03f, 1.25f, 0.42f), ref now);
+                PiecesOf(ritual).Add(piece);
+                Vector3 c = piece.Center;
+                HandFrame frame = default;
+                int peak = 0;
+                for (int i = 0; i <= 12; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = GapPose(c + new Vector3(0f, 0f, -0.25f + 0.25f * i / 12f), gap);
+                    ritual.Tick(now, Dt, frame);
+                    peak = Mathf.Max(peak, piece.LooseCount);
+                }
+                if (scatters)
+                {
+                    Assert.That(peak, Is.GreaterThan(0), "손을 펴고 빠르게 휘저으면 흩어진다");
+                    Assert.That(ritual.ScatterEvents, Is.EqualTo(1));
+                    return;
+                }
+                Assert.That(peak, Is.EqualTo(0), "집으려고 빠르게 뻗은 손은 조각을 흩뜨리지 않는다");
+                for (int i = 0; i < 8; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = PinchPose(c, true);
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(piece.state, Is.EqualTo(PieceState.Held));
+                Assert.That(ritual.ScatterEvents, Is.EqualTo(0));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        float LagAfterJerk(int units)
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("WeightRitual" + units, cfg, cats, null);
+                float now = 1f;
+                TimePieceView piece = Shaped(cats[2], 2, units, new Vector3(-0.03f, 1.25f, 0.42f), ref now);
+                PiecesOf(ritual).Add(piece);
+                Vector3 grab = piece.Center;
+                HandFrame frame = new HandFrame { t = now, right = PinchPose(grab, false) };
+                now += Dt;
+                ritual.Tick(now, Dt, frame);
+                for (int i = 0; i < 10; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = PinchPose(grab, true);
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(piece.state, Is.EqualTo(PieceState.Held));
+                float startX = piece.Center.x;
+                for (int i = 0; i < 8; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = PinchPose(grab + new Vector3(0.06f, 0f, 0f), true);
+                    ritual.Tick(now, Dt, frame);
+                }
+                return 0.06f - (piece.Center.x - startX);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void BiggerPiecesTrailTheHandAndAMergedPieceMovesHeavier()
+        {
+            Assert.That(TimeRitual.WeightOmega(_config, 10), Is.LessThan(TimeRitual.WeightOmega(_config, 5) * 0.92f), "합친 조각(5+5)은 합치기 전보다 묵직하다");
+            Assert.That(TimeRitual.WeightOmega(_config, 46), Is.GreaterThan(12f), "아주 큰 조각도 너무 무겁지 않다 (사람 11-16: 너무 무겁긴 함)");
+            float light = LagAfterJerk(2);
+            float heavy = LagAfterJerk(10);
+            Assert.That(heavy, Is.GreaterThan(light * 1.25f), "큰 조각일수록 손을 느리게 따라온다");
+            Assert.That(heavy, Is.LessThan(_config.weightMaxLag + 0.005f), "그래도 손에서 떨어지지 않는다");
+            Assert.That(light, Is.LessThan(0.03f), "작은 조각은 손에 붙어 다닌다");
+        }
+
+        void GrabAndApproach(TimeRitual ritual, TimePieceView held, TimePieceView loose, ref float now, ref HandFrame frame, out Vector3 grab, out Vector3 stop)
+        {
+            grab = held.Center;
+            frame.right = PinchPose(grab, false);
+            now += Dt;
+            frame.t = now;
+            ritual.Tick(now, Dt, frame);
+            for (int i = 0; i < 8; i++)
+            {
+                now += Dt;
+                frame.t = now;
+                frame.right = PinchPose(grab, true);
+                ritual.Tick(now, Dt, frame);
+            }
+            Assert.That(held.state, Is.EqualTo(PieceState.Held));
+            Vector3 toward = loose.Center - held.Center;
+            float travel = toward.magnitude - held.Radius - loose.Radius - 0.008f;
+            stop = grab + toward.normalized * travel;
+        }
+
+        [Test]
+        public void SameKindPiecesBridgeForAboutASecondThenBecomeOneWithAGoldSeam()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("BondRitual", cfg, cats, null);
+                float now = 1f;
+                TimePieceView loose = Shaped(cats[2], 2, 3, new Vector3(-0.16f, 1.25f, 0.42f), ref now);
+                TimePieceView held = Shaped(cats[2], 2, 3, new Vector3(0.04f, 1.25f, 0.42f), ref now);
+                PiecesOf(ritual).Add(loose);
+                PiecesOf(ritual).Add(held);
+                HandFrame frame = default;
+                GrabAndApproach(ritual, held, loose, ref now, ref frame, out Vector3 grab, out Vector3 stop);
+                float t = 0f, bondAt = -1f, mergeAt = -1f, bridge = 0f, minGap = 1f;
+                for (int i = 0; i < 72 * 4 && mergeAt < 0f; i++)
+                {
+                    now += Dt;
+                    t += Dt;
+                    frame.t = now;
+                    frame.right = PinchPose(Vector3.Lerp(grab, stop, Mathf.Clamp01(i / 50f)), true);
+                    ritual.Tick(now, Dt, frame);
+                    if (bondAt < 0f && ritual.BondProgress(1) > 0f)
+                    {
+                        bondAt = t;
+                        Assert.That(loose.Alive, Is.True, "닿자마자 합쳐지지 않는다");
+                    }
+                    if (bondAt >= 0f && loose.Alive)
+                    {
+                        bridge = Mathf.Max(bridge, Mathf.Min(loose.BridgeAmount, held.BridgeAmount));
+                        minGap = Mathf.Min(minGap, held.DistanceTo(loose));
+                    }
+                    if (!loose.Alive) mergeAt = t;
+                }
+                Assert.That(bondAt, Is.GreaterThanOrEqualTo(0f), "가까이 대면 서로 이어지기 시작한다");
+                Assert.That(bridge, Is.GreaterThan(0.5f), "두 조각의 알갱이가 다리처럼 이어진다");
+                Assert.That(minGap, Is.GreaterThan(-0.012f), "이어지는 동안 서로 파고들지 않는다");
+                Assert.That(mergeAt - bondAt, Is.InRange(cfg.bondSeconds * 0.8f, cfg.bondSeconds * 1.6f), "이어진 뒤 잠시 있다가 하나가 된다");
+                Assert.That(held.Units, Is.EqualTo(6));
+                Assert.That(held.data.mergedCount, Is.EqualTo(1));
+                Assert.That(held.shape, Is.EqualTo(PieceShape.Blob), "같은 종의 더 큰 형상");
+                Assert.That(held.SeamCount, Is.EqualTo(0), "금선은 없앤다 (사람 결정 11-16)");
+                Assert.That(ritual.Snaps, Is.EqualTo(0));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void PullingApartBeforeTheBondCompletesStretchesThenSnaps()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("SnapRitual", cfg, cats, null);
+                float now = 1f;
+                TimePieceView loose = Shaped(cats[2], 2, 3, new Vector3(-0.16f, 1.25f, 0.42f), ref now);
+                TimePieceView held = Shaped(cats[2], 2, 3, new Vector3(0.04f, 1.25f, 0.42f), ref now);
+                PiecesOf(ritual).Add(loose);
+                PiecesOf(ritual).Add(held);
+                HandFrame frame = default;
+                GrabAndApproach(ritual, held, loose, ref now, ref frame, out Vector3 grab, out Vector3 stop);
+                Vector3 last = grab;
+                for (int i = 0; i < 72 * 3 && ritual.BondProgress(1) < 0.3f; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    last = Vector3.Lerp(grab, stop, Mathf.Clamp01(i / 50f));
+                    frame.right = PinchPose(last, true);
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(ritual.BondProgress(1), Is.InRange(0.3f, 0.99f), "이어지는 중");
+                Vector3 away = last + (grab - stop).normalized * 0.14f;
+                float stretched = 0f;
+                for (int i = 1; i <= 40; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = PinchPose(Vector3.Lerp(last, away, Mathf.Clamp01(i / 10f)), true);
+                    ritual.Tick(now, Dt, frame);
+                    if (ritual.Snaps == 0 && loose.Alive) stretched = Mathf.Max(stretched, held.DistanceTo(loose));
+                }
+                Assert.That(ritual.Snaps, Is.EqualTo(1), "다 이어지기 전에 떼면 끊어진다");
+                Assert.That(stretched, Is.GreaterThan(cfg.bondStart), "끊어지기 전에 늘어난다");
+                Assert.That(loose.Alive && held.Alive, Is.True);
+                Assert.That(held.data.mergedCount, Is.EqualTo(0));
+                Assert.That(held.SeamCount, Is.EqualTo(0));
+                Assert.That(held.BridgeAmount + loose.BridgeAmount, Is.EqualTo(0f).Within(1e-6f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void AMergedPieceNeverShowsHowManyFragmentsItHolds()
+        {
+            _config.showMinutesLabel = true;
+            _config.timeLabels = true;
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            TimePieceView a = Pulled(_move, 0, 3, Vector3.zero, Vector3.forward, font);
+            TimePieceView b = Pulled(_move, 0, 2, new Vector3(0.04f, 0f, 0f), Vector3.forward, font);
+            a.Absorb(b, MergedShape.Blob);
+            a.Hold();
+            a.Tick(1f, Dt);
+            Assert.That(a.LabelText, Is.Not.Empty);
+            Assert.That(a.LabelText, Does.Not.Contain("fragments"), "개수 표기는 없다");
+            Assert.That(a.LabelText, Does.Not.Contain("(2)"));
+            a.Kill();
+        }
+
         [Test]
         public void DeskPoolGlowsUnderTheJarWhileFillingSwellsAfterTheSealAndFadesWhenLifted()
         {
@@ -930,6 +1283,13 @@ namespace MoodPicker.Tests
             Assert.That(shipped.roomLight, Is.LessThan(1f));
             Assert.That(shipped.guideTrails, Is.False, "형상에서 병으로 계속 떨어지는 입자 줄기는 없앤다");
             Assert.That(shipped.halos && shipped.handLight, Is.True, "오브제가 광원, 손에 빛이 닿는다");
+            Assert.That(shipped.handField, Is.True, "손은 알갱이에 힘을 준다");
+            Assert.That(shipped.scatterSpeed, Is.GreaterThanOrEqualTo(0.4f), "흩어짐은 손 속도가 문턱값 이상일 때만");
+            Assert.That(shipped.returnSeconds, Is.GreaterThanOrEqualTo(1f), "몇 초에 걸쳐 돌아온다");
+            Assert.That(shipped.weightLag, Is.GreaterThan(0f), "무게는 지연으로 표현한다");
+            Assert.That(shipped.stickyMerge, Is.True, "알갱이 다리로 끈적하게 합쳐진다");
+            Assert.That(shipped.seam, Is.False, "금선은 없앤다 (사람 결정 11-16)");
+            Assert.That(shipped.releaseGlideMax, Is.LessThanOrEqualTo(0.1f), "던지기는 없다");
         }
 
         [Test]

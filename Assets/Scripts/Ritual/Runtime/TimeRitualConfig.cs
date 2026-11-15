@@ -300,6 +300,49 @@ namespace MoodPicker.Ritual
         [Header("Scatter")]
         [Range(1f, 3.5f)] public float scatterAspectMax = 1.6f;
 
+        [Header("Hand Field")]
+        public bool handField = true;
+        public float fieldFinger = 0.013f;
+        public float fieldPalm = 0.03f;
+        public float fieldReach = 0.14f;
+        [Range(0f, 1f)] public float partStrength = 0.5f;
+        public float partRecover = 0.7f;
+        public float scatterSpeed = 0.6f;
+        public float pinchFormDistance = 0.045f;
+        public float scatterGrace = 0.35f;
+        [Range(0f, 1.5f)] public float scatterCarry = 0.7f;
+        public float scatterBurst = 0.35f;
+        public float scatterFlight = 0.35f;
+        public float scatterDrag = 3.5f;
+        public float returnSeconds = 2.2f;
+        [Range(0f, 1.5f)] public float returnSwirl = 0.6f;
+
+        [Header("Weight")]
+        public float weightLag = 0.6f;
+        public float weightUnits = 6f;
+        public float weightFollow = 40f;
+        [Range(0.4f, 1.5f)] public float weightDamping = 1f;
+        public float weightMaxLag = 0.05f;
+        [Range(0f, 1f)] public float releaseGlide = 0.3f;
+        public float releaseGlideMax = 0.06f;
+
+        [Header("Sticky Merge")]
+        public bool stickyMerge = true;
+        public float bondStart = 0.016f;
+        public float bondBreak = 0.045f;
+        public float bondSeconds = 0.7f;
+        public float bondFollow = 0.12f;
+        [Range(0f, 1f)] public float bondLean = 0.25f;
+        [Range(0f, 1f)] public float bridgeShare = 0.4f;
+        [Range(0f, 1f)] public float bridgeReach = 0.95f;
+        public bool seam = false;
+        public int seamSplats = 96;
+        public float seamRadius = 0.0011f;
+        [Range(1f, 1.15f)] public float seamLift = 1.03f;
+        public float seamDelay = 0.5f;
+        public float seamSeconds = 1.2f;
+        [Range(0f, 2f)] public float seamGlow = 0.6f;
+
         [Header("Halo")]
         public bool halos = true;
         [Range(0f, 2f)] public float haloIntensity = 0.55f;

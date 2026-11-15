@@ -688,6 +688,11 @@ namespace MoodPicker.Ritual
                 _queue.Add(new Queued { at = _clock + i * step, position = position, units = firstUnit + i + 1, volume = 0.85f, windChime = windChime });
         }
 
+        public void Snap(Vector3 position)
+        {
+            Play(_soft, position, downVolume * 0.85f, 1.32f);
+        }
+
         public void Cancel(Vector3 position, bool windChime = false)
         {
             if (windChime) Play(_chimeSoft, position, downVolume * 1.2f, 0.94f);

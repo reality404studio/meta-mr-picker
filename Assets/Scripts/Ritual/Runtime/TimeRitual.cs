@@ -42,6 +42,28 @@ namespace MoodPicker.Ritual
             public Quaternion relative;
             public Vector3 jarOffset;
             public float span;
+            public Vector3 vel;
+        }
+
+        struct Bond
+        {
+            public TimePieceView other;
+            public float t;
+        }
+
+        readonly Bond[] _bonds = new Bond[2];
+        readonly Vector3[] _probes = new Vector3[6];
+        readonly float[] _probeRadii = new float[6];
+        readonly float[] _pinchEndedAt = { -10f, -10f };
+        public int Snaps { get; private set; }
+        public int ScatterEvents { get; private set; }
+        readonly bool[] _scattering = new bool[2];
+        public float BondProgress(int hand) => _bonds[Mathf.Clamp(hand, 0, 1)].t;
+
+        public static float WeightOmega(TimeRitualConfig cfg, int units)
+        {
+            float heavy = 1f + Mathf.Max(0f, cfg.weightLag) * Mathf.Sqrt(Mathf.Max(0, units) / Mathf.Max(1f, cfg.weightUnits));
+            return Mathf.Max(0.5f, cfg.weightFollow) / heavy;
         }
 
         struct LabelGlyphVert
@@ -620,7 +642,7 @@ namespace MoodPicker.Ritual
 
         TimePieceView CreatePiece(TimeHeap heap)
         {
-            return new TimePieceView(piecesRoot, heap.Category, IndexOf(heap.Category), LookOf(heap.Category), splatMaterial, _config, tuning, labelFont, head, glowMaterial);
+            return new TimePieceView(piecesRoot, heap.Category, IndexOf(heap.Category), LookOf(heap.Category), splatMaterial, _config, tuning, labelFont, head, glowMaterial, waxMaterial);
         }
 
         public void PlaceAt(Vector3 position, Quaternion rotation)
@@ -729,7 +751,8 @@ namespace MoodPicker.Ritual
             {
                 if (!hand.tracked || !hand.pinching || g.piece == null || !g.piece.Alive || g.piece.state != PieceState.Held)
                 {
-                    if (g.piece != null && g.piece.Alive) g.piece.Drop();
+                    if (g.piece != null && g.piece.Alive) Release(h, ref g);
+                    _bonds[h] = default;
                     g = default;
                 }
                 else HoldPiece(h, ref g, hand, now, dt);
@@ -845,8 +868,34 @@ namespace MoodPicker.Ritual
                 if ((_grips[k].mode == GripHold || _grips[k].mode == GripSqueeze) && _grips[k].piece == piece) _grips[k] = default;
             g.mode = GripHold;
             g.piece = piece;
+            g.vel = Vector3.zero;
+            _bonds[h] = default;
             piece.Hold();
             Anchor(ref g, hand);
+        }
+
+        void Release(int h, ref Grip g)
+        {
+            TimePieceView piece = g.piece;
+            piece.Drop();
+            if (piece.state != PieceState.Floating) return;
+            if (_config.releaseGlide > 0f)
+            {
+                Vector3 glide = Vector3.ClampMagnitude(g.vel * _config.releaseGlide, Mathf.Max(0f, _config.releaseGlideMax));
+                if (glide.sqrMagnitude > 1e-8f) piece.Nudge(glide);
+            }
+            Bond b = _bonds[h];
+            _bonds[h] = default;
+            if (!_config.stickyMerge || b.t <= 0f || b.other == null || !b.other.Alive) return;
+            if (b.other.state != PieceState.Floating && b.other.state != PieceState.Held) return;
+            if (piece.DistanceTo(b.other) >= _config.bondBreak) return;
+            int o = 1 - h;
+            if (_grips[o].mode == GripHold && _grips[o].piece == b.other)
+            {
+                Merge(b.other, piece);
+                Anchor(ref _grips[o], _hands[o]);
+            }
+            else Merge(piece, b.other);
         }
 
         void StepSqueeze(int h, ref Grip g, in RitualHand hand, float now, float dt)
@@ -1009,9 +1058,31 @@ namespace MoodPicker.Ritual
             if (_grips[1 - h].mode == GripSqueeze && _grips[1 - h].piece == piece) return;
             Transform t = piece.Transform;
             Quaternion wanted = hand.rotation * g.relative;
-            Quaternion rotation = Quaternion.Slerp(t.rotation, wanted, 1f - Mathf.Exp(-dt * 14f * _config.holdRotate));
+            bool weighted = _config.weightLag > 0f;
+            float heavy = weighted ? Mathf.Max(0.5f, _config.weightFollow) / WeightOmega(_config, piece.Units) : 1f;
+            Quaternion rotation = Quaternion.Slerp(t.rotation, wanted, 1f - Mathf.Exp(-dt * 14f * _config.holdRotate / Mathf.Sqrt(heavy)));
             Vector3 target = hand.pinch - rotation * g.local;
-            Vector3 position = Vector3.Lerp(t.position, target, 1f - Mathf.Exp(-dt * _config.holdFollow));
+            Vector3 position;
+            if (weighted && dt > 0f)
+            {
+                float omega = WeightOmega(_config, piece.Units);
+                Vector3 x = t.position;
+                Vector3 err = target - x;
+                float maxLag = Mathf.Max(0.005f, _config.weightMaxLag);
+                if (err.magnitude > maxLag)
+                {
+                    x = target - err.normalized * maxLag;
+                    err = target - x;
+                }
+                float zeta = _config.weightDamping;
+                g.vel = (g.vel + err * (dt * omega * omega)) / (1f + 2f * zeta * omega * dt + omega * omega * dt * dt);
+                position = x + g.vel * dt;
+            }
+            else
+            {
+                position = Vector3.Lerp(t.position, target, 1f - Mathf.Exp(-dt * _config.holdFollow));
+                if (dt > 0f) g.vel = (position - t.position) / dt;
+            }
 
             bool magnetSpout = !_sealed && !_lidClosed && !_press.pressing && !_jar.Pouring && _jar.CanAccept(piece.Units);
             if (magnetSpout)
@@ -1029,6 +1100,12 @@ namespace MoodPicker.Ritual
             float roll = Mathf.Clamp((hand.rollSpeed - 0.9f) * _config.rollGlow, 0f, _config.rollGlowMax);
             if (roll > 0.03f) piece.AddGlow(roll);
 
+            if (_config.stickyMerge && StepBond(h, piece, dt))
+            {
+                Anchor(ref g, hand);
+                g.vel = Vector3.zero;
+            }
+
             for (int i = 0; i < _pieces.Count; i++)
             {
                 TimePieceView other = _pieces[i];
@@ -1036,6 +1113,7 @@ namespace MoodPicker.Ritual
                 float d = piece.DistanceTo(other);
                 if (other.categoryIndex == piece.categoryIndex)
                 {
+                    if (_config.stickyMerge) continue;
                     if (other.state == PieceState.Held && d < _config.mergeDistance)
                     {
                         Merge(piece, other);
@@ -1082,6 +1160,11 @@ namespace MoodPicker.Ritual
 
         void Attract(TimePieceView loose, TimePieceView toward, float gap, float dt)
         {
+            Attract(loose, toward, gap, dt, _config.mergeMagnetSpeed);
+        }
+
+        void Attract(TimePieceView loose, TimePieceView toward, float gap, float dt, float speed)
+        {
             loose.Segment(out Vector3 a, out Vector3 b);
             toward.Segment(out Vector3 c, out Vector3 e);
             RitualUtil.SegmentDistance(a, b, c, e, out Unity.Mathematics.float3 from, out Unity.Mathematics.float3 to);
@@ -1089,9 +1172,113 @@ namespace MoodPicker.Ritual
             if (dir.sqrMagnitude < 1e-8f) dir = toward.Center - loose.Center;
             if (dir.sqrMagnitude < 1e-8f) return;
             float k = 1f - Mathf.Clamp01(gap / Mathf.Max(1e-4f, _config.mergeMagnetRange));
-            Vector3 want = dir.normalized * (_config.mergeMagnetSpeed * (0.35f + 0.65f * k));
+            Vector3 want = dir.normalized * (speed * (0.35f + 0.65f * k));
             loose.Nudge((want - loose.drift) * (1f - Mathf.Exp(-dt * 10f)));
             if (_config.mergeMagnetGlow > 0f) loose.AddGlow(_config.mergeMagnetGlow * k);
+        }
+
+        bool StepBond(int h, TimePieceView piece, float dt)
+        {
+            ref Bond b = ref _bonds[h];
+            float range = Mathf.Max(_config.mergeMagnetRange, _config.bondBreak);
+            TimePieceView best = null;
+            float bestGap = range;
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                TimePieceView other = _pieces[i];
+                if (other == piece || other.categoryIndex != piece.categoryIndex) continue;
+                if (other.state != PieceState.Floating && other.state != PieceState.Held) continue;
+                float gap = piece.DistanceTo(other);
+                if (gap < bestGap)
+                {
+                    best = other;
+                    bestGap = gap;
+                }
+            }
+            int o = 1 - h;
+            if (best != null && h > o && _grips[o].mode == GripHold && _grips[o].piece == best)
+            {
+                b = default;
+                return false;
+            }
+            if (best != b.other)
+            {
+                if (b.other != null && b.other.Alive && b.t > 0f) Snap(piece, b.other);
+                b.other = best;
+                b.t = 0f;
+            }
+            if (best == null) return false;
+
+            if (best.state == PieceState.Floating)
+            {
+                float rest = _config.bondStart * 0.5f;
+                if (bestGap < 0f)
+                {
+                    Vector3 away = best.Center - piece.Center;
+                    if (away.sqrMagnitude < 1e-8f) away = Vector3.up;
+                    best.Nudge(away.normalized * Mathf.Min(0.4f, -bestGap * 14f) - best.drift * (1f - Mathf.Exp(-dt * 12f)));
+                }
+                else if (bestGap <= rest) best.Nudge(-best.drift * (1f - Mathf.Exp(-dt * 10f)));
+                else if (b.t > 0f) Attract(best, piece, bestGap, dt, _config.bondFollow);
+                else if (bestGap < _config.mergeMagnetRange) Attract(best, piece, bestGap, dt);
+            }
+            Vector3 contact = Contact(piece, best);
+            if (b.t > 0f && bestGap >= _config.bondBreak)
+            {
+                Snap(piece, best);
+                b.t = 0f;
+            }
+            else if (b.t > 0f || bestGap < _config.bondStart)
+            {
+                if (b.t <= 0f) Debug.Log($"{Tag} ritual bond start {piece.data.category} {piece.Units}+{best.Units} gap={bestGap:0.000}");
+                b.t += dt / Mathf.Max(0.05f, _config.bondSeconds);
+            }
+
+            float amount;
+            if (b.t > 0f)
+            {
+                float stretch = Mathf.Clamp01((bestGap - _config.bondStart) / Mathf.Max(1e-4f, _config.bondBreak - _config.bondStart));
+                amount = Mathf.Lerp(_config.bondLean, 1f, RitualUtil.Smooth(b.t * 1.6f)) * (1f - 0.55f * stretch);
+            }
+            else
+            {
+                float lean = 1f - Mathf.Clamp01(bestGap / Mathf.Max(1e-4f, _config.mergeMagnetRange));
+                amount = _config.bondLean * lean;
+            }
+            if (amount > 0.001f)
+            {
+                piece.SetBridge(contact, amount);
+                best.SetBridge(contact, amount);
+            }
+
+            if (b.t < 1f) return false;
+            b = default;
+            Merge(piece, best);
+            return true;
+        }
+
+        static Vector3 Contact(TimePieceView a, TimePieceView b)
+        {
+            a.Segment(out Vector3 a0, out Vector3 a1);
+            b.Segment(out Vector3 b0, out Vector3 b1);
+            RitualUtil.SegmentDistance(a0, a1, b0, b1, out Unity.Mathematics.float3 ca, out Unity.Mathematics.float3 cb);
+            Vector3 dir = (Vector3)cb - (Vector3)ca;
+            if (dir.sqrMagnitude < 1e-8f) dir = b.Center - a.Center;
+            if (dir.sqrMagnitude < 1e-8f) return a.Center;
+            dir.Normalize();
+            Vector3 sa = (Vector3)ca + dir * a.Radius;
+            Vector3 sb = (Vector3)cb - dir * b.Radius;
+            return (sa + sb) * 0.5f;
+        }
+
+        void Snap(TimePieceView a, TimePieceView b)
+        {
+            a.Snap();
+            b.Snap();
+            Snaps++;
+            Vector3 at = Contact(a, b);
+            if (sound != null) sound.Snap(at);
+            Debug.Log($"{Tag} ritual bond snap {a.data.category} gap={a.DistanceTo(b):0.000} n={Snaps}");
         }
 
         void Merge(TimePieceView keeper, TimePieceView absorbed)
@@ -1155,8 +1342,66 @@ namespace MoodPicker.Ritual
             return best;
         }
 
+        public static bool WouldScatter(TimeRitualConfig cfg, in RitualHand hand, float sinceRelease)
+        {
+            if (!hand.tracked || hand.pinching) return false;
+            if (sinceRelease < cfg.scatterGrace) return false;
+            if (Vector3.Distance(hand.thumb, hand.index) < cfg.pinchFormDistance) return false;
+            return hand.palmVelocity.magnitude >= cfg.scatterSpeed;
+        }
+
+        void StepField(float now, float dt)
+        {
+            for (int h = 0; h < 2; h++)
+            {
+                ref RitualHand hand = ref _hands[h];
+                if (hand.pinchEnded) _pinchEndedAt[h] = now;
+                int mode = _grips[h].mode;
+                if (!hand.tracked || mode == GripPull || mode == GripJar || mode == GripWax) continue;
+                bool scatter = WouldScatter(_config, hand, now - _pinchEndedAt[h]);
+                bool scatteredAny = false;
+                _probes[0] = hand.thumb;
+                _probes[1] = hand.index;
+                _probes[2] = hand.middle;
+                _probes[3] = hand.ring;
+                _probes[4] = hand.little;
+                _probes[5] = hand.palm;
+                for (int k = 0; k < 5; k++) _probeRadii[k] = _config.fieldFinger;
+                _probeRadii[5] = _config.fieldPalm;
+                for (int i = 0; i < _pieces.Count; i++)
+                {
+                    TimePieceView piece = _pieces[i];
+                    if (piece.state != PieceState.Floating && piece.state != PieceState.Held) continue;
+                    if ((mode == GripHold || mode == GripSqueeze) && _grips[h].piece == piece) continue;
+                    float extent = piece.shape == PieceShape.Blob ? piece.Radius : piece.Length * 0.5f + piece.Radius;
+                    if (Vector3.Distance(hand.palm, piece.Center) > extent + _config.fieldReach) continue;
+                    float contact = piece.Field(_probes, _probeRadii, 6, hand.palmVelocity, scatter, dt);
+                    if (piece.LastScattered > 0 && !scatteredAny)
+                    {
+                        scatteredAny = true;
+                        if (!_scattering[h])
+                        {
+                            ScatterEvents++;
+                            Debug.Log($"{Tag} ritual scatter {piece.data.category} grains={piece.LastScattered} speed={hand.palmVelocity.magnitude:0.00} pinchGap={Vector3.Distance(hand.thumb, hand.index):0.000} n={ScatterEvents}");
+                        }
+                    }
+                    if (contact > 0.15f && hand.palmVelocity.sqrMagnitude > 0.002f && now >= _nextTouchSoundTime[h])
+                    {
+                        if (sound != null) sound.Knead(hand.palm, piece.feel, IsWindChime(piece));
+                        _nextTouchSoundTime[h] = now + (scatter ? 0.12f : 0.26f);
+                    }
+                }
+                _scattering[h] = scatteredAny;
+            }
+        }
+
         void StepTouch(float now, float dt)
         {
+            if (_config.handField)
+            {
+                StepField(now, dt);
+                return;
+            }
             for (int h = 0; h < 2; h++)
             {
                 ref RitualHand hand = ref _hands[h];
