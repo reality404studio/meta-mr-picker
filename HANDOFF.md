@@ -1,13 +1,23 @@
 # HANDOFF — 시간 채집 리추얼 (Time Ritual)
-updated: 2026-11-15 00:45 KST · branch: `ritual` (앱 레포 `unity/mood-picker`) · 보드: `studio/apps/time-ritual/` (`--app time-ritual`)
+updated: 2026-11-15 15:15 KST · branch: `ritual` (앱 레포 `unity/mood-picker`) · 보드: `studio/apps/time-ritual/` (`--app time-ritual`)
 
 ## 1. 프로젝트 한 줄 정의 & 목표
 - **작품 한 줄**: 형태 없이 흘러가 버린 오늘을, 그 시간을 보낸 책상 위에 빛의 병으로 남기는 하루 마무리 의식.
-- **배경/타깃**: Meta VR Start Developer Competition 2026 생산성 트랙(마감 `2026-11-19 05:00 KST`). 컨트롤러 없이 **핸드트래킹만**으로 처음부터 끝까지 조작. 명세 원천: `../studio/apps/time-ritual/source/ritual-guide-1112.md`.
+- **배경/타깃**: Meta VR Start Developer Competition 2026 생산성 트랙(마감 `2026-11-19 05:00 KST`). 컨트롤러 없이 **핸드트래킹만**으로 처음부터 끝까지 조작. **구현 기준(명세): `/Users/rafaela/01_PROJECT_NOW/my-vr-colorpicker/Time Ritual 구현 명세 (Claude Code용).md` (2026-11-15, 7장면·작업 순서 9단계, 단계마다 멈추고 보고 → 사람 헤드셋 확인).** 이 HANDOFF 는 현황 파악용. 옛 `../studio/apps/time-ritual/source/ritual-guide-1112.md` 는 11-12 실험 빌드 가이드
 - **핵심 원칙**: 압박/스트릭/점수/알림 없음("성취가 아니라 안도감"). 아름다움 + Quest 3S 72fps/발열 안정.
-- **다음 메인 작업**: **기억보관대 (Memory Shelf / 보관대)** 구축 (봉인된 병 보관·전시·날짜/기록 저장·다시 꺼내 보기).
+- **다음 메인 작업**: 명세 **3단계 꺼내기** (아래 0절). 기억보관대는 명세 6단계 「선반」으로 대체됨
 
 ---
+
+## 0. 지금 카드 (2026-11-15 15:15)
+- **명세 1단계(조사·기준선)** 보고 `evidence/time-ritual-spec-1115/stage1-report.md`
+- **명세 2단계(빛과 정리)** 보드 `build-c5b8` done · 커밋 `d62aab6` · 증거 L4 `evidence/spec1115-s2/7c4cee9-dirty-1115-145342/` (보고 `evidence/time-ritual-spec-1115/stage2-report.md`)
+  - 방 패스스루 `textureOpacity` 0.38/봉인 뒤 0.32 · 후광·손 빛 `RitualLightField` · 책상 웅덩이 첫 붓기부터 `RitualDeskPool` · 빛 궤적 끔 · 라벨 왼손 마이크로제스처 온오프(기본 끔=꼬리표) · 같은 종류 6cm 끌림 · 흩어진 스플랫 길이/폭 상한 1.6 (`LetterSplatURP _AspectMax`, 리추얼만)
+  - 실기: 72fps 유지, GPU 최대 10.2ms(약 73%). 사람: 방 "딱 좋았다", 후광 "빛나는 물체로 보였다", 라벨 "왼손 마이크로제스쳐 온오프로 컨펌"
+- **다음: 3단계 꺼내기** — 샘을 형태 없는 무리로, 당기기 = **지금 구조 유지**(사람: 핀치해 당기면 이 오브제 모습의 작은 구슬이 실에 꿰인 염주처럼), 놓으면 알갱이가 흘러 형상, 조각이 방에 천천히 떠다니기. 이어서 4 봉인 · 5 시계 · 6 선반 · 7 손의 물성 · 8 붓기 · 9 가이드·소리
+- 사람 결정 (DECIDED 11-15): 카테고리 이름 지금 그대로(Rested·Moved·Focused·Explored·Enjoyed), 굵기 지금 값(`barRadius` 0.014), 라벨 온오프, **60fps 아래로 떨어지면 안 됨**
+- 미확인: 흩어진 스플랫 상한 1.6 체감, 꼬리표 끈(없음)·글자 크기
+- 도구 주의: `mr preflight` 오판(LESSONS 11-10), `mr logcat` 실패 → adb 직접, `.harness/device.env` PACKAGE 가 moodpicker → `com.DefaultCompany.timeritual` 명시, 커밋은 보드 done 카드 id (LESSONS 11-15). 빌드 메서드가 `TimeRitual.unity` 를 다시 만들어 fileID 만 바뀜 → 커밋에서 빼고 `git checkout`
 
 ## 2. 현재 구현 완료 상태 (2026-11-15 00:45 기준)
 직전 커밋(`e2b1685`) 이후 이번 세션까지 구현·검증·Quest 3S 배포된 전체 루프:
@@ -62,7 +72,7 @@ updated: 2026-11-15 00:45 KST · branch: `ritual` (앱 레포 `unity/mood-picker
 
 ---
 
-## 4. 다음 작업: 기억보관대 (Memory Shelf / 보관대) 착수 가이드
+## 4. (대체됨 2026-11-15 → 명세 6단계 「선반」) 기억보관대 착수 가이드 — 참고용
 원천 명세(`ritual-guide-1112.md`)에서 다음 단계로 보류되어 있던 **"선반, 일주일 보기, 날짜별 저장(기억보관대)"**을 이제 시작한다.
 
 ### 착수 전 사용자와 확인할/결정할 사항 (필요 시 `ask_question` 또는 간단 확인)
@@ -107,4 +117,4 @@ updated: 2026-11-15 00:45 KST · branch: `ritual` (앱 레포 `unity/mood-picker
 ---
 
 ## 6. 다음 세션 첫 발화 추천
-`HANDOFF.md 확인 완료. 방금 배포한 기울임 뚜껑 고정·바닥 마감 Quest 3S 실기 확인 결과 먼저 여쭙고, 곧바로 기억보관대(위치/슬롯 수/저장·꺼내보기 흐름) 설계와 구현에 착수하겠습니다.`
+`HANDOFF 0절 확인. 「Time Ritual 구현 명세 (Claude Code용).md」 3단계 꺼내기(형태 없는 샘, 지금 구슬-실 구조 유지, 놓으면 흘러 형상, 조각이 방에 떠다님)부터 이어 갑니다. 단계 끝에 멈추고 보고 형식으로 보고합니다.`

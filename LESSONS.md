@@ -104,3 +104,15 @@
 - 원인: Horizon OS 가 창이 닫힐 때까지 실행을 미룸. `autoPlace` 는 첫 30프레임의 머리 위치로 한 번만 놓음
 - 확인법: 사람이 "준비"(착용) 한 뒤 `sh scripts/ritual.sh run`. 착용 전에 실행했으면 다시 실행. 단, 사람이 이미 쓰는 중이면 재시작이 그 판을 지움 → 재시작 전에 logcat 에서 `sealed=` 확인
 - 적용 범위: Unity Quest 실기 라운드 promote?
+
+## 패스스루를 "원래 밝기의 N%"로 어둡게 하려면 밝기 오프셋이 아니라 textureOpacity (2026-11-15, build-c5b8)
+- 증상: `SetBrightnessContrastSaturation(brightness)` 는 오프셋이라 −0.36 을 줘도 "조금 어두운" 정도이고, 더 내리면 어두운 곳부터 뭉개져 "30~40%" 같은 배율 목표를 못 맞춘다
+- 원인: brightness 는 휘도에 더하는 값. 배율로 어둡히는 건 `OVRPassthroughLayer.textureOpacity` (Meta 문서: "Use this to dim passthrough", 0~1)
+- 확인법: `RitualOvrBridge.LateUpdate` 에서 `textureOpacity = ritual.PassthroughLight`. 실기 0.38 → 사람 "딱 좋았다" (손·책상 보이고 병 윤곽 또렷)
+- 적용 범위: 모든 MR (Unity Meta XR Core 207)
+
+## `mr logcat` 이 `-T '11-15'` 로 실패, 커밋은 보드에서 done 인 카드 id 가 첫 줄이어야 (2026-11-15, build-c5b8)
+- 증상: `mr logcat <pkg>` 가 "-T '11-15' not in time format" 으로 끝남. `git commit` 이 "카드 "…" 가 어느 보드에도 없어요" 로 거절
+- 원인: `mr launch` 가 실행 시각을 날짜만 기록. 커밋 훅(`my-mr-studio/scripts/githooks/rules.mjs`)은 첫 줄 `card-id:` 의 카드가 보드에 있고 status done 이어야 통과
+- 확인법: logcat 은 `adb logcat -d -v time -s Unity:I VrApi:I > evidence/<card>/<buildId>/logcat.txt` 로 직접. 커밋 전 `npm run studio -- show <id> --app time-ritual` 에서 상태 done 확인 (보드에 없으면 add → sub → done 으로 카드부터)
+- 적용 범위: 모든 MR (mr 도구 · 작업대 커밋 훅)
