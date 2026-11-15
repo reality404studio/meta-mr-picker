@@ -12,7 +12,7 @@ namespace MoodPicker.Ritual
         const string Tag = "[MP]";
         public const string LiveFile = "ritual.json";
 
-        const int GripNone = 0, GripPull = 1, GripHold = 2, GripJar = 3, GripSqueeze = 4, GripWax = 5, GripLid = 6;
+        const int GripNone = 0, GripPull = 1, GripHold = 2, GripJar = 3, GripSqueeze = 4, GripWax = 5, GripLid = 6, GripPalm = 7;
         const float LabelAttachScale = 0.56f;
         const float LabelDividerY = 0.024f;
         const float LabelMaxWidth = 0.084f;
@@ -55,6 +55,9 @@ namespace MoodPicker.Ritual
         readonly Vector3[] _probes = new Vector3[6];
         readonly float[] _probeRadii = new float[6];
         readonly float[] _pinchEndedAt = { -10f, -10f };
+        readonly float[] _cupWait = new float[2];
+        bool _restPending;
+        public int PalmPours { get; private set; }
         public int Snaps { get; private set; }
         public int ScatterEvents { get; private set; }
         readonly bool[] _scattering = new bool[2];
@@ -720,6 +723,7 @@ namespace MoodPicker.Ritual
                 if (!piece.Alive) _pieces.RemoveAt(i);
             }
             StepSeal(now, dt);
+            StepRest();
             StepMicrogesture(now);
             StepGuideTrails(dt);
             StepRoomNote(dt);
@@ -768,6 +772,11 @@ namespace MoodPicker.Ritual
                 StepSqueeze(h, ref g, hand, now, dt);
                 return;
             }
+            if (g.mode == GripPalm)
+            {
+                StepPalm(h, ref g, hand, dt);
+                return;
+            }
             if (g.mode == GripLid)
             {
                 if (!hand.tracked || !hand.pinching)
@@ -800,6 +809,7 @@ namespace MoodPicker.Ritual
                     if (near.Present) _hoveredHeap = near;
                 }
             }
+            if (_config.palmPour && !_sealed && !_lidClosed && !hand.pinching && TryCup(h, ref g, hand, dt)) return;
             if (!hand.pinchStarted) return;
             if (!_sealed && !_lidClosed && !_jar.Pouring && _wax.LidShown && !_config.waxStick
                 && Vector3.Distance(hand.pinch, _wax.lidRoot.position) < _config.lidGrabRadius
@@ -865,13 +875,141 @@ namespace MoodPicker.Ritual
                 }
             }
             for (int k = 0; k < 2; k++)
-                if ((_grips[k].mode == GripHold || _grips[k].mode == GripSqueeze) && _grips[k].piece == piece) _grips[k] = default;
+                if ((_grips[k].mode == GripHold || _grips[k].mode == GripSqueeze || _grips[k].mode == GripPalm) && _grips[k].piece == piece)
+                {
+                    if (_grips[k].mode == GripPalm) piece.SetSqueeze(0f);
+                    _grips[k] = default;
+                }
             g.mode = GripHold;
             g.piece = piece;
             g.vel = Vector3.zero;
             _bonds[h] = default;
             piece.Hold();
             Anchor(ref g, hand);
+        }
+
+        Vector3 PalmNormal(in RitualHand hand)
+        {
+            Vector3 n = hand.palmNormal.sqrMagnitude > 1e-8f ? hand.palmNormal.normalized : Vector3.up;
+            return _config.palmNormalSign < 0f ? -n : n;
+        }
+
+        bool TryCup(int h, ref Grip g, in RitualHand hand, float dt)
+        {
+            Vector3 n = PalmNormal(hand);
+            if (n.y < _config.palmUp || hand.openness < _config.palmOpen || hand.palmVelocity.magnitude > _config.scatterSpeed)
+            {
+                _cupWait[h] = 0f;
+                return false;
+            }
+            Vector3 cup = hand.palm + n * _config.palmCupLift;
+            TimePieceView best = null;
+            float bestDistance = _config.palmCupReach;
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                TimePieceView piece = _pieces[i];
+                if (piece.state != PieceState.Floating) continue;
+                float d = Vector3.Distance(piece.Center, cup) - piece.Radius * 0.5f;
+                if (d < bestDistance)
+                {
+                    best = piece;
+                    bestDistance = d;
+                }
+            }
+            if (best == null)
+            {
+                _cupWait[h] = 0f;
+                return false;
+            }
+            _cupWait[h] += dt;
+            if (_cupWait[h] < _config.palmCupSeconds) return false;
+            _cupWait[h] = 0f;
+            g = default;
+            g.mode = GripPalm;
+            g.piece = best;
+            _bonds[h] = default;
+            best.Hold();
+            Debug.Log($"{Tag} ritual palm cup hand={h} {best.data.category} units={best.Units} up={n.y:0.00}");
+            return true;
+        }
+
+        void StepPalm(int h, ref Grip g, in RitualHand hand, float dt)
+        {
+            TimePieceView piece = g.piece;
+            if (!hand.tracked || piece == null || !piece.Alive || piece.state != PieceState.Held)
+            {
+                if (piece != null && piece.Alive)
+                {
+                    piece.SetSqueeze(0f);
+                    piece.Drop();
+                }
+                g = default;
+                return;
+            }
+            Vector3 n = PalmNormal(hand);
+            Vector3 mouth = _jar.MouthCenter;
+            Vector3 flat = hand.palm - mouth;
+            float above = flat.y;
+            flat.y = 0f;
+            bool overJar = !_sealed && !_lidClosed && flat.magnitude < _config.palmJarReach && above > -0.03f && above < _config.palmJarHeight;
+            if (n.y < _config.palmPourTilt)
+            {
+                piece.SetSqueeze(0f);
+                if (overJar && !_press.pressing && _jar.CanAccept(piece.Units))
+                {
+                    _wax.Hide();
+                    _press = default;
+                    _jar.BeginPour(piece);
+                    PalmPours++;
+                    Debug.Log($"{Tag} ritual palm pour {piece.data.category} units={piece.Units} tilt={n.y:0.00}");
+                    g = default;
+                    return;
+                }
+                if (overJar && !_jar.Pouring && !_jar.Fits(piece.Units))
+                {
+                    Refuse(piece);
+                    g = default;
+                    return;
+                }
+                piece.Drop();
+                Vector3 slide = Vector3.ProjectOnPlane(Vector3.down, n);
+                if (slide.sqrMagnitude < 1e-6f) slide = Vector3.down;
+                piece.Nudge(slide.normalized * 0.05f + Vector3.ClampMagnitude(g.vel * _config.releaseGlide, _config.releaseGlideMax));
+                Debug.Log($"{Tag} ritual palm slide {piece.data.category} tilt={n.y:0.00}");
+                g = default;
+                return;
+            }
+            if (hand.pinching || hand.openness < _config.palmOpen * 0.7f)
+            {
+                piece.SetSqueeze(0f);
+                piece.Drop();
+                g = default;
+                return;
+            }
+            Transform t = piece.Transform;
+            float lift = Mathf.Max(_config.palmCupLift * 0.6f, piece.Radius * (1f - 0.45f * _config.palmSettle * _config.blobSquash * 2f));
+            Vector3 target = hand.palm + n * lift;
+            float omega = WeightOmega(_config, piece.Units);
+            Vector3 x = t.position;
+            Vector3 err = target - x;
+            float maxLag = Mathf.Max(0.005f, _config.weightMaxLag);
+            if (err.magnitude > maxLag)
+            {
+                x = target - err.normalized * maxLag;
+                err = target - x;
+            }
+            if (dt > 0f) g.vel = (g.vel + err * (dt * omega * omega)) / (1f + 2f * _config.weightDamping * omega * dt + omega * omega * dt * dt);
+            piece.SetPose(x + g.vel * dt, t.rotation, _config.carry);
+            piece.SetSqueeze(_config.palmSettle, n);
+            if (overJar && piece.category != null && _jar.CanAccept(piece.Units)) _pourPreviewGlow = piece.category.glowColor * 0.14f;
+        }
+
+        void StepRest()
+        {
+            if (!_restPending || _jar.Pouring || _sealed) return;
+            _restPending = false;
+            RitualJar.Layer rest = _jar.BeginRest();
+            if (rest != null) Debug.Log($"{Tag} ritual rest sand units={rest.units} grains={rest.cloud.Count}");
         }
 
         void Release(int h, ref Grip g)
@@ -1284,7 +1422,7 @@ namespace MoodPicker.Ritual
         void Merge(TimePieceView keeper, TimePieceView absorbed)
         {
             for (int o = 0; o < 2; o++)
-                if ((_grips[o].mode == GripHold || _grips[o].mode == GripSqueeze) && _grips[o].piece == absorbed) _grips[o] = default;
+                if ((_grips[o].mode == GripHold || _grips[o].mode == GripSqueeze || _grips[o].mode == GripPalm) && _grips[o].piece == absorbed) _grips[o] = default;
             int before = keeper.Units;
             int added = absorbed.Units;
             keeper.Absorb(absorbed, _config.mergedShape);
@@ -1372,7 +1510,7 @@ namespace MoodPicker.Ritual
                 {
                     TimePieceView piece = _pieces[i];
                     if (piece.state != PieceState.Floating && piece.state != PieceState.Held) continue;
-                    if ((mode == GripHold || mode == GripSqueeze) && _grips[h].piece == piece) continue;
+                    if ((mode == GripHold || mode == GripSqueeze || mode == GripPalm) && _grips[h].piece == piece) continue;
                     float extent = piece.shape == PieceShape.Blob ? piece.Radius : piece.Length * 0.5f + piece.Radius;
                     if (Vector3.Distance(hand.palm, piece.Center) > extent + _config.fieldReach) continue;
                     float contact = piece.Field(_probes, _probeRadii, 6, hand.palmVelocity, scatter, dt);
@@ -1565,7 +1703,8 @@ namespace MoodPicker.Ritual
                     if (pull.Heaps[i] != null) pull.Heaps[i].MeltInto(drop, _config.meltSeconds * (0.85f + 0.06f * i));
             }
             if (sound != null) sound.Landed(_jar.MouthCenter, 40);
-            Debug.Log($"{Tag} ritual lid closed units={_jar.TotalUnits}");
+            _restPending = _config.restSand;
+            Debug.Log($"{Tag} ritual lid closed units={_jar.TotalUnits} room={_jar.Room}");
         }
 
         void StepMelt(float dt)
@@ -1623,6 +1762,7 @@ namespace MoodPicker.Ritual
             IReadOnlyList<RitualJar.Layer> layers = _jar.Layers;
             for (int i = 0; i < layers.Count; i++)
             {
+                if (layers[i].rest) continue;
                 _glowColors.Add(layers[i].category != null ? layers[i].category.glowColor : Color.white);
                 _glowUnits.Add(layers[i].units);
             }
@@ -1702,6 +1842,7 @@ namespace MoodPicker.Ritual
             if (sound != null) sound.Restore();
             _jarWasHeld = false;
             _lidClosed = false;
+            _restPending = false;
             _lidCloseAge = 0f;
             _lidLocal = Vector3.zero;
             _meltAge = -1f;
@@ -1835,6 +1976,7 @@ namespace MoodPicker.Ritual
                 if (cat == null || layer.units <= 0 || vessel.Room <= 0) continue;
                 vessel.FillInstant(cat, IndexOf(cat), Mathf.Min(layer.units, vessel.Room));
             }
+            if (_config.restSand) vessel.FillRestInstant();
             RitualWax wax = null;
             if (waxMaterial != null)
             {
@@ -1858,7 +2000,7 @@ namespace MoodPicker.Ritual
             };
             IReadOnlyList<RitualJar.Layer> layers = _jar.Layers;
             for (int i = 0; i < layers.Count; i++)
-                rec.layers.Add(new DayLayer { category = layers[i].category != null ? layers[i].category.id : "", units = layers[i].units });
+                if (!layers[i].rest) rec.layers.Add(new DayLayer { category = layers[i].category != null ? layers[i].category.id : "", units = layers[i].units });
             int d = DominantIndex();
             rec.dominant = d >= 0 && categories[d] != null ? categories[d].id : "";
             return rec;
@@ -2073,7 +2215,8 @@ namespace MoodPicker.Ritual
 
         void OnPourStarted(RitualJar.Layer layer)
         {
-            if (sound != null) sound.PourStart(_jar.MouthCenter);
+            float fill = Mathf.Clamp01(_jar.TotalUnits / (float)Mathf.Max(1, _jar.Capacity));
+            if (sound != null) sound.PourStart(_jar.MouthCenter, Mathf.Lerp(_config.pourPitchLow, _config.pourPitchHigh, layer.rest ? 1f : fill));
             if (layer.category != null) _labelAccent = layer.category.glowColor;
             _labelGlow = 1f;
             _panelTimer = 0f;
@@ -2105,6 +2248,7 @@ namespace MoodPicker.Ritual
             int total = 0;
             for (int i = 0; i < layers.Count; i++)
             {
+                if (layers[i].rest) continue;
                 Color c = layers[i].category != null ? layers[i].category.glowColor : Color.white;
                 _glowColors.Add(c);
                 _glowUnits.Add(layers[i].units);

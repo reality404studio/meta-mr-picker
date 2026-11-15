@@ -343,6 +343,28 @@ namespace MoodPicker.Ritual
         public float seamSeconds = 1.2f;
         [Range(0f, 2f)] public float seamGlow = 0.6f;
 
+        [Header("Palm Pour And Vessel")]
+        public bool palmPour = true;
+        [Range(0f, 1f)] public float palmUp = 0.55f;
+        public float palmOpen = 0.065f;
+        public float palmCupReach = 0.07f;
+        public float palmCupLift = 0.035f;
+        public float palmCupSeconds = 0.2f;
+        [Range(-0.5f, 0.9f)] public float palmPourTilt = 0.25f;
+        public float palmJarReach = 0.09f;
+        public float palmJarHeight = 0.3f;
+        [Range(0f, 1f)] public float palmSettle = 0.9f;
+        public float palmNormalSign = 1f;
+        public float pourPitchLow = 0.85f;
+        public float pourPitchHigh = 1.4f;
+        public bool restSand = true;
+        public float restSeconds = 2.6f;
+        [Range(0.3f, 1f)] public float restGrain = 0.7f;
+        public float glyphsPerHour = 1.2f;
+        public int glyphGrains = 30;
+        public float glyphHeight = 0.007f;
+        [Range(0f, 1f)] public float glyphGlow = 0.35f;
+
         [Header("Halo")]
         public bool halos = true;
         [Range(0f, 2f)] public float haloIntensity = 0.55f;

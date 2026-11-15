@@ -1179,6 +1179,194 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void ClosingTheDayFillsTheRestWithPaleFineSandSoTheVesselIsAlwaysFull()
+        {
+            RitualJar jar = Jar();
+            try
+            {
+                float now = 0f;
+                TimePieceView piece = Pulled(_move, 0, 2, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(jar.BeginPour(piece), Is.Not.Null);
+                Finish(jar, ref now);
+                Assert.That(jar.Room, Is.GreaterThan(100), "아주 조금만 꺼낸 날");
+                RitualJar.Layer rest = jar.BeginRest();
+                Assert.That(rest, Is.Not.Null);
+                Assert.That(rest.rest && rest.category == null, Is.True, "고운 옅은 모래");
+                Assert.That(rest.glyphs, Is.EqualTo(0));
+                Finish(jar, ref now);
+                Assert.That(jar.Room, Is.EqualTo(0), "얼마나 꺼냈든 병은 항상 가득 찬다");
+                Assert.That(jar.SurfaceMean, Is.GreaterThan(jar.Shape.FillCeiling - 0.006f));
+                Assert.That(jar.BeginRest(), Is.Null, "이미 가득하면 더 붓지 않는다");
+            }
+            finally
+            {
+                jar.Dispose();
+            }
+        }
+
+        [Test]
+        public void EachColouredLayerCarriesAFewDigitGrainsThatStayLitAfterSettling()
+        {
+            RitualJar jar = Jar();
+            try
+            {
+                float now = 0f;
+                TimePieceView piece = Pulled(_move, 0, 12, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                RitualJar.Layer layer = jar.BeginPour(piece);
+                Assert.That(layer.glyphs, Is.InRange(1, 8), "병 속에 숫자 글리프 알갱이를 소량 섞는다");
+                Assert.That(layer.cloud.Count - layer.glyphStart, Is.EqualTo(layer.glyphs * _config.glyphGrains));
+                Finish(jar, ref now);
+                Assert.That(layer.cloud.glow[layer.glyphStart], Is.EqualTo(_config.glyphGlow).Within(1e-4f), "가까이 들여다보면 숫자가 보인다");
+                Assert.That(layer.cloud.glow[0], Is.EqualTo(0f));
+                Vector3 h = layer.cloud.home[layer.glyphStart];
+                float radial = new Vector2(h.x, h.z).magnitude;
+                Assert.That(radial, Is.GreaterThan(jar.Shape.InnerRadius(h.y) - 0.004f), "유리벽 바로 안쪽");
+            }
+            finally
+            {
+                jar.Dispose();
+            }
+        }
+
+        static HandPose PalmPose(Vector3 palm, Vector3 normal)
+        {
+            Vector3 fwd = Vector3.ProjectOnPlane(Vector3.forward, normal);
+            if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.ProjectOnPlane(Vector3.right, normal);
+            fwd.Normalize();
+            Vector3 side = Vector3.Cross(normal, fwd).normalized;
+            return new HandPose
+            {
+                tracked = true,
+                palm = palm,
+                palmNormal = normal,
+                thumbTip = palm + side * 0.07f + fwd * 0.03f,
+                indexTip = palm + fwd * 0.09f + side * 0.02f,
+                middleTip = palm + fwd * 0.095f,
+                ringTip = palm + fwd * 0.09f - side * 0.02f,
+                littleTip = palm + fwd * 0.075f - side * 0.04f
+            };
+        }
+
+        TimePieceView CupOnPalm(TimeRitual ritual, TimeRitualConfig cfg, TimeCategoryAsset cat, int index, ref float now, ref HandFrame frame, out Vector3 palm)
+        {
+            TimePieceView piece = Shaped(cat, index, 4, new Vector3(-0.05f, 1.25f, 0.30f), ref now);
+            PiecesOf(ritual).Add(piece);
+            palm = piece.Center - Vector3.up * (cfg.palmCupLift + 0.01f);
+            for (int i = 0; i < 30; i++)
+            {
+                now += Dt;
+                frame.t = now;
+                frame.right = PalmPose(palm, Vector3.up);
+                ritual.Tick(now, Dt, frame);
+            }
+            Assert.That(piece.state, Is.EqualTo(PieceState.Held), "손바닥에 올리면 손에 실린다");
+            Assert.That(piece.Squeeze, Is.GreaterThan(0.5f), "모래처럼 내려앉는다");
+            return piece;
+        }
+
+        [Test]
+        public void APalmTurnedUpCupsAPieceLikeSandAndTiltingItOverTheJarPoursIt()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("PalmRitual", cfg, cats, null);
+                float now = 1f;
+                HandFrame frame = default;
+                TimePieceView piece = CupOnPalm(ritual, cfg, cats[1], 1, ref now, ref frame, out Vector3 palm);
+                Vector3 over = ritual.Jar.MouthCenter + Vector3.up * 0.12f;
+                for (int i = 1; i <= 50; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    frame.right = PalmPose(Vector3.Lerp(palm, over, Mathf.Clamp01(i / 40f)), Vector3.up);
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(piece.state, Is.EqualTo(PieceState.Held), "손바닥에 실린 채 병 위로");
+                Assert.That(ritual.Jar.Pouring, Is.False, "기울이기 전엔 붓지 않는다");
+                now += Dt;
+                frame.t = now;
+                frame.right = PalmPose(over, new Vector3(1f, 0.1f, 0f).normalized);
+                ritual.Tick(now, Dt, frame);
+                Assert.That(ritual.Jar.Pouring, Is.True, "병 위에서 손을 기울이면 흘러 들어간다");
+                Assert.That(ritual.PalmPours, Is.EqualTo(1));
+                for (int i = 0; i < 72 * 8 && ritual.Jar.Pouring; i++)
+                {
+                    now += Dt;
+                    frame.t = now;
+                    ritual.Tick(now, Dt, frame);
+                }
+                Assert.That(ritual.Jar.Layers.Count, Is.EqualTo(1));
+                Assert.That(piece.Alive, Is.False, "조각의 알갱이가 그대로 층이 된다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void TiltingThePalmAwayFromTheJarLetsThePieceSlideOffWithoutPouring()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("SlideRitual", cfg, cats, null);
+                float now = 1f;
+                HandFrame frame = default;
+                TimePieceView piece = CupOnPalm(ritual, cfg, cats[1], 1, ref now, ref frame, out Vector3 palm);
+                now += Dt;
+                frame.t = now;
+                frame.right = PalmPose(palm, new Vector3(1f, 0.1f, 0f).normalized);
+                ritual.Tick(now, Dt, frame);
+                Assert.That(piece.state, Is.EqualTo(PieceState.Floating), "병 밖에서 기울이면 미끄러져 떠 있는다");
+                Assert.That(ritual.Jar.Pouring, Is.False);
+                Assert.That(ritual.Jar.Layers.Count, Is.EqualTo(0));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void ClosingTheLidSiftsTheRestOfTheDayAndTheRecordKeepsOnlyWhatWasPoured()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                TimeRitual ritual = BareRitual("RestRitual", cfg, cats, null);
+                float now = 1f;
+                TimePieceView piece = Pulled(cats[2], 2, 3, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+                for (int i = 0; i < 72 * 8 && ritual.Jar.Pouring; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                typeof(TimeRitual).GetMethod("CloseLid", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(ritual, null);
+                now += Dt;
+                ritual.Tick(now, Dt, default);
+                Assert.That(ritual.Jar.Pouring, Is.True, "뚜껑을 닫으면 남은 빈틈에 고운 모래가 내려앉는다");
+                for (int i = 0; i < 72 * 8 && ritual.Jar.Pouring; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.Jar.Room, Is.EqualTo(0));
+                var rec = (DayRecord)typeof(TimeRitual).GetMethod("RecordToday", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(ritual, null);
+                Assert.That(rec.layers.Count, Is.EqualTo(1), "기록에는 부은 하루만, 나머지 모래는 다시 채운다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
         public void AMergedPieceNeverShowsHowManyFragmentsItHolds()
         {
             _config.showMinutesLabel = true;
@@ -1290,6 +1478,10 @@ namespace MoodPicker.Tests
             Assert.That(shipped.stickyMerge, Is.True, "알갱이 다리로 끈적하게 합쳐진다");
             Assert.That(shipped.seam, Is.False, "금선은 없앤다 (사람 결정 11-16)");
             Assert.That(shipped.releaseGlideMax, Is.LessThanOrEqualTo(0.1f), "던지기는 없다");
+            Assert.That(shipped.palmPour, Is.True, "손바닥에 올려 기울여 붓는다 (핀치로 들고 가 놓기는 보조)");
+            Assert.That(shipped.restSand, Is.True, "얼마나 꺼냈든 병은 항상 가득 찬다");
+            Assert.That(shipped.glyphsPerHour, Is.GreaterThan(0f), "병 속에 숫자 글리프 알갱이");
+            Assert.That(shipped.pourPitchHigh, Is.GreaterThan(shipped.pourPitchLow), "병이 찰수록 붓는 소리가 올라간다");
         }
 
         [Test]
@@ -2537,8 +2729,9 @@ namespace MoodPicker.Tests
                 TimeRitual r = SealedShelfRitual("Ending", cfg, cats, glowMat, ref now);
                 RitualShelf.ShelfJar past = r.Shelf.Jars[0];
                 Assert.That(past.vessel, Is.Not.Null, "지난 병도 완성된 입자 병");
-                Assert.That(past.vessel.TotalUnits, Is.EqualTo(past.record.TotalUnits));
-                Assert.That(past.vessel.Layers.Count, Is.EqualTo(past.record.layers.Count));
+                Assert.That(past.vessel.Room, Is.EqualTo(0), "지난 병도 나머지 하루의 고운 모래로 가득");
+                Assert.That(past.vessel.Layers.Count, Is.EqualTo(past.record.layers.Count + 1));
+                Assert.That(past.vessel.Layers[past.vessel.Layers.Count - 1].rest, Is.True);
                 Assert.That(past.vessel.TotalGrains, Is.GreaterThan(500));
                 float before = past.level;
                 CarryJar(r, ref now, r.Shelf.TodaySeat + new Vector3(0f, 0.05f, 0f), false);

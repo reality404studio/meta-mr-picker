@@ -699,9 +699,10 @@ namespace MoodPicker.Ritual
             else Play(_soft, position, downVolume, 0.8f);
         }
 
-        public void PourStart(Vector3 position)
+        public void PourStart(Vector3 position, float pitch = 1f)
         {
             if (!_ready) return;
+            _sand.pitch = Mathf.Clamp(pitch, 0.5f, 2f);
             _sand.transform.position = position;
             _sandTarget = sandVolume;
             if (!_sand.isPlaying) _sand.Play();
