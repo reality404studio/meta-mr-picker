@@ -271,3 +271,34 @@ MonoBehaviour:
   resetCounter: 0
   placeDistance: 0.42
   placeBelowEye: 0.14
+  shelf: 1
+  shelfDemo: 1
+  shelfDemoDays: 2
+  shelfFile: ritual-days.json
+  shelfStyle: 1
+  shelfSlots: 5
+  shelfTodaySlot: 2
+  shelfDistance: 0.58
+  shelfLift: 0.16
+  shelfSpacingDeg: 16
+  shelfDepth: 0.13
+  shelfSnapDistance: 0.12
+  shelfReleaseDistance: 0.22
+  shelfDepthTolerance: 0.5
+  shelfLightBack: 3
+  shelfLight: 1
+  shelfFrost: 0.1
+  shelfMemoryLight: 0.8
+  shelfPokeRadius: 0.012
+  shelfSwirl: 240
+  shelfInfoSeconds: 3.2
+  shelfMiniScale: 0.25
+  shelfCorner: {x: -0.38, y: -0.285, z: -0.04}
+  shelfApproachDelay: 1.5
+  shelfApproachSeconds: 2.5
+  shelfPastQuality: 0.7
+  ending: 1
+  endOrbDelay: 3
+  endOrbRadius: 0.07
+  endFadeSeconds: 3
+  endQuits: 1

@@ -6,6 +6,7 @@ namespace MoodPicker.Ritual
     public enum GlowStyle { Seep = 0, Petals = 1 }
     public enum FormStyle { Gather = 0, Flow = 1 }
     public enum ClimaxStyle { Ring = 0, Shell = 1, Bloom = 2 }
+    public enum ShelfStyle { Ledge = 0, Pedestals = 1 }
     public enum ClockCollapse { Crumble = 0, Burst = 1 }
 
     [CreateAssetMenu(menuName = "Mood Picker/Time Ritual Config")]
@@ -182,6 +183,41 @@ namespace MoodPicker.Ritual
         public ClockCollapse clockCollapse = ClockCollapse.Crumble;
         public float clockCollapseSeconds = 4.2f;
         public float clockSpread = 1.6f;
+
+        [Header("Shelf")]
+        public bool shelf = true;
+        public bool shelfDemo = true;
+        public int shelfDemoDays = 2;
+        public string shelfFile = "ritual-days.json";
+        public ShelfStyle shelfStyle = ShelfStyle.Pedestals;
+        public int shelfSlots = 5;
+        public int shelfTodaySlot = 2;
+        public float shelfDistance = 0.58f;
+        public float shelfLift = 0.16f;
+        public float shelfSpacingDeg = 16f;
+        public float shelfDepth = 0.13f;
+        public float shelfSnapDistance = 0.12f;
+        public float shelfReleaseDistance = 0.22f;
+        [Range(0.2f, 1f)] public float shelfDepthTolerance = 0.5f;
+        public float shelfLightBack = 3f;
+        [Range(0f, 2f)] public float shelfLight = 1f;
+        [Range(0f, 0.4f)] public float shelfFrost = 0.1f;
+        [Range(0f, 1.5f)] public float shelfMemoryLight = 0.8f;
+        public float shelfPokeRadius = 0.012f;
+        public float shelfSwirl = 240f;
+        public float shelfInfoSeconds = 3.2f;
+        [Range(0.1f, 1f)] public float shelfMiniScale = 0.25f;
+        public Vector3 shelfCorner = new Vector3(-0.38f, -0.285f, -0.04f);
+        public float shelfApproachDelay = 1.5f;
+        public float shelfApproachSeconds = 2.5f;
+        [Range(0.25f, 1f)] public float shelfPastQuality = 0.7f;
+
+        [Header("Ending")]
+        public bool ending = true;
+        public float endOrbDelay = 3f;
+        public float endOrbRadius = 0.07f;
+        public float endFadeSeconds = 3f;
+        public bool endQuits = true;
 
         [Header("Seal Flow")]
         public bool waxStick = false;

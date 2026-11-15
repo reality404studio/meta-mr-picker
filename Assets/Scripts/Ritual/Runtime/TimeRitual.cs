@@ -66,6 +66,7 @@ namespace MoodPicker.Ritual
         [SerializeField] Material glassMaterial;
         [SerializeField] Material waxMaterial;
         [SerializeField] Material glowMaterial;
+        [SerializeField] Material frostMaterial;
         [SerializeField] Material glyphMaterial;
         [SerializeField] Font labelFont;
         [SerializeField] Transform piecesRoot;
@@ -107,6 +108,22 @@ namespace MoodPicker.Ritual
         int _floatSlots;
         RitualSealWave _sealWave;
         RitualClock _clock;
+        RitualShelf _shelf;
+        RitualDayStore _store;
+        DayRecord _today;
+        bool _shelved;
+        float _shelveAge = -1f;
+        Vector3 _shelveFrom;
+        bool _jarWasHeld;
+        float _shelfNear;
+        RitualEnding _ending;
+        RitualEnding.Phase _endSeen;
+        bool _quitIssued;
+        readonly RitualSwirl _todaySwirl = new RitualSwirl();
+        readonly bool[] _todayInside = new bool[2];
+        float _todayPoke;
+        float _todayPokeCool;
+        float _shelfStage;
         bool _clockDone = true;
         bool _clockSand;
         readonly Vector3[] _springPos = new Vector3[5];
@@ -213,6 +230,13 @@ namespace MoodPicker.Ritual
         public Vector3 LidPosition => _wax != null ? _wax.lidRoot.position : Vector3.zero;
         public RitualSealWave SealWave => _sealWave;
         public RitualClock Clock => _clock;
+        public RitualShelf Shelf => _shelf;
+        public RitualEnding Ending => _ending;
+        public RitualSwirl TodaySwirl => _todaySwirl;
+        public bool QuitIssued => _quitIssued;
+        public RitualDayStore Store => _store;
+        public DayRecord Today => _today;
+        public bool Shelved => _shelved;
         public bool ClockDone => _clockDone;
         public bool PressFull => _press.full;
         public bool Melting => _meltAge >= 0f && !_materialized;
@@ -261,6 +285,13 @@ namespace MoodPicker.Ritual
                 MakePanel(labelFont);
                 _roomNote = MakeRoomNote(labelFont);
                 _heapNote = MakeHeapNote(labelFont);
+            }
+            if (_config.shelf)
+            {
+                _store = new RitualDayStore(Path.Combine(Application.persistentDataPath, _config.shelfFile));
+                _shelf = new RitualShelf(_config, glowMaterial, frostMaterial, glassMaterial, labelFont, ColorOfCategory, NameOfCategory);
+                _shelf.MakeJar = MakeShelfJar;
+                if (_config.ending) _ending = new RitualEnding(_config, glowMaterial, frostMaterial, labelFont, head);
             }
             if (_config.clockIntro && labelFont != null)
             {
@@ -598,6 +629,7 @@ namespace MoodPicker.Ritual
             _placed = true;
             PlaceJar();
             if (_clock != null && !_clockDone) PlaceClock(true);
+            PlaceShelf();
         }
 
         void PlaceJar()
@@ -655,6 +687,7 @@ namespace MoodPicker.Ritual
             for (int h = 0; h < 2; h++) StepHand(h, now, dt);
             StepHint(dt);
             StepJarPose(dt);
+            StepShelf(dt);
             if (!_sealed) _jar.SetInnerGlow(_pourPreviewGlow);
             if (_config.sweepEnabled && !_sealed) StepSweep(now, dt);
             if (!_sealed) StepTouch(now, dt);
@@ -783,10 +816,11 @@ namespace MoodPicker.Ritual
                 }
             }
             bool otherHoldingJar = _grips[1 - h].mode == GripJar;
-            if (_jar.InGrabZone(hand.pinch, _sealed, otherHoldingJar))
+            if (!_shelved && _jar.InGrabZone(hand.pinch, _sealed, otherHoldingJar))
             {
                 g.mode = GripJar;
                 g.jarOffset = _jar.root.position - hand.pinch;
+                if (_sealed) Debug.Log($"{Tag} ritual jar grab hand={h} shelfD={(_shelf != null ? _shelf.CaptureDistance(_jar.root.position) : -1f):0.000}");
             }
         }
 
@@ -1157,11 +1191,21 @@ namespace MoodPicker.Ritual
                 else level = _config.sealedIntensity * (1f + _config.idleBreath * Mathf.Sin((_sealTime - _config.breathSeconds) * 6.2831853f / Mathf.Max(0.5f, _config.idleBreathSeconds)));
                 _jar.SetLevel(level);
                 float surge = _sealWave != null ? _sealWave.JarGlow : 0f;
-                _jar.SetInnerGlow(_glowDominant * (0.1f + _config.bloomJarGlow * surge));
+                _jar.SetInnerGlow(_glowDominant * (0.1f + _config.bloomJarGlow * surge + 0.4f * _todayPoke));
                 _glow.SetBoost(surge);
                 float wave = Mathf.Clamp01(_sealTime / 1.35f);
                 _jar.SetPulse(wave < 1f ? wave : 0f);
-                if (_config.roomDarkFromStart)
+                if (_ending != null && _ending.State >= RitualEnding.Phase.Snuffing)
+                {
+                    _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
+                    _light = Mathf.MoveTowards(_light, _ending.State == RitualEnding.Phase.Snuffing ? 0.4f : 0f, dt * 0.5f);
+                }
+                else if (_shelved)
+                {
+                    _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
+                    _light = Mathf.MoveTowards(_light, 1f, dt / Mathf.Max(0.1f, _config.shelfLightBack));
+                }
+                else if (_config.roomDarkFromStart)
                 {
                     _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
                     _light = Mathf.MoveTowards(_light, _config.roomLightSealed, dt * _config.roomLightRate);
@@ -1341,6 +1385,8 @@ namespace MoodPicker.Ritual
             Color dominant = d >= 0 && categories[d] != null ? categories[d].glowColor : new Color(1f, 0.85f, 0.6f, 1f);
             _deskY = _jar.root.position.y;
             _glowDominant = dominant;
+            _today = RecordToday();
+            if (_store != null) _store.Save(_today);
             _glow.Bloom(_jar.root.position, _jar.root.rotation, _glowColors, _glowUnits, dominant);
             if (_config.sealOnRelease && _sealWave != null) _sealWave.Begin(_jar.BodyCenter, dominant, _glowColors);
             _pool.Bloom(_jar.root.position, _jar.root.rotation, _tableY, _glowColors, _glowUnits, dominant, _config.breathSeconds * 0.25f, 1f, 0.4f);
@@ -1397,6 +1443,19 @@ namespace MoodPicker.Ritual
             if (_heapNote != null) _heapNote.gameObject.SetActive(false);
             _labelAppear = 0f;
             _floatSlots = 0;
+            _shelved = false;
+            _shelveAge = -1f;
+            _today = null;
+            _todaySwirl.Clear();
+            _todayInside[0] = _todayInside[1] = false;
+            _todayPoke = 0f;
+            _todayPokeCool = 0f;
+            _shelfStage = 0f;
+            _ending?.Reset();
+            _endSeen = RitualEnding.Phase.Hidden;
+            _quitIssued = false;
+            if (sound != null) sound.Restore();
+            _jarWasHeld = false;
             _lidClosed = false;
             _lidCloseAge = 0f;
             _lidLocal = Vector3.zero;
@@ -1410,6 +1469,7 @@ namespace MoodPicker.Ritual
             _sealTime = 0f;
             BuildJar();
             if (labelFont != null) MakePanel(labelFont);
+            PlaceShelf();
             if (_clock != null && _config.clockIntro)
             {
                 _clockDone = false;
@@ -1477,6 +1537,185 @@ namespace MoodPicker.Ritual
                 if (flat.magnitude < 0.12f && slot.y < jarTop.y) slot.y = jarTop.y;
             }
             return slot;
+        }
+
+        Color ColorOfCategory(string id)
+        {
+            for (int i = 0; categories != null && i < categories.Length; i++)
+                if (categories[i] != null && categories[i].id == id) return categories[i].glowColor;
+            return new Color(1f, 0.9f, 0.75f, 1f);
+        }
+
+        List<DayRecord> PastDays()
+        {
+            System.DateTime now = System.DateTime.Now;
+            if (_config.shelfDemo) return RitualDayStore.Demo(now, Mathf.Max(0, _config.shelfDemoDays));
+            int n = _shelf != null ? Mathf.Max(0, _shelf.TodaySlot) : Mathf.Max(0, _config.shelfTodaySlot);
+            return _store != null ? _store.Before(now, n) : new List<DayRecord>();
+        }
+
+        string NameOfCategory(string id)
+        {
+            for (int i = 0; categories != null && i < categories.Length; i++)
+                if (categories[i] != null && categories[i].id == id) return categories[i].displayEn;
+            return id;
+        }
+
+        int IndexOfCategory(string id)
+        {
+            for (int i = 0; categories != null && i < categories.Length; i++)
+                if (categories[i] != null && categories[i].id == id) return i;
+            return 0;
+        }
+
+        void PlaceShelf()
+        {
+            if (_shelf == null) return;
+            _shelf.GlassMesh = _jar != null ? _jar.GlassMesh : null;
+            _shelf.SetCorner(transform.TransformPoint(_config.shelfCorner));
+            _shelf.Place(EyePosition(), transform.forward, _tableY + _config.shelfLift, System.DateTime.Now);
+            _shelf.Show(PastDays());
+            _shelf.Fill(_shelved);
+            _shelf.SetStage(RitualUtil.Smooth(_shelfStage));
+        }
+
+        (RitualJar, RitualWax) MakeShelfJar(Transform parent, DayRecord rec)
+        {
+            var vessel = new RitualJar(parent, _config, tuning, splatMaterial, glassMaterial, LookOf);
+            foreach (DayLayer layer in rec.layers)
+            {
+                TimeCategoryAsset cat = null;
+                for (int i = 0; categories != null && i < categories.Length; i++)
+                    if (categories[i] != null && categories[i].id == layer.category) cat = categories[i];
+                if (cat == null || layer.units <= 0 || vessel.Room <= 0) continue;
+                vessel.FillInstant(cat, IndexOf(cat), Mathf.Min(layer.units, vessel.Room));
+            }
+            RitualWax wax = null;
+            if (waxMaterial != null)
+            {
+                wax = new RitualWax(vessel.root, _config, waxMaterial, glowMaterial);
+                wax.PlaceLid(wax.LidHomeLocal, Quaternion.identity);
+                int d = IndexOfCategory(rec.dominant);
+                wax.Materialize(categories != null && d < categories.Length && categories[d] != null ? categories[d].waxColor : new Color(0.55f, 0.16f, 0.12f, 1f));
+                wax.SetHold(1f);
+                wax.Seal();
+                for (int i = 0; i < 40; i++) wax.Tick(0.25f);
+            }
+            return (vessel, wax);
+        }
+
+        DayRecord RecordToday()
+        {
+            var rec = new DayRecord
+            {
+                date = RitualDayStore.Key(System.DateTime.Now),
+                sealedAtUtc = System.DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture)
+            };
+            IReadOnlyList<RitualJar.Layer> layers = _jar.Layers;
+            for (int i = 0; i < layers.Count; i++)
+                rec.layers.Add(new DayLayer { category = layers[i].category != null ? layers[i].category.id : "", units = layers[i].units });
+            int d = DominantIndex();
+            rec.dominant = d >= 0 && categories[d] != null ? categories[d].id : "";
+            return rec;
+        }
+
+        void Shelve()
+        {
+            if (_shelved || _shelf == null) return;
+            _shelved = true;
+            _shelveAge = 0f;
+            _shelveFrom = _jar.root.position;
+            for (int h = 0; h < 2; h++)
+                if (_grips[h].mode == GripJar) _grips[h] = default;
+            _shelf.Fill(true);
+            _todaySwirl.Clear();
+            for (int i = 0; i < _jar.Layers.Count; i++)
+                if (_jar.Layers[i].cloud != null) _todaySwirl.Add(_jar.Layers[i].cloud.transform);
+            Debug.Log($"{Tag} ritual shelved date={(_today != null ? _today.date : "-")}");
+        }
+
+        void StepShelf(float dt)
+        {
+            if (_shelf == null) return;
+            float emphasis = !_clockDone ? 0.35f : (_shelved ? 0.85f : (_sealed ? 1f : 0.6f));
+            if (_ending != null) emphasis *= _ending.Mood * (1f - _ending.Fade);
+            bool approach = _sealed && _sealTime >= _config.shelfApproachDelay;
+            float stageBefore = _shelfStage;
+            _shelfStage = Mathf.MoveTowards(_shelfStage, approach ? 1f : 0f, dt / Mathf.Max(0.1f, _config.shelfApproachSeconds));
+            if (_shelfStage != stageBefore || !Mathf.Approximately(_shelf.Stage, RitualUtil.Smooth(_shelfStage))) _shelf.SetStage(RitualUtil.Smooth(_shelfStage));
+            if (stageBefore <= 0f && _shelfStage > 0f) Debug.Log($"{Tag} ritual shelf approaches");
+            _shelf.Tick(dt, emphasis, _shelfNear);
+            _todaySwirl.Tick(dt);
+            _todayPoke = Mathf.MoveTowards(_todayPoke, 0f, dt * 0.8f);
+            _todayPokeCool = Mathf.Max(0f, _todayPokeCool - dt);
+            if (_clockDone && (_ending == null || _ending.State < RitualEnding.Phase.Snuffing)) StepPokes();
+            StepEnding(dt);
+            if (_shelveAge < 0f) return;
+            _shelveAge += dt;
+            float u = RitualUtil.Smooth(Mathf.Clamp01(_shelveAge / 0.55f));
+            Vector3 target = _shelf.TodaySeat;
+            Vector3 p = Vector3.Lerp(_shelveFrom, target, u) + Vector3.up * (0.03f * Mathf.Sin(u * Mathf.PI));
+            Quaternion upright = UprightYaw(_jar.root, transform.forward);
+            _jar.root.SetPositionAndRotation(p, Quaternion.Slerp(_jar.root.rotation, upright, u));
+            if (_shelveAge >= 0.55f)
+            {
+                _jar.root.SetPositionAndRotation(target, upright);
+                _shelveAge = -1f;
+                if (sound != null) sound.Landed(target, 60);
+                _shelf.Landed(_today, _jar.MouthCenter);
+                Vector3 toEye = Vector3.ProjectOnPlane(_shelf.Eye - target, Vector3.up);
+                toEye = toEye.sqrMagnitude > 1e-6f ? toEye.normalized : -transform.forward;
+                _ending?.Arm(target + toEye * 0.12f + Vector3.down * 0.07f, _shelf.Eye, _config.endOrbDelay);
+                Debug.Log($"{Tag} ritual landed on shelf note=\"{_shelf.NoteText}\"");
+            }
+        }
+
+        void StepPokes()
+        {
+            for (int h = 0; h < 2; h++)
+            {
+                RitualHand hand = _hands[h];
+                bool free = hand.tracked && _grips[h].mode == GripNone && !hand.pinching;
+                int hit = _shelf.Touch(h, hand.index, free);
+                if (hit >= 0)
+                {
+                    RitualShelf.ShelfJar j = _shelf.Jars[hit];
+                    _shelf.Poke(hit);
+                    if (sound != null) sound.DropChord(j.root.position, IndexOfCategory(j.record.dominant));
+                    Debug.Log($"{Tag} ritual poke past {j.record.date} \"{j.info}\"");
+                }
+                bool inside = free && _shelved && _shelveAge < 0f && _jar.InBody(hand.index);
+                if (inside && !_todayInside[h] && _todayPokeCool <= 0f)
+                {
+                    _todaySwirl.Kick(_config.shelfSwirl);
+                    _todayPoke = 1f;
+                    _todayPokeCool = 0.5f;
+                    if (sound != null) sound.DropChord(_jar.BodyCenter, Mathf.Max(0, DominantIndex()));
+                    string info = _shelf.InfoFor(_today);
+                    _shelf.ShowNote(info, _jar.MouthCenter + Vector3.up * 0.035f, _config.shelfInfoSeconds);
+                    Debug.Log($"{Tag} ritual poke today \"{info}\"");
+                }
+                _todayInside[h] = inside;
+            }
+        }
+
+        void StepEnding(float dt)
+        {
+            if (_ending == null) return;
+            _ending.Tick(dt, in _hands[0], in _hands[1]);
+            RitualEnding.Phase now = _ending.State;
+            if (now != _endSeen)
+            {
+                if (now == RitualEnding.Phase.Rising) Debug.Log($"{Tag} ritual end orb rises at {_ending.Position}");
+                if (now == RitualEnding.Phase.Snuffing && sound != null) sound.Snuff(_ending.Position);
+                if (now == RitualEnding.Phase.Fading && sound != null) sound.FadeOut(_config.endFadeSeconds);
+                _endSeen = now;
+            }
+            if (_ending.QuitRequested && !_quitIssued)
+            {
+                _quitIssued = true;
+                if (_config.endQuits && !Application.isEditor) Application.Quit();
+            }
         }
 
         void HideSprings()
@@ -2198,6 +2437,8 @@ namespace MoodPicker.Ritual
             _lightField?.Dispose();
             _sealWave?.Dispose();
             _clock?.Dispose();
+            _shelf?.Dispose();
+            _ending?.Dispose();
             RitualUtil.Kill(_labelBorderTagMesh);
             _guideTrails?.Dispose();
             _jar?.Dispose();
@@ -2425,8 +2666,33 @@ namespace MoodPicker.Ritual
             if (_jar == null) return;
             bool hold0 = _grips[0].mode == GripJar && _hands[0].tracked && _hands[0].pinching;
             bool hold1 = _grips[1].mode == GripJar && _hands[1].tracked && _hands[1].pinching;
-
-            if (hold0 && hold1 && _sealed)
+            bool heldNow = hold0 || hold1;
+            _shelfNear = 0f;
+            if (_sealed && !_shelved && _shelveAge < 0f && _shelf != null)
+            {
+                float d = _shelf.CaptureDistance(_jar.root.position);
+                if (heldNow)
+                {
+                    _shelfNear = Mathf.Clamp01(1f - (d - _config.shelfSnapDistance) / Mathf.Max(0.01f, _config.shelfReleaseDistance * 1.5f));
+                    if (d < _config.shelfSnapDistance)
+                    {
+                        Debug.Log($"{Tag} ritual jar drawn to shelf d={d:0.000}");
+                        Shelve();
+                    }
+                }
+                else if (_jarWasHeld)
+                {
+                    Debug.Log($"{Tag} ritual jar release shelfD={d:0.000} at={_jar.root.position}");
+                    if (d < _config.shelfReleaseDistance) Shelve();
+                }
+            }
+            _jarWasHeld = heldNow && !_shelved;
+            bool pinned = _shelveAge >= 0f || _shelved;
+            if (pinned)
+            {
+                _twoHandJarActive = false;
+            }
+            else if (hold0 && hold1 && _sealed)
             {
                 Vector3 mid = (_hands[0].pinch + _hands[1].pinch) * 0.5f;
                 if (TryTwoHandFrame(in _hands[0], in _hands[1], _jar.root.up, out Quaternion frameRot))

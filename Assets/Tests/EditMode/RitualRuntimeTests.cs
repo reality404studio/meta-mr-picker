@@ -9,6 +9,7 @@ namespace MoodPicker.Tests
     public class RitualRuntimeTests
     {
         const float Dt = 1f / 72f;
+        const string TestDaysFile = "editmode-test-ritual-days.json";
         GameObject _root;
         TimeRitualConfig _config;
         TimeCategoryAsset _move;
@@ -21,6 +22,8 @@ namespace MoodPicker.Tests
             _root = new GameObject("RitualTestRoot");
             _config = ScriptableObject.CreateInstance<TimeRitualConfig>();
             _config.showMinutesLabel = false;
+            _config.shelfFile = TestDaysFile;
+            System.IO.File.Delete(System.IO.Path.Combine(Application.persistentDataPath, TestDaysFile));
             _move = ScriptableObject.CreateInstance<TimeCategoryAsset>();
             _move.id = "move";
             _work = ScriptableObject.CreateInstance<TimeCategoryAsset>();
@@ -33,6 +36,7 @@ namespace MoodPicker.Tests
         {
             Object.DestroyImmediate(_root);
             Object.DestroyImmediate(_config);
+            System.IO.File.Delete(System.IO.Path.Combine(Application.persistentDataPath, TestDaysFile));
             Object.DestroyImmediate(_move);
             Object.DestroyImmediate(_work);
         }
@@ -1888,5 +1892,335 @@ namespace MoodPicker.Tests
                 Object.DestroyImmediate(cfg);
             }
         }
+
+
+        [Test]
+        public void DaysAreSavedByDateAndReadBackWithoutDemoRecords()
+        {
+            string path = System.IO.Path.Combine(Application.temporaryCachePath, "store-test-" + System.Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                var store = new RitualDayStore(path);
+                var a = new DayRecord { date = "2026-11-13", dominant = "work" };
+                a.layers.Add(new DayLayer { category = "work", units = 30 });
+                var b = new DayRecord { date = "2026-11-14", dominant = "sleep" };
+                b.layers.Add(new DayLayer { category = "sleep", units = 40 });
+                b.layers.Add(new DayLayer { category = "play", units = 10 });
+                store.Save(b);
+                store.Save(a);
+                store.Save(new DayRecord { date = "2026-11-12", demo = true });
+                var again = new DayRecord { date = "2026-11-14", dominant = "move" };
+                again.layers.Add(new DayLayer { category = "move", units = 12 });
+                store.Save(again);
+                var reread = new RitualDayStore(path);
+                Assert.That(reread.Days.Count, Is.EqualTo(2), "데모 기록은 실제 저장과 섞이지 않는다");
+                Assert.That(reread.Days[0].date, Is.EqualTo("2026-11-13"), "날짜 순");
+                Assert.That(reread.Days[1].dominant, Is.EqualTo("move"), "같은 날은 마지막 봉인으로");
+                var before = reread.Before(new System.DateTime(2026, 11, 14), 6);
+                Assert.That(before.Count, Is.EqualTo(1), "오늘 이전 날만");
+                Assert.That(reread.Find(new System.DateTime(2026, 11, 13)).TotalUnits, Is.EqualTo(30));
+            }
+            finally
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+
+        [Test]
+        public void DemoFillsSixPastDaysWithDifferentLayerRatios()
+        {
+            var today = new System.DateTime(2026, 11, 15);
+            var demo = RitualDayStore.Demo(today, 6);
+            Assert.That(demo.Count, Is.EqualTo(6));
+            var ratios = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < 6; i++)
+            {
+                Assert.That(demo[i].demo, Is.True);
+                Assert.That(demo[i].date, Is.EqualTo(RitualDayStore.Key(today.AddDays(i - 6))), "어제까지 차례로");
+                Assert.That(demo[i].layers.Count, Is.GreaterThanOrEqualTo(2));
+                string sig = "";
+                foreach (DayLayer l in demo[i].layers) sig += l.category + Mathf.RoundToInt(10f * l.units / demo[i].TotalUnits);
+                ratios.Add(sig);
+            }
+            Assert.That(new System.Collections.Generic.HashSet<string>(ratios).Count, Is.GreaterThanOrEqualTo(5), "층 비율이 서로 다르다");
+        }
+
+        [Test]
+        public void TheShelfIsAFrostedLedgeOfFivePlacesWithDatesAndTwoPastJarsYouCanPoke()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            Material glassMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlass.mat");
+            Shader frostShader = UnityEditor.AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/Ritual/RitualFrost.shader");
+            Assert.That(frostShader, Is.Not.Null, "반투명 유리 단 셰이더");
+            var frostMat = new Material(frostShader);
+            Font font = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            System.Func<string, TimeCategoryAsset> of = id => System.Array.Find(cats, c => c.id == id);
+            var shelf = new RitualShelf(_config, glowMat, frostMat, glassMat, font, id => of(id).glowColor, id => of(id).displayEn);
+            try
+            {
+                var day = new System.DateTime(2026, 11, 15);
+                Vector3 eye = new Vector3(0f, 1.2f, 0f);
+                shelf.Place(eye, Vector3.forward, 0.92f, day);
+                Assert.That(shelf.SlotCount, Is.EqualTo(5), "자리 다섯");
+                Assert.That(shelf.TodaySlot, Is.EqualTo(2), "오늘은 세 번째 고리");
+                for (int i = 0; i < 5; i++)
+                {
+                    Vector3 p = shelf.Slot(i);
+                    Vector3 flat = p - eye;
+                    flat.y = 0f;
+                    Assert.That(flat.magnitude, Is.EqualTo(_config.shelfDistance).Within(1e-3f), "사용자를 감싸는 호");
+                    Assert.That(p.y, Is.EqualTo(0.92f).Within(1e-4f), "책상 위에 뜬 단");
+                    if (i > 0) Assert.That(p.x, Is.GreaterThan(shelf.Slot(i - 1).x), "왼쪽이 지난 날, 오른쪽이 앞으로 올 날");
+                }
+                Assert.That(shelf.DateText(0), Is.EqualTo("Nov 13"));
+                Assert.That(shelf.DateText(2), Is.EqualTo("Nov 15"));
+                Assert.That(shelf.DateText(4), Is.EqualTo("Nov 17"), "빈 자리에는 날짜만");
+                Assert.That(_config.shelfStyle, Is.EqualTo(ShelfStyle.Pedestals), "B 확정");
+                Assert.That(shelf.Surfaces, Is.EqualTo(5), "떠 있는 받침 다섯");
+
+                Vector3 restSeat = shelf.TodaySeat;
+                Vector3 corner = new Vector3(-0.38f, 0.75f, 0.38f);
+                shelf.SetCorner(corner);
+                shelf.SetStage(0f);
+                Assert.That(shelf.Scale, Is.EqualTo(0.25f).Within(0.01f), "만드는 동안은 1/4 미니어처");
+                Assert.That(Vector3.Distance(shelf.TodaySeat, corner), Is.LessThan(1e-3f), "책상 왼쪽 구석");
+                Assert.That(shelf.TodaySeat.z, Is.LessThan(restSeat.z), "뒤로 물러나 벽을 뚫지 않는다");
+                shelf.SetStage(0.5f);
+                Assert.That(shelf.Scale, Is.GreaterThan(0.5f).And.LessThan(0.75f), "커지면서 올라온다");
+                shelf.SetStage(1f);
+                Assert.That(Vector3.Distance(shelf.TodaySeat, restSeat), Is.LessThan(1e-4f), "봉인 뒤 원래 자리·크기로");
+                Assert.That(shelf.Scale, Is.EqualTo(1f).Within(1e-4f));
+
+                shelf.Show(RitualDayStore.Demo(day, _config.shelfDemoDays));
+                Assert.That(shelf.MemoryJars, Is.EqualTo(2), "어제·그저께 병 두 개");
+                Assert.That(shelf.Jars[0].slot, Is.EqualTo(0));
+                Assert.That(shelf.Jars[1].slot, Is.EqualTo(1));
+                Color calm = of(shelf.Jars[0].record.dominant).glowColor;
+                Color lively = of(shelf.Jars[1].record.dominant).glowColor;
+                Assert.That(calm.b, Is.GreaterThan(calm.r), "그저께는 푸른빛 차분한 날");
+                Assert.That(lively.r, Is.GreaterThan(lively.b), "어제는 금빛 활기찬 날");
+
+                float hi = 0f, lo = 1f;
+                for (int i = 0; i < 200; i++)
+                {
+                    shelf.Tick(Dt, 1f);
+                    if (i > 100)
+                    {
+                        hi = Mathf.Max(hi, shelf.TodayPulse);
+                        lo = Mathf.Min(lo, shelf.TodayPulse);
+                    }
+                }
+                Assert.That(hi - lo, Is.GreaterThan(0.3f), "오늘 고리가 숨 쉬듯 깜빡인다");
+                for (int i = 0; i < 30; i++) shelf.Tick(Dt, 1f, 1f);
+                Assert.That(shelf.TodayNear, Is.GreaterThan(0.9f), "병을 가져가면 오늘 고리가 밝아진다");
+
+                RitualShelf.ShelfJar past = shelf.Jars[0];
+                Vector3 tip = past.root.position + Vector3.up * 0.05f;
+                Assert.That(shelf.Touch(0, tip + Vector3.forward * 0.3f, true), Is.EqualTo(-1));
+                Assert.That(shelf.Touch(0, tip, true), Is.EqualTo(0), "손가락으로 톡");
+                shelf.Poke(0);
+                Assert.That(shelf.Touch(0, tip, true), Is.EqualTo(-1), "머물러 있으면 다시 울리지 않는다");
+                for (int i = 0; i < 20; i++) shelf.Tick(Dt, 1f);
+                Assert.That(past.swirl.Energy, Is.GreaterThan(10f), "스노우볼처럼 소용돌이");
+                Assert.That(Mathf.Abs(past.swirl.AngleOf(0)), Is.GreaterThan(5f));
+                Assert.That(shelf.NoteText, Does.StartWith("Rested 5h"), "그날의 시간 기록이 피어오른다");
+                Assert.That(shelf.NoteText, Does.Contain("Moved 1h 50m"));
+                for (int i = 0; i < 600; i++) shelf.Tick(Dt, 1f);
+                Assert.That(past.swirl.Energy, Is.EqualTo(0f), "잦아든다");
+                Assert.That(shelf.NoteText, Is.EqualTo(""), "기록은 잠깐만");
+
+                shelf.Fill(true);
+                shelf.Tick(Dt, 1f);
+                Assert.That(shelf.TodayPulse, Is.EqualTo(0f), "채우면 깜빡임이 멈춘다");
+
+                _config.shelfStyle = ShelfStyle.Ledge;
+                shelf.Place(eye, Vector3.forward, 0.92f, day);
+                Assert.That(shelf.Surfaces, Is.EqualTo(1), "A 는 하나로 이어진 유리 단");
+            }
+            finally
+            {
+                shelf.Dispose();
+                Object.DestroyImmediate(frostMat);
+            }
+        }
+
+        [Test]
+        public void PlacingTheSealedJarOnTodaysPlaceEndsTheRitualAndTheDayIsRemembered()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.shelfDemo = false;
+            try
+            {
+                TimeRitual ritual = BareRitual("ShelfRitual", cfg, cats, glowMat);
+                Assert.That(ritual.Shelf, Is.Not.Null);
+                Assert.That(ritual.Shelf.MemoryJars, Is.EqualTo(0), "기록이 없으면 지난 병도 없다");
+                Assert.That(ritual.Shelf.Stage, Is.EqualTo(0f), "만드는 동안 선반은 미니어처");
+                Assert.That(ritual.Shelf.Scale, Is.EqualTo(cfg.shelfMiniScale).Within(1e-3f));
+                Assert.That(Vector3.Distance(ritual.Shelf.TodaySeat, ritual.transform.TransformPoint(cfg.shelfCorner)), Is.LessThan(1e-3f), "책상 왼쪽 구석");
+                float now = 1f;
+                for (int c = 1; c <= 3; c++)
+                {
+                    TimePieceView piece = Pulled(cats[c], c, 6 * c, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                    Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+                    Run(ritual, ref now, 4f, default);
+                }
+                typeof(TimeRitual).GetMethod("Seal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(ritual, null);
+                Run(ritual, ref now, 6f, default);
+                Assert.That(ritual.Shelf.Stage, Is.EqualTo(1f), "봉인이 끝나면 선반이 앞으로 온다");
+                Assert.That(ritual.Shelf.Scale, Is.EqualTo(1f).Within(1e-4f));
+                Assert.That(ritual.Today, Is.Not.Null);
+                Assert.That(ritual.Store.Find(System.DateTime.Now), Is.Not.Null, "봉인하면 오늘이 날짜로 저장된다");
+                Assert.That(ritual.Store.Find(System.DateTime.Now).TotalUnits, Is.EqualTo(36));
+                float lightBefore = ritual.PassthroughLight;
+
+                Vector3 grab = ritual.Jar.BodyCenter + new Vector3(0.06f, 0f, 0f);
+                Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(grab, false) });
+                Run(ritual, ref now, 8 * Dt, new HandFrame { right = PinchPose(grab, true) });
+                Vector3 offset = ritual.Jar.root.position - grab;
+                Vector3 slot = ritual.Shelf.TodaySeat;
+                Vector3 end = slot - offset + new Vector3(0.02f, 0.03f, 0f);
+                for (int i = 1; i <= 60; i++) Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(Vector3.Lerp(grab, end, i / 60f), true) });
+                Run(ritual, ref now, 4 * Dt, new HandFrame { right = PinchPose(end + Vector3.up * 0.15f, false) });
+                Assert.That(ritual.Shelved, Is.True, "선반의 오늘 자리에 놓는다");
+                Run(ritual, ref now, 1f, default);
+                Assert.That(Vector3.Distance(ritual.Jar.root.position, slot), Is.LessThan(0.005f), "오늘 자리에 선다");
+                Assert.That(ritual.Shelf.NoteText, Is.EqualTo(RitualShelf.LoggedLabel(System.DateTime.Now)), "November 15, Logged.");
+                Assert.That(ritual.Shelf.Rippling, Is.True, "단에 물결이 한 번 퍼진다");
+                Assert.That(Vector3.Dot(ritual.Jar.root.up, Vector3.up), Is.GreaterThan(0.99f));
+                Run(ritual, ref now, cfg.shelfLightBack + 0.5f, default);
+                Assert.That(lightBefore, Is.LessThan(0.5f));
+                Assert.That(ritual.PassthroughLight, Is.EqualTo(1f).Within(0.01f), "방의 밝기가 돌아온다");
+
+                var yesterday = new DayRecord { date = RitualDayStore.Key(System.DateTime.Now.AddDays(-1)), dominant = "sleep" };
+                yesterday.layers.Add(new DayLayer { category = "sleep", units = 42 });
+                ritual.Store.Save(yesterday);
+                TimeRitual next = BareRitual("NextDay", cfg, cats, glowMat);
+                Assert.That(next.Shelf.MemoryJars, Is.EqualTo(1), "저장된 지난 날의 병이 다음에 다시 보인다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        TimeRitual SealedShelfRitual(string name, TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat, ref float now)
+        {
+            TimeRitual ritual = BareRitual(name, cfg, cats, glowMat);
+            TimePieceView piece = Pulled(cats[1], 1, 12, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+            Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+            Run(ritual, ref now, 4f, default);
+            typeof(TimeRitual).GetMethod("Seal", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(ritual, null);
+            Run(ritual, ref now, 6f, default);
+            return ritual;
+        }
+
+        Vector3 CarryJar(TimeRitual ritual, ref float now, Vector3 jarBaseTarget, bool letGo)
+        {
+            Vector3 grab = ritual.Jar.BodyCenter + new Vector3(0.06f, 0f, 0f);
+            Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(grab, false) });
+            Run(ritual, ref now, 8 * Dt, new HandFrame { right = PinchPose(grab, true) });
+            Vector3 offset = ritual.Jar.root.position - grab;
+            Vector3 end = jarBaseTarget - offset;
+            for (int i = 1; i <= 40; i++) Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(Vector3.Lerp(grab, end, i / 40f), true) });
+            if (letGo) Run(ritual, ref now, 4 * Dt, new HandFrame { right = PinchPose(end, false) });
+            return end;
+        }
+
+        [Test]
+        public void TheSealedJarIsDrawnIntoTodaysPlaceWhenCarriedCloseAndForgivesDepth()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.shelfDemo = true;
+            try
+            {
+                float now = 1f;
+                TimeRitual a = SealedShelfRitual("Magnet", cfg, cats, glowMat, ref now);
+                Vector3 seat = a.Shelf.TodaySeat;
+                Vector3 hand = CarryJar(a, ref now, seat + new Vector3(0f, 0.05f, 0f), false);
+                Assert.That(a.Shelved, Is.True, "손을 놓지 않아도 가까이 가져가면 오늘 자리가 끌어당긴다");
+                Run(a, ref now, 1f, new HandFrame { right = PinchPose(hand, true) });
+                Assert.That(Vector3.Distance(a.Jar.root.position, seat), Is.LessThan(0.005f), "오늘 자리 빛 위에 선다");
+
+                float now2 = 1f;
+                TimeRitual b = SealedShelfRitual("Depth", cfg, cats, glowMat, ref now2);
+                Vector3 seatB = b.Shelf.TodaySeat;
+                Vector3 radial = Vector3.ProjectOnPlane(seatB - b.Shelf.Eye, Vector3.up).normalized;
+                Vector3 side = Vector3.Cross(Vector3.up, radial);
+                CarryJar(b, ref now2, seatB + side * 0.4f, true);
+                Assert.That(b.Shelved, Is.False, "멀리서 놓으면 그 자리에 머문다");
+                CarryJar(b, ref now2, seatB - radial * 0.3f, true);
+                Assert.That(b.Shelved, Is.True, "앞뒤 깊이는 너그럽게 — 30cm 앞에서 놓아도 들어간다");
+                Run(b, ref now2, 1f, default);
+                Assert.That(Vector3.Distance(b.Jar.root.position, seatB), Is.LessThan(0.005f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void PokingTodaysJarOnTheShelfSwirlsItAndTheMoonOrbEndsTheDay()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.shelfDemo = true;
+            try
+            {
+                float now = 1f;
+                TimeRitual r = SealedShelfRitual("Ending", cfg, cats, glowMat, ref now);
+                RitualShelf.ShelfJar past = r.Shelf.Jars[0];
+                Assert.That(past.vessel, Is.Not.Null, "지난 병도 완성된 입자 병");
+                Assert.That(past.vessel.TotalUnits, Is.EqualTo(past.record.TotalUnits));
+                Assert.That(past.vessel.Layers.Count, Is.EqualTo(past.record.layers.Count));
+                Assert.That(past.vessel.TotalGrains, Is.GreaterThan(500));
+                float before = past.level;
+                CarryJar(r, ref now, r.Shelf.TodaySeat + new Vector3(0f, 0.05f, 0f), false);
+                Assert.That(r.Shelved, Is.True);
+                Run(r, ref now, 1f, new HandFrame { right = PinchPose(r.Jar.BodyCenter + new Vector3(0.3f, 0.2f, 0f), false) });
+                Assert.That(r.Shelf.Flash, Is.GreaterThan(0.5f), "오늘 병이 놓이는 순간");
+                Assert.That(past.level, Is.GreaterThan(before * 1.3f), "다른 병들이 같이 밝아진다");
+                Assert.That(r.Ending, Is.Not.Null);
+                Assert.That(r.Ending.State, Is.EqualTo(RitualEnding.Phase.Waiting), "놓은 뒤 잠시 기다린다");
+                Assert.That(r.TodaySwirl.Count, Is.GreaterThan(0));
+
+                Vector3 away = r.Jar.BodyCenter + new Vector3(0.12f, 0f, -0.1f);
+                Vector3 into = r.Jar.BodyCenter;
+                Run(r, ref now, 4 * Dt, new HandFrame { right = PinchPose(away - new Vector3(0.055f, 0f, 0f), false) });
+                Run(r, ref now, 4 * Dt, new HandFrame { right = PinchPose(into - new Vector3(0.055f, 0f, 0f), false) });
+                Run(r, ref now, 10 * Dt, new HandFrame { right = PinchPose(away - new Vector3(0.055f, 0f, 0f), false) });
+                Assert.That(r.TodaySwirl.Energy, Is.GreaterThan(10f), "오늘 병도 톡 건드리면 소용돌이");
+                Assert.That(r.Shelf.NoteText, Does.Contain(cats[1].displayEn), "오늘의 기록");
+
+                Run(r, ref now, cfg.endOrbDelay + 1.4f, new HandFrame { right = PinchPose(away, false) });
+                Assert.That(r.Ending.State, Is.EqualTo(RitualEnding.Phase.Ready), "달빛 구슬이 떠오른다");
+                Vector3 orb = r.Ending.Position;
+                Assert.That(orb.y, Is.LessThan(r.Shelf.SurfaceY), "선반 아래쪽");
+                Assert.That(r.Ending.QuitRequested, Is.False);
+
+                for (int i = 0; i < 12; i++)
+                    Run(r, ref now, Dt, new HandFrame { right = PinchPose(orb + new Vector3(-0.055f, 0.08f - i * 0.012f, 0.06f), false) });
+                Assert.That(r.Ending.State, Is.EqualTo(RitualEnding.Phase.Snuffing), "쓸어내리면 촛불처럼 꺼진다");
+                Assert.That(r.Ending.Trigger, Is.EqualTo("swept").Or.EqualTo("cupped"));
+                Run(r, ref now, RitualEnding.SnuffSeconds, default);
+                Assert.That(r.Ending.Mood, Is.LessThan(0.5f), "병들이 무드등으로 잦아든다");
+                Run(r, ref now, cfg.endFadeSeconds + 0.7f, default);
+                Assert.That(r.Ending.Fade, Is.EqualTo(1f).Within(1e-3f), "화면이 부드럽게 어두워진다");
+                Assert.That(r.Ending.QuitRequested, Is.True, "앱을 닫는다");
+                Assert.That(r.QuitIssued, Is.True);
+                Assert.That(r.PassthroughLight, Is.LessThan(0.2f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
     }
 }

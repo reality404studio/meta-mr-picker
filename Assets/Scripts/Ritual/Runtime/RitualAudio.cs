@@ -75,7 +75,24 @@ namespace MoodPicker.Ritual
         float _pressTarget;
         float _lastGlass = -1f;
         float _master = 1f;
+        float _out = 1f;
+        float _outRate;
+        AudioClip[] _chords;
+        AudioClip _snuff;
         bool _ready;
+
+        public int ChordsPlayed { get; private set; }
+        public float OutGain => _out;
+
+        static readonly float[][] ChordNotes =
+        {
+            new[] { 523.25f, 659.25f, 783.99f, 987.77f },
+            new[] { 587.33f, 739.99f, 880f, 1174.66f },
+            new[] { 440f, 659.25f, 880f },
+            new[] { 783.99f, 880f, 1174.66f, 1479.98f },
+            new[] { 659.25f, 783.99f, 880f, 1046.5f, 1318.51f },
+        };
+        static readonly float[] ChordStagger = { 0.075f, 0.05f, 0.09f, 0.065f, 0.045f };
 
         public void Init(float master)
         {
@@ -216,6 +233,9 @@ namespace MoodPicker.Ritual
             _press = Voice("Press", true);
             _press.clip = Bake("ritual-press", rate, 1f, (t, n) => (Mathf.Sin(2f * Mathf.PI * 132f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * 198f * t)) * 0.32f);
             _bowl = BakeBowl(rate);
+            _chords = new AudioClip[ChordNotes.Length];
+            for (int c = 0; c < ChordNotes.Length; c++) _chords[c] = BakeChord(rate, c);
+            _snuff = BakeSnuff(rate);
             _clockTick = BakeClockTick(rate, false);
             _clockTock = BakeClockTick(rate, true);
             _bowlVoice = Voice("Bowl", false);
@@ -309,6 +329,51 @@ namespace MoodPicker.Ritual
             source.dopplerLevel = 0f;
             source.volume = 0f;
             return source;
+        }
+
+        public static AudioClip BakeChord(int rate, int category)
+        {
+            float[] notes = ChordNotes[Mathf.Clamp(category, 0, ChordNotes.Length - 1)];
+            float stagger = ChordStagger[Mathf.Clamp(category, 0, ChordStagger.Length - 1)];
+            var drops = new (float, float, float, float, float, float)[notes.Length];
+            for (int i = 0; i < notes.Length; i++)
+                drops[i] = (i * stagger, notes[i] * 0.82f, notes[i], 34f, 5.5f + i * 0.6f, 0.34f - i * 0.03f);
+            return BakeWaterDrop("ritual-chord-" + category, rate, 1.5f, drops);
+        }
+
+        public static AudioClip BakeSnuff(int rate)
+        {
+            return Bake("ritual-snuff", rate, 1.3f, (t, n) =>
+            {
+                float atk = Mathf.Min(1f, t / 0.08f);
+                float breath = n * 0.16f * atk * Mathf.Exp(-t * 3.2f);
+                float low = Mathf.Sin(2f * Mathf.PI * 174f * t) * 0.22f * atk * Mathf.Exp(-t * 2.4f);
+                float high = Mathf.Sin(2f * Mathf.PI * 1046.5f * t) * 0.06f * Mathf.Exp(-t * 4f);
+                return breath + low + high;
+            });
+        }
+
+        public void DropChord(Vector3 position, int category)
+        {
+            ChordsPlayed++;
+            if (!_ready || _chords == null) return;
+            Play(_chords[Mathf.Clamp(category, 0, _chords.Length - 1)], position, chimeVolume * 1.1f, 1f);
+        }
+
+        public void Snuff(Vector3 position)
+        {
+            Play(_snuff, position, bowlVolume, 1f);
+        }
+
+        public void FadeOut(float seconds)
+        {
+            _outRate = 1f / Mathf.Max(0.1f, seconds);
+        }
+
+        public void Restore()
+        {
+            _outRate = 0f;
+            _out = 1f;
         }
 
         static AudioClip Bake(string label, int rate, float seconds, Func<float, float, float> wave)
@@ -667,7 +732,8 @@ namespace MoodPicker.Ritual
 
         public void Tick(float dt, float master)
         {
-            _master = master;
+            if (_outRate > 0f) _out = Mathf.MoveTowards(_out, 0f, dt * _outRate);
+            _master = master * _out;
             _clock += dt;
             if (_hush > 0f) _hush = Mathf.Max(0f, _hush - dt);
             if (!_ready) return;

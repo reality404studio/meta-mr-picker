@@ -122,3 +122,15 @@
 - 원인: `MoodPickerBuild.BuildTimeRitualApkBatch` 가 장면을 다시 만들면서 `Assets/Editor/TimeRitualSceneSetup.cs` 의 `Categories` 배열(이름·형상·색·질감)로 카테고리 에셋을 덮어쓴다. 테스트는 빌드 전에 돌아서 못 잡음
 - 확인법: 빌드 뒤 `grep beadShape Assets/Ritual/Category_*.asset`. 카테고리 값은 `TimeRitualSceneSetup.Categories` 에서 바꾸고, 게이트 `EachKindWearsTheShapeThePersonChoseAndKeepsItsOwnSilhouette` 가 그 배열을 리플렉션으로 확인
 - 적용 범위: 이 프로젝트 (장면 설정이 에셋을 다시 쓰는 빌드 전반)
+
+## TextMesh 에 처음 쓰는 글자가 나오는 순간 ~90ms 멈춤 → 미리 굽기 (2026-11-15, build-fe7c)
+- 증상: 선반에 병이 놓이며 "November 15, Logged." 가 처음 뜨는 프레임에 `ritual hitch gap=90ms lastTick=0.3ms` (우리 코드는 0.3ms)
+- 원인: 동적 폰트(Fraunces)가 처음 보는 글자를 그 프레임에 아틀라스로 굽고, `Font.textureRebuilt` 로 다른 글자 메시까지 다시 만든다
+- 확인법: 장면을 놓을 때 `font.RequestCharactersInTexture(쓸 글자 전부, fontSize)` → 다음 빌드에서 같은 순간 hitch 로그 없음 (5052aa0-dirty-1115-220115)
+- 적용 범위: Unity TextMesh/동적 폰트를 쓰는 모든 앱
+
+## 책상 의식에서 오브젝트를 "뒤로 물려" 숨기면 실제 벽을 뚫는다 (2026-11-15, build-fe7c)
+- 증상: 만드는 동안 선반을 1m 뒤로 물렸더니 사람이 "벽을 뚫을 수 있네요"
+- 원인: 패스스루 MR 에서 가상 물체는 실제 벽에 가려지지 않는다(뎁스 가림 없음). 책상은 보통 벽에 붙어 있어 50cm 너머는 벽 안
+- 확인법: 덜 중요하게 만들 때는 거리 대신 크기(1/4 미니어처)와 자리(책상 구석)로. `shelfMiniScale`·`shelfCorner`
+- 적용 범위: 모든 책상 MR

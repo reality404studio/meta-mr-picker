@@ -87,6 +87,7 @@ public static class TimeRitualSceneSetup
         Material waxMat = EnsureMaterial("RitualWax", "MoodPicker/RitualWaxSplat");
         Material glowMat = EnsureMaterial("RitualGlow", "MoodPicker/RitualGlowSplat");
         Material glyphMat = EnsureMaterial("RitualGlyph", "MoodPicker/RitualGlyph");
+        Material frostMat = EnsureMaterial("RitualFrost", "MoodPicker/RitualFrost");
         SplatPigmentSlotAsset[] presets = SplatterSceneSetup.EnsureRealVideoSlotAssets();
         TimeCategoryAsset[] categories = Categories.Select(c => EnsureCategory(c, presets)).ToArray();
         Mesh heapMesh = SplatterSceneSetup.EnsureShapeMesh("RitualHeap", SplatShapeMeshes.Sphere("RitualHeap", config.heapDiameter * 0.5f, 40, 30));
@@ -180,6 +181,7 @@ public static class TimeRitualSceneSetup
         rso.FindProperty("waxMaterial").objectReferenceValue = waxMat;
         rso.FindProperty("glowMaterial").objectReferenceValue = glowMat;
         rso.FindProperty("glyphMaterial").objectReferenceValue = glyphMat;
+        rso.FindProperty("frostMaterial").objectReferenceValue = frostMat;
         rso.FindProperty("labelFont").objectReferenceValue = font;
         rso.FindProperty("piecesRoot").objectReferenceValue = pieces.transform;
         var catsProp = rso.FindProperty("categories");

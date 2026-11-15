@@ -386,15 +386,72 @@ namespace MoodPicker.Ritual
         public Layer BeginPour(TimePieceView piece)
         {
             if (!CanAccept(piece.Units)) return null;
-            int units = piece.Units;
+            Layer layer = CreateLayer(piece.category, piece.categoryIndex, piece.Units, piece.data.category);
+            _pouring = layer;
+            _pourPiece = piece;
+            _pourTime = 0f;
+            _pourSeconds = Mathf.Clamp(_config.pourSecondsMin + layer.units * _config.pourSecondsPerUnit, _config.pourSecondsMin, _config.pourSecondsMax);
+            _pourTail = _config.grainFlight * 1.25f + 1f / Mathf.Max(0.2f, _config.landGlowDecay);
+            piece.BeginPour(Spout);
+            PourStarted?.Invoke(layer);
+            return layer;
+        }
+
+        public Layer FillInstant(TimeCategoryAsset category, int categoryIndex, int units)
+        {
+            if (_pouring != null || !Fits(units)) return null;
+            Layer layer = CreateLayer(category, categoryIndex, units, category != null ? category.id : "day");
+            RitualSplatCloud cloud = layer.cloud;
+            float3 rest = new float3(0f, TimeRitualLook.RestLift, 0f);
+            int n = cloud.Count;
+            for (int i = 0; i < n; i++)
+            {
+                cloud.disp[i] = rest;
+                cloud.vel[i] = float3.zero;
+                cloud.scale[i] = 1f;
+                cloud.glow[i] = 0f;
+                layer.landed[i] = true;
+            }
+            layer.landedCount = n;
+            cloud.MarkSim();
+            float limit = WallRadius(Strata.Mean(layer.top)) - _config.grainRadius;
+            float3 capRest = new float3(0f, TimeRitualLook.RestLift, 0f);
+            for (int i = 0; i < _capRadius.Length; i++)
+            {
+                float3 h = _cap.home[i];
+                _cap.SetHome(i, new float3(h.x, CapHeight(layer.top, i, 0.4f), h.z), _cap.normal[i], _cap.halfSize[i]);
+                _cap.disp[i] = capRest;
+                _cap.scale[i] = _capRadius[i] <= limit ? 1f : 0f;
+            }
+            _cap.SetDrawCount(Mathf.RoundToInt(_capRadius.Length * _quality));
+            _cap.MarkSim();
+            _capSurface.apply = new Vector4(0f, Strata.Mean(layer.top), 0f, _shape.bodyRadius * 1.1f);
+            if (_layers.Count == 1)
+            {
+                for (int i = 0; i < _floorRadius.Length; i++) _floor.scale[i] = 1f;
+                _floor.SetDrawCount(Mathf.RoundToInt(_floorRadius.Length * _quality));
+                _floor.MarkSim();
+            }
+            layer.settled = true;
+            float[] swap = _surface;
+            _surface = _next;
+            _next = swap;
+            _totalUnits += layer.units;
+            _capSurface.previous = null;
+            _capSurface.MarkDirty();
+            return layer;
+        }
+
+        Layer CreateLayer(TimeCategoryAsset category, int categoryIndex, int units, string label)
+        {
             float before = RitualFill.HeightAfter(_shape, _config.hoursWhenFull, _totalUnits);
             float after = Mathf.Min(_shape.FillCeiling, RitualFill.HeightAfter(_shape, _config.hoursWhenFull, _totalUnits + units));
             float rise = Mathf.Max(1e-5f, after - before);
             Strata.Raise(_surface, _next, rise, _config.layerBump, _seed++);
             var layer = new Layer
             {
-                category = piece.category,
-                categoryIndex = piece.categoryIndex,
+                category = category,
+                categoryIndex = categoryIndex,
                 units = units,
                 bottom = (float[])_surface.Clone(),
                 top = (float[])_next.Clone()
@@ -414,7 +471,7 @@ namespace MoodPicker.Ritual
                 count = 1;
             }
 
-            layer.cloud = new RitualSplatCloud("Sand " + piece.data.category + " " + _layers.Count, root, _splatMaterial, count, 0.4f);
+            layer.cloud = new RitualSplatCloud("Sand " + label + " " + _layers.Count, root, _splatMaterial, count, 0.4f);
             layer.emit = new float[count];
             layer.flight = new float[count];
             layer.source = new float3[count];
@@ -439,11 +496,11 @@ namespace MoodPicker.Ritual
             }
             layer.surface = new RitualSurface
             {
-                material = _lookOf(piece.category),
-                look = TimeRitualLook.Sand(_tuning, piece.category, _config.sandDetach, 1f),
+                material = _lookOf(category),
+                look = TimeRitualLook.Sand(_tuning, category, _config.sandDetach, 1f),
                 sizeMeters = _config.sandTextureSize,
                 triplanarScale = 1f,
-                intensity = piece.category != null ? piece.category.sandIntensity : 1.1f,
+                intensity = category != null ? category.sandIntensity : 1.1f,
                 aspectMax = _config.scatterAspectMax
             };
             _layers.Add(layer);
@@ -468,13 +525,6 @@ namespace MoodPicker.Ritual
                 _floorSurface.MarkDirty();
             }
 
-            _pouring = layer;
-            _pourPiece = piece;
-            _pourTime = 0f;
-            _pourSeconds = Mathf.Clamp(_config.pourSecondsMin + units * _config.pourSecondsPerUnit, _config.pourSecondsMin, _config.pourSecondsMax);
-            _pourTail = _config.grainFlight * 1.25f + 1f / Mathf.Max(0.2f, _config.landGlowDecay);
-            piece.BeginPour(Spout);
-            PourStarted?.Invoke(layer);
             return layer;
         }
 
