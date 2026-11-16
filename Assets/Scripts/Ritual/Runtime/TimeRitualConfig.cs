@@ -357,13 +357,9 @@ namespace MoodPicker.Ritual
         public float palmNormalSign = 1f;
         public float pourPitchLow = 0.85f;
         public float pourPitchHigh = 1.4f;
-        public bool restSand = true;
+        public bool restSand = false;
         public float restSeconds = 2.6f;
         [Range(0.3f, 1f)] public float restGrain = 0.7f;
-        public float glyphsPerHour = 1.2f;
-        public int glyphGrains = 30;
-        public float glyphHeight = 0.007f;
-        [Range(0f, 1f)] public float glyphGlow = 0.35f;
 
         [Header("Halo")]
         public bool halos = true;

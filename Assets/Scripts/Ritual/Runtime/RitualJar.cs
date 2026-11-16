@@ -34,8 +34,6 @@ namespace MoodPicker.Ritual
             public bool settled;
             public float grainScale = 1f;
             public bool rest;
-            public int glyphStart = -1;
-            public int glyphs;
         }
 
         struct Point
@@ -431,7 +429,7 @@ namespace MoodPicker.Ritual
                 cloud.disp[i] = rest;
                 cloud.vel[i] = float3.zero;
                 cloud.scale[i] = 1f;
-                cloud.glow[i] = GlyphGlow(layer, i);
+                cloud.glow[i] = 0f;
                 layer.landed[i] = true;
             }
             layer.landedCount = n;
@@ -462,52 +460,6 @@ namespace MoodPicker.Ritual
             _capSurface.previous = null;
             _capSurface.MarkDirty();
             return layer;
-        }
-
-        float GlyphGlow(Layer layer, int i)
-        {
-            return layer.glyphStart >= 0 && i >= layer.glyphStart ? _config.glyphGlow : 0f;
-        }
-
-        int GlyphCount(int units, bool rest)
-        {
-            if (rest || _config.glyphsPerHour <= 0f || _config.glyphGrains <= 0) return 0;
-            float want = units / 6f * _config.glyphsPerHour;
-            return Mathf.Clamp(Mathf.FloorToInt(want + RitualUtil.Hash(_seed * 7 + units)), 0, 8);
-        }
-
-        void AddGlyphs(Layer layer, int glyphs, ref int at, float yLo, float span)
-        {
-            int per = _config.glyphGrains;
-            var samples = new Vector2[per];
-            for (int g = 0; g < glyphs; g++)
-            {
-                int key = _seed * 131 + g * 17 + layer.units;
-                char digit = (char)('0' + Mathf.FloorToInt(RitualUtil.Hash(key) * 9.999f));
-                RitualClockFont.Sample(digit, per, samples, 0, 0.02f, key);
-                float theta = RitualUtil.Hash(key + 3) * 6.2831853f;
-                float lo = Strata.At(layer.bottom, theta), hi = Strata.At(layer.top, theta);
-                float height = Mathf.Max(0.004f, Mathf.Min(_config.glyphHeight, (hi - lo) * 1.2f));
-                float yMid = 0.5f * (lo + hi);
-                float ct = Mathf.Cos(theta), st = Mathf.Sin(theta);
-                float3 radial = new float3(ct, 0f, st);
-                float3 tangent = new float3(-st, 0f, ct);
-                for (int k = 0; k < per; k++)
-                {
-                    Vector2 q = samples[k];
-                    float y = yMid + (q.y - 0.5f) * height;
-                    float r = WallRadius(y) - 0.0002f;
-                    float3 home = radial * r + tangent * ((q.x - RitualClockFont.Width * 0.5f) * height) + new float3(0f, y, 0f);
-                    int s = layer.cloud.Add(home, radial, _config.grainRadius * 0.55f);
-                    layer.cloud.scale[s] = 0f;
-                    layer.emit[at] = 0.82f * Mathf.Clamp01((y - yLo) / span) + 0.14f * RitualUtil.Hash(at * 5 + _seed);
-                    layer.flight[at] = _config.grainFlight * (0.8f + 0.4f * RitualUtil.Hash(at * 9 + 1));
-                    float a = RitualUtil.Hash(at * 13 + 5) * 6.2831853f;
-                    float rr = Mathf.Sqrt(RitualUtil.Hash(at * 17 + 3));
-                    layer.source[at] = new float3(Mathf.Cos(a) * rr, RitualUtil.Hash(at * 21 + 7), Mathf.Sin(a) * rr);
-                    at++;
-                }
-            }
         }
 
         Layer CreateLayer(TimeCategoryAsset category, int categoryIndex, int units, string label, bool rest = false)
@@ -541,13 +493,11 @@ namespace MoodPicker.Ritual
                 count = 1;
             }
 
-            int glyphs = GlyphCount(units, rest);
-            int total = count + glyphs * Mathf.Max(0, _config.glyphGrains);
-            layer.cloud = new RitualSplatCloud("Sand " + label + " " + _layers.Count, root, _splatMaterial, total, 0.4f);
-            layer.emit = new float[total];
-            layer.flight = new float[total];
-            layer.source = new float3[total];
-            layer.landed = new bool[total];
+            layer.cloud = new RitualSplatCloud("Sand " + label + " " + _layers.Count, root, _splatMaterial, count, 0.4f);
+            layer.emit = new float[count];
+            layer.flight = new float[count];
+            layer.source = new float3[count];
+            layer.landed = new bool[count];
             float yLo = float.MaxValue, yHi = float.MinValue;
             for (int i = 0; i < count; i++)
             {
@@ -565,14 +515,6 @@ namespace MoodPicker.Ritual
                 float a = RitualUtil.Hash(i * 13 + 5) * 6.2831853f;
                 float rr = Mathf.Sqrt(RitualUtil.Hash(i * 17 + 3));
                 layer.source[i] = new float3(Mathf.Cos(a) * rr, RitualUtil.Hash(i * 21 + 7), Mathf.Sin(a) * rr);
-            }
-            if (glyphs > 0)
-            {
-                layer.glyphStart = count;
-                layer.glyphs = glyphs;
-                int at = count;
-                AddGlyphs(layer, glyphs, ref at, yLo, span);
-                count = at;
             }
             layer.surface = new RitualSurface
             {
@@ -731,7 +673,7 @@ namespace MoodPicker.Ritual
 
             if (_pourTime >= _pourSeconds + _pourTail && layer.landedCount >= n)
             {
-                for (int i = 0; i < n; i++) glow[i] = GlyphGlow(layer, i);
+                for (int i = 0; i < n; i++) glow[i] = 0f;
                 cloud.MarkSim();
                 if (_layers.Count == 1)
                 {

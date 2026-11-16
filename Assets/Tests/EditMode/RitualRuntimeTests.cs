@@ -1179,7 +1179,7 @@ namespace MoodPicker.Tests
         }
 
         [Test]
-        public void ClosingTheDayFillsTheRestWithPaleFineSandSoTheVesselIsAlwaysFull()
+        public void RestSandKeptBehindItsFlagStillFillsTheGapWhenTurnedOn()
         {
             RitualJar jar = Jar();
             try
@@ -1192,7 +1192,6 @@ namespace MoodPicker.Tests
                 RitualJar.Layer rest = jar.BeginRest();
                 Assert.That(rest, Is.Not.Null);
                 Assert.That(rest.rest && rest.category == null, Is.True, "고운 옅은 모래");
-                Assert.That(rest.glyphs, Is.EqualTo(0));
                 Finish(jar, ref now);
                 Assert.That(jar.Room, Is.EqualTo(0), "얼마나 꺼냈든 병은 항상 가득 찬다");
                 Assert.That(jar.SurfaceMean, Is.GreaterThan(jar.Shape.FillCeiling - 0.006f));
@@ -1205,7 +1204,7 @@ namespace MoodPicker.Tests
         }
 
         [Test]
-        public void EachColouredLayerCarriesAFewDigitGrainsThatStayLitAfterSettling()
+        public void SettledLayersHoldPlainSandWithNoDigitGrainsLeftGlowing()
         {
             RitualJar jar = Jar();
             try
@@ -1213,14 +1212,10 @@ namespace MoodPicker.Tests
                 float now = 0f;
                 TimePieceView piece = Pulled(_move, 0, 12, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
                 RitualJar.Layer layer = jar.BeginPour(piece);
-                Assert.That(layer.glyphs, Is.InRange(1, 8), "병 속에 숫자 글리프 알갱이를 소량 섞는다");
-                Assert.That(layer.cloud.Count - layer.glyphStart, Is.EqualTo(layer.glyphs * _config.glyphGrains));
                 Finish(jar, ref now);
-                Assert.That(layer.cloud.glow[layer.glyphStart], Is.EqualTo(_config.glyphGlow).Within(1e-4f), "가까이 들여다보면 숫자가 보인다");
-                Assert.That(layer.cloud.glow[0], Is.EqualTo(0f));
-                Vector3 h = layer.cloud.home[layer.glyphStart];
-                float radial = new Vector2(h.x, h.z).magnitude;
-                Assert.That(radial, Is.GreaterThan(jar.Shape.InnerRadius(h.y) - 0.004f), "유리벽 바로 안쪽");
+                int lit = 0;
+                for (int i = 0; i < layer.cloud.Count; i++) if (layer.cloud.glow[i] > 0f) lit++;
+                Assert.That(lit, Is.EqualTo(0), "병 속 숫자 글리프는 없앤다 (사람 결정 11-16: 핵심 경험이 아님)");
             }
             finally
             {
@@ -1332,10 +1327,44 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void ClosingTheLidByDefaultLeavesTheUnpouredSpaceClear()
+        {
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = ScriptableObject.CreateInstance<TimeRitualConfig>();
+            try
+            {
+                TimeRitual ritual = BareRitual("ClearRitual", cfg, cats, null);
+                float now = 1f;
+                TimePieceView piece = Pulled(cats[2], 2, 3, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+                Assert.That(ritual.Jar.BeginPour(piece), Is.Not.Null);
+                for (int i = 0; i < 72 * 8 && ritual.Jar.Pouring; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                int room = ritual.Jar.Room;
+                int layers = ritual.Jar.Layers.Count;
+                typeof(TimeRitual).GetMethod("CloseLid", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(ritual, null);
+                for (int i = 0; i < 72 * 4; i++)
+                {
+                    now += Dt;
+                    ritual.Tick(now, Dt, default);
+                }
+                Assert.That(ritual.Jar.Layers.Count, Is.EqualTo(layers), "뿌연 고운 모래는 뺀다 (사람 결정 11-16)");
+                Assert.That(ritual.Jar.Room, Is.EqualTo(room));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
         public void ClosingTheLidSiftsTheRestOfTheDayAndTheRecordKeepsOnlyWhatWasPoured()
         {
             TimeCategoryAsset[] cats = ShippedCategories();
             var cfg = Object.Instantiate(_config);
+            cfg.restSand = true;
             try
             {
                 TimeRitual ritual = BareRitual("RestRitual", cfg, cats, null);
@@ -1479,8 +1508,7 @@ namespace MoodPicker.Tests
             Assert.That(shipped.seam, Is.False, "금선은 없앤다 (사람 결정 11-16)");
             Assert.That(shipped.releaseGlideMax, Is.LessThanOrEqualTo(0.1f), "던지기는 없다");
             Assert.That(shipped.palmPour, Is.True, "손바닥에 올려 기울여 붓는다 (핀치로 들고 가 놓기는 보조)");
-            Assert.That(shipped.restSand, Is.True, "얼마나 꺼냈든 병은 항상 가득 찬다");
-            Assert.That(shipped.glyphsPerHour, Is.GreaterThan(0f), "병 속에 숫자 글리프 알갱이");
+            Assert.That(shipped.restSand, Is.False, "뿌연 고운 모래로 빈틈을 채우지 않는다 (사람 결정 11-16)");
             Assert.That(shipped.pourPitchHigh, Is.GreaterThan(shipped.pourPitchLow), "병이 찰수록 붓는 소리가 올라간다");
         }
 
@@ -2729,9 +2757,8 @@ namespace MoodPicker.Tests
                 TimeRitual r = SealedShelfRitual("Ending", cfg, cats, glowMat, ref now);
                 RitualShelf.ShelfJar past = r.Shelf.Jars[0];
                 Assert.That(past.vessel, Is.Not.Null, "지난 병도 완성된 입자 병");
-                Assert.That(past.vessel.Room, Is.EqualTo(0), "지난 병도 나머지 하루의 고운 모래로 가득");
-                Assert.That(past.vessel.Layers.Count, Is.EqualTo(past.record.layers.Count + 1));
-                Assert.That(past.vessel.Layers[past.vessel.Layers.Count - 1].rest, Is.True);
+                Assert.That(past.vessel.TotalUnits, Is.EqualTo(past.record.TotalUnits));
+                Assert.That(past.vessel.Layers.Count, Is.EqualTo(past.record.layers.Count), "지난 병에도 고운 모래를 채우지 않는다");
                 Assert.That(past.vessel.TotalGrains, Is.GreaterThan(500));
                 float before = past.level;
                 CarryJar(r, ref now, r.Shelf.TodaySeat + new Vector3(0f, 0.05f, 0f), false);
