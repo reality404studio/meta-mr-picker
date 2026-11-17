@@ -52,6 +52,73 @@ public static class MoodPickerBuild
         }
     }
 
+    public const string TimeRitualReleaseUnsignedPath = "Builds/time-ritual-release-unsigned.apk";
+    public const string TimeRitualReleasePackage = "com.reality404.timeritual";
+    public const string TimeRitualReleaseProductName = "Ourglass";
+
+    static string Arg(string name, string fallback)
+    {
+        string[] a = Environment.GetCommandLineArgs();
+        for (int i = 0; i < a.Length - 1; i++) if (a[i] == name) return a[i + 1];
+        return fallback;
+    }
+
+    [MenuItem("Mood Picker/Build Time Ritual Release APK")]
+    public static bool BuildTimeRitualReleaseApk()
+    {
+        string package = Arg("-ritualPackage", TimeRitualReleasePackage);
+        int versionCode = int.TryParse(Arg("-ritualVersionCode", "1"), out int vc) && vc > 0 ? vc : 1;
+        string versionName = Arg("-ritualVersionName", "1.0." + versionCode);
+        string productName = Arg("-ritualProductName", TimeRitualReleaseProductName);
+        TimeRitualSceneSetup.Run();
+        var target = UnityEditor.Build.NamedBuildTarget.Android;
+        string savedId = PlayerSettings.GetApplicationIdentifier(target);
+        string savedName = PlayerSettings.productName;
+        string savedVersion = PlayerSettings.bundleVersion;
+        int savedCode = PlayerSettings.Android.bundleVersionCode;
+        var savedScenes = EditorBuildSettings.scenes;
+        bool savedDev = EditorUserBuildSettings.development;
+        try
+        {
+            PlayerSettings.SetApplicationIdentifier(target, package);
+            PlayerSettings.productName = productName;
+            PlayerSettings.bundleVersion = versionName;
+            PlayerSettings.Android.bundleVersionCode = versionCode;
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(TimeRitualSceneSetup.ScenePath, true) };
+            EditorUserBuildSettings.development = false;
+            Directory.CreateDirectory(Path.GetDirectoryName(TimeRitualReleaseUnsignedPath));
+            var opts = new BuildPlayerOptions
+            {
+                scenes = new[] { TimeRitualSceneSetup.ScenePath },
+                locationPathName = TimeRitualReleaseUnsignedPath,
+                target = BuildTarget.Android,
+                targetGroup = BuildTargetGroup.Android,
+                options = BuildOptions.None,
+            };
+            BuildReport report = BuildPipeline.BuildPlayer(opts);
+            var s = report.summary;
+            Debug.Log($"[MP] release build result={s.result} errors={s.totalErrors} size={s.totalSize / (1024 * 1024)}MB time={s.totalTime.TotalSeconds:0}s package={package} label={productName} versionCode={versionCode} versionName={versionName} path={TimeRitualReleaseUnsignedPath}");
+            return s.result == BuildResult.Succeeded;
+        }
+        finally
+        {
+            PlayerSettings.SetApplicationIdentifier(target, savedId);
+            PlayerSettings.productName = savedName;
+            PlayerSettings.bundleVersion = savedVersion;
+            PlayerSettings.Android.bundleVersionCode = savedCode;
+            EditorBuildSettings.scenes = savedScenes;
+            EditorUserBuildSettings.development = savedDev;
+            AssetDatabase.SaveAssets();
+        }
+    }
+
+    public static void BuildTimeRitualReleaseApkBatch()
+    {
+        _deadline = EditorApplication.timeSinceStartup + 120;
+        _job = BuildTimeRitualReleaseApk;
+        EditorApplication.update += Wait;
+    }
+
     public static void BuildTimeRitualApkBatch()
     {
         _deadline = EditorApplication.timeSinceStartup + 120;

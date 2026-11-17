@@ -11,7 +11,7 @@
 #   install | run | stop | log <파일> | temp
 set -u
 ADB=/Applications/Unity/Hub/Editor/6000.3.27f2/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb
-PKG=com.DefaultCompany.timeritual
+PKG="${PKG:-com.DefaultCompany.timeritual}"
 DIR=/sdcard/Android/data/$PKG/files
 APK="$(cd "$(dirname "$0")/.." && pwd)/Builds/time-ritual-dev.apk"
 TMP="${TMPDIR:-/tmp}/ritual-live.json"
