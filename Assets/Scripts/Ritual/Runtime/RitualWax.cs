@@ -54,6 +54,14 @@ namespace MoodPicker.Ritual
         Mesh _stickMesh;
         Mesh _dropMesh;
         Mesh _sparksMesh;
+        Mesh _waxThinMesh;
+        Mesh _coverThinMesh;
+        Mesh _twineThinMesh;
+        readonly float _thinKeep;
+        float _thinRadius = 1f;
+        int _full;
+        int _thinCount;
+        bool _thin;
         float _waxRadius;
         float _coverRadius;
         float _stickSplat;
@@ -103,8 +111,13 @@ namespace MoodPicker.Ritual
         public float Cool => Sealed ? RitualUtil.Smooth(_sealedFor / Mathf.Max(0.1f, _config.coolSeconds)) : 0f;
         public float Lift => _lift;
 
-        public RitualWax(Transform jarRoot, TimeRitualConfig config, Material waxMaterial, Material glowMaterial = null)
+        public int LidSplatsFull => _full;
+        public int LidSplats => _thin ? _thinCount : _full;
+        public bool Thin => _thin;
+
+        public RitualWax(Transform jarRoot, TimeRitualConfig config, Material waxMaterial, Material glowMaterial = null, float thinKeep = 1f)
         {
+            _thinKeep = Mathf.Clamp(thinKeep, 0.05f, 1f);
             _config = config;
             _shape = config.jar;
             var go = new GameObject("Wax");
@@ -131,6 +144,26 @@ namespace MoodPicker.Ritual
             BuildDrop(waxMaterial);
             BuildSparks(waxMaterial);
             Push();
+        }
+
+        Mesh Thinned(RitualStaticSplats.Builder b, string name)
+        {
+            _full += b.Count;
+            if (_thinKeep >= 0.999f) return null;
+            Mesh thin = b.ToThinMesh(name, 0.2f, _thinKeep);
+            _thinCount += thin.vertexCount / 4;
+            return thin;
+        }
+
+        public void SetThin(bool thin)
+        {
+            if (_waxThinMesh == null || _wax == null || thin == _thin) return;
+            _thin = thin;
+            _wax.GetComponent<MeshFilter>().sharedMesh = thin ? _waxThinMesh : _waxMesh;
+            _cover.GetComponent<MeshFilter>().sharedMesh = thin ? _coverThinMesh : _coverMesh;
+            _twine.GetComponent<MeshFilter>().sharedMesh = thin ? _twineThinMesh : _twineMesh;
+            _thinRadius = thin ? RitualStaticSplats.ThinRadius(_thinKeep) : 1f;
+            _dirty = true;
         }
 
         void BuildSparks(Material material)
@@ -264,6 +297,7 @@ namespace MoodPicker.Ritual
 
             float area = 4f * Mathf.PI * rd * rd;
             _waxRadius = Mathf.Sqrt(area / discCount) * 1.15f;
+            _waxThinMesh = Thinned(b, "WaxSealThin");
             _waxMesh = b.ToMesh("WaxSeal", 0.2f);
             _wax = RitualStaticSplats.Spawn("WaxSeal", root, _waxMesh, material);
         }
@@ -308,6 +342,7 @@ namespace MoodPicker.Ritual
             }
             float area = Mathf.PI * rc * rc + 2f * Mathf.PI * rc * 0.02f;
             _coverRadius = Mathf.Sqrt(area / n) * 1.05f;
+            _coverThinMesh = Thinned(b, "WaxCoverThin");
             _coverMesh = b.ToMesh("WaxCover", 0.2f);
             _cover = RitualStaticSplats.Spawn("Cover", lidRoot, _coverMesh, material);
         }
@@ -354,6 +389,7 @@ namespace MoodPicker.Ritual
                 float delay = 0.75f + 0.25f * RitualUtil.Hash(i * 13 + 9);
                 b.Add(a, normal, new Vector4(pos.x, pos.y, pos.z, delay), new Vector4(normal.x, normal.y, normal.z, 0f), new Vector4(normal.x, normal.y, normal.z, rnd));
             }
+            _twineThinMesh = Thinned(b, "WaxTwineThin");
             _twineMesh = b.ToMesh("WaxTwine", 0.2f);
             _twine = RitualStaticSplats.Spawn("Twine", lidRoot, _twineMesh, material);
         }
@@ -710,12 +746,12 @@ namespace MoodPicker.Ritual
             Color body = Color.Lerp(_color, matte, cool);
             Color deep = new Color(body.r * 0.42f, body.g * 0.34f, body.b * 0.32f, 1f);
             Color light = Color.Lerp(new Color(1f, 0.94f, 0.85f, 1f), new Color(0.72f, 0.68f, 0.62f, 1f), cool);
-            Fill(_waxBlock, body, deep, light, _glow, Mathf.Lerp(0.55f, 0.12f, cool), _waxRadius, _press, _stamp, _appear, origin, 0f, 0f);
+            Fill(_waxBlock, body, deep, light, _glow, Mathf.Lerp(0.55f, 0.12f, cool), _waxRadius * _thinRadius, _press, _stamp, _appear, origin, 0f, 0f);
             _wax.SetPropertyBlock(_waxBlock);
             float cinch = Mathf.Lerp(0.75f, 1f, Mathf.Max(_appear, _press));
-            Fill(_coverBlock, new Color(0.78f, 0.72f, 0.61f, 1f), new Color(0.35f, 0.30f, 0.24f, 1f), new Color(0.92f, 0.88f, 0.80f, 1f), 0f, 0.04f, _coverRadius, cinch, 0f, _coverAppear, origin, 0f, 0f);
+            Fill(_coverBlock, new Color(0.78f, 0.72f, 0.61f, 1f), new Color(0.35f, 0.30f, 0.24f, 1f), new Color(0.92f, 0.88f, 0.80f, 1f), 0f, 0.04f, _coverRadius * _thinRadius, cinch, 0f, _coverAppear, origin, 0f, 0f);
             _cover.SetPropertyBlock(_coverBlock);
-            Fill(_twineBlock, new Color(0.56f, 0.44f, 0.29f, 1f), new Color(0.26f, 0.20f, 0.12f, 1f), new Color(0.84f, 0.76f, 0.64f, 1f), 0f, 0.08f, 0.00075f, cinch, 0f, _coverAppear, origin, 0f, 0f);
+            Fill(_twineBlock, new Color(0.56f, 0.44f, 0.29f, 1f), new Color(0.26f, 0.20f, 0.12f, 1f), new Color(0.84f, 0.76f, 0.64f, 1f), 0f, 0.08f, 0.00075f * _thinRadius, cinch, 0f, _coverAppear, origin, 0f, 0f);
             _twine.SetPropertyBlock(_twineBlock);
         }
 
@@ -744,6 +780,9 @@ namespace MoodPicker.Ritual
             RitualUtil.Kill(_stickMesh);
             RitualUtil.Kill(_dropMesh);
             RitualUtil.Kill(_sparksMesh);
+            RitualUtil.Kill(_waxThinMesh);
+            RitualUtil.Kill(_coverThinMesh);
+            RitualUtil.Kill(_twineThinMesh);
             if (root != null) RitualUtil.Kill(root.gameObject);
             if (lidRoot != null) RitualUtil.Kill(lidRoot.gameObject);
             if (stickRoot != null) RitualUtil.Kill(stickRoot.gameObject);

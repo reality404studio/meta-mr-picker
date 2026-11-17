@@ -134,3 +134,9 @@
 - 원인: 패스스루 MR 에서 가상 물체는 실제 벽에 가려지지 않는다(뎁스 가림 없음). 책상은 보통 벽에 붙어 있어 50cm 너머는 벽 안
 - 확인법: 덜 중요하게 만들 때는 거리 대신 크기(1/4 미니어처)와 자리(책상 구석)로. `shelfMiniScale`·`shelfCorner`
 - 적용 범위: 모든 책상 MR
+
+## Meta VR MCP 의 수동 시작/정지 Perfetto 캡처에는 GPU 데이터가 없다 (2026-11-16, build-2c40)
+- 증상: `perf_trace_capture_start`(mode vr) → 50초 뒤 stop 한 트레이스에 GPU 렌더 단계 슬라이스·GPU 카운터(`% Time Shading Fragments` 등)가 0개. CPU 슬라이스도 처음 9초만 촘촘하고 뒤는 컴포지터 것만 남음. 봉인 Bloom 구간을 통째로 놓침
+- 원인: 미확인 (백그라운드 캡처 설정에 GPU 데이터 소스가 빠졌거나 버퍼가 찬 뒤 버림). 타이머 캡처 `perf_trace_capture`(12초, 약 110MB)는 전부 담김
+- 확인법: 캡처 직후 `SELECT COUNT(*) FROM slice s JOIN gpu_track g ON s.track_id=g.id` 가 0 이 아닌지. 한 번뿐인 순간(봉인)은 이벤트 로그(`ritual lid closed`)에 맞춰 타이머 캡처 15초로 건다
+- 적용 범위: Quest 실기 성능 측정 전반 (metavr MCP) promote?

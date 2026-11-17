@@ -172,6 +172,11 @@ namespace MoodPicker.Ritual
         RitualDeskPool _pool;
         float _tableY;
         RitualGuideTrails _guideTrails;
+        RitualTutorial _tutorial;
+        float _tutIdle;
+        bool _tutMerged;
+        int _tutPoured;
+        const string TutorialPref = "ritual.tutorial";
         Color _pourPreviewGlow;
         Mesh _labelTextMesh;
         MeshRenderer _labelTextRenderer;
@@ -233,6 +238,8 @@ namespace MoodPicker.Ritual
         public float TableY => _tableY;
         public RitualGuideTrails GuideTrails => _guideTrails;
         public bool GuideTrailsEnabled => _config != null && _config.guideTrails;
+        public RitualTutorial Tutorial => _tutorial;
+        public bool TutorialEnabled => _config != null && _config.tutorial;
         public bool Sealed => _sealed;
         public float Quality => _quality;
         public float FrameMs => _frameMs;
@@ -303,7 +310,13 @@ namespace MoodPicker.Ritual
             }
             BuildJar();
             _guideTrails = new RitualGuideTrails(transform, _config, glowMaterial);
-            if (sound != null) sound.Init(_config.volume);
+            if (Application.isPlaying)
+            {
+                if (_config.tutorialRemember) _config.tutorial = PlayerPrefs.GetInt(TutorialPref, _config.tutorial ? 1 : 0) == 1;
+                _config.guideTrails = _config.tutorial;
+            }
+            if (labelFont != null && frostMaterial != null) _tutorial = new RitualTutorial(transform, _config, labelFont, frostMaterial);
+            if (sound != null) sound.Init(_config.volume, _config);
             Font.textureRebuilt += OnFontTextureRebuilt;
             if (labelFont != null)
             {
@@ -340,6 +353,7 @@ namespace MoodPicker.Ritual
             _jar.PourStarted += OnPourStarted;
             _jar.PourFinished += OnPourFinished;
             _jar.GrainsLanded += OnGrainsLanded;
+            _jar.StreamEnded += OnStreamEnded;
             _wax = new RitualWax(_jar.root, _config, waxMaterial, glowMaterial);
             _wax.Landed += OnWaxLanded;
             _glow = new RitualDeskGlow(piecesRoot, _config, glowMaterial);
@@ -726,9 +740,12 @@ namespace MoodPicker.Ritual
             StepRest();
             StepMicrogesture(now);
             StepGuideTrails(dt);
+            StepTutorial(dt);
             StepRoomNote(dt);
             StepHeapNote(dt);
+            _jar.SloshEnabled = _config.sandSlosh && _sealed && !_shelved;
             _jar.Tick(now, dt);
+            if (sound != null && _sealed && (_jar.Sloshing || _jar.SloshEnabled)) sound.SandShift(_jar.BodyCenter, _jar.SloshSpeed / Mathf.Max(1e-3f, _config.sandShiftFullSpeed));
             _wax.Tick(dt);
             _glow.Tick(dt);
             _pool.Tick(dt, _jar.root.position, _tableY);
@@ -1070,7 +1087,7 @@ namespace MoodPicker.Ritual
                 float blobContact = piece.Touch(midBlob, blobRelVel, 0.045f, dt);
                 if (blobContact > 0.15f && blobRelVel.sqrMagnitude > 0.002f && now >= _nextTouchSoundTime[h])
                 {
-                    if (sound != null) sound.Knead(midBlob, piece.feel, IsWindChime(piece));
+                    if (sound != null) sound.Knead(midBlob, piece.feel, IsWindChime(piece), blobRelVel.magnitude);
                     _nextTouchSoundTime[h] = now + 0.26f;
                 }
                 return;
@@ -1085,7 +1102,7 @@ namespace MoodPicker.Ritual
             float contact = piece.Touch(mid, relVel, 0.045f, dt);
             if (contact > 0.15f && relVel.sqrMagnitude > 0.002f && now >= _nextTouchSoundTime[h])
             {
-                if (sound != null) sound.Knead(mid, piece.feel, IsWindChime(piece));
+                if (sound != null) sound.Knead(mid, piece.feel, IsWindChime(piece), relVel.magnitude);
                 _nextTouchSoundTime[h] = now + 0.26f;
             }
         }
@@ -1369,7 +1386,11 @@ namespace MoodPicker.Ritual
             else if (b.t > 0f || bestGap < _config.bondStart)
             {
                 if (b.t <= 0f) Debug.Log($"{Tag} ritual bond start {piece.data.category} {piece.Units}+{best.Units} gap={bestGap:0.000}");
+                float was = b.t;
                 b.t += dt / Mathf.Max(0.05f, _config.bondSeconds);
+                int beats = Mathf.Max(1, _config.bondBeats);
+                int beat = Mathf.FloorToInt(b.t * beats);
+                if (sound != null && (was <= 0f || (beat > Mathf.FloorToInt(was * beats) && beat < beats))) sound.Bond(contact, IsWindChime(piece), was <= 0f ? 0 : beat);
             }
 
             float amount;
@@ -1415,7 +1436,7 @@ namespace MoodPicker.Ritual
             b.Snap();
             Snaps++;
             Vector3 at = Contact(a, b);
-            if (sound != null) sound.Snap(at);
+            if (sound != null) sound.Snap(at, IsWindChime(a));
             Debug.Log($"{Tag} ritual bond snap {a.data.category} gap={a.DistanceTo(b):0.000} n={Snaps}");
         }
 
@@ -1426,6 +1447,7 @@ namespace MoodPicker.Ritual
             int before = keeper.Units;
             int added = absorbed.Units;
             keeper.Absorb(absorbed, _config.mergedShape);
+            _tutMerged = true;
             if (sound != null) sound.Chimes(keeper.Center, before, Mathf.Min(added, 24), _config.chimeInterval, IsWindChime(keeper));
             Debug.Log($"{Tag} ritual merge {keeper.data.category} {before}+{added}={keeper.Units} merged={keeper.data.mergedCount} shape={keeper.shape}");
         }
@@ -1525,7 +1547,7 @@ namespace MoodPicker.Ritual
                     }
                     if (contact > 0.15f && hand.palmVelocity.sqrMagnitude > 0.002f && now >= _nextTouchSoundTime[h])
                     {
-                        if (sound != null) sound.Knead(hand.palm, piece.feel, IsWindChime(piece));
+                        if (sound != null) sound.Knead(hand.palm, piece.feel, IsWindChime(piece), hand.palmVelocity.magnitude);
                         _nextTouchSoundTime[h] = now + (scatter ? 0.12f : 0.26f);
                     }
                 }
@@ -1555,7 +1577,7 @@ namespace MoodPicker.Ritual
                     float contact = piece.Touch(probe, hand.palmVelocity, 0.036f, dt);
                     if (contact > 0.15f && hand.palmVelocity.sqrMagnitude > 0.002f && now >= _nextTouchSoundTime[h])
                     {
-                        if (sound != null) sound.Knead(probe, piece.feel, IsWindChime(piece));
+                        if (sound != null) sound.Knead(probe, piece.feel, IsWindChime(piece), hand.palmVelocity.magnitude);
                         _nextTouchSoundTime[h] = now + 0.26f;
                     }
                 }
@@ -1702,7 +1724,7 @@ namespace MoodPicker.Ritual
                 for (int i = 0; pull.Heaps != null && i < pull.Heaps.Length; i++)
                     if (pull.Heaps[i] != null) pull.Heaps[i].MeltInto(drop, _config.meltSeconds * (0.85f + 0.06f * i));
             }
-            if (sound != null) sound.Landed(_jar.MouthCenter, 40);
+            if (sound != null) sound.LidClosed(_jar.MouthCenter);
             _restPending = _config.restSand;
             Debug.Log($"{Tag} ritual lid closed units={_jar.TotalUnits} room={_jar.Room}");
         }
@@ -1849,6 +1871,10 @@ namespace MoodPicker.Ritual
             _materialized = false;
             _everPulled = false;
             _idle = 0f;
+            _tutIdle = 0f;
+            _tutMerged = false;
+            _tutPoured = 0;
+            _tutorial?.Restart();
             _labelAttach = 0f;
             _labelGlow = 0f;
             _panelTimer = 0f;
@@ -1886,7 +1912,8 @@ namespace MoodPicker.Ritual
 
         void OnReleased(TimePieceView piece)
         {
-            if (piece.Crumple() && sound != null && IsWindChime(piece)) sound.Knead(piece.Center, piece.feel, true);
+            bool crumpled = piece.Crumple();
+            if (sound != null) sound.Form(piece.Center, IsWindChime(piece), crumpled);
             Transform t = piece.Transform;
             if (_config.releaseDrift > 1e-4f && t != null) piece.Nudge(t.forward * _config.releaseDrift);
             if (_config.floatAway)
@@ -1967,7 +1994,7 @@ namespace MoodPicker.Ritual
 
         (RitualJar, RitualWax) MakeShelfJar(Transform parent, DayRecord rec)
         {
-            var vessel = new RitualJar(parent, _config, tuning, splatMaterial, glassMaterial, LookOf);
+            var vessel = new RitualJar(parent, _config, tuning, splatMaterial, glassMaterial, LookOf, _config.shelfMiniDetail);
             foreach (DayLayer layer in rec.layers)
             {
                 TimeCategoryAsset cat = null;
@@ -1980,7 +2007,7 @@ namespace MoodPicker.Ritual
             RitualWax wax = null;
             if (waxMaterial != null)
             {
-                wax = new RitualWax(vessel.root, _config, waxMaterial, glowMaterial);
+                wax = new RitualWax(vessel.root, _config, waxMaterial, glowMaterial, _config.shelfMiniDetail);
                 wax.PlaceLid(wax.LidHomeLocal, Quaternion.identity);
                 int d = IndexOfCategory(rec.dominant);
                 wax.Materialize(categories != null && d < categories.Length && categories[d] != null ? categories[d].waxColor : new Color(0.55f, 0.16f, 0.12f, 1f));
@@ -2042,13 +2069,13 @@ namespace MoodPicker.Ritual
             float u = RitualUtil.Smooth(Mathf.Clamp01(_shelveAge / 0.55f));
             Vector3 target = _shelf.TodaySeat;
             Vector3 p = Vector3.Lerp(_shelveFrom, target, u) + Vector3.up * (0.03f * Mathf.Sin(u * Mathf.PI));
-            Quaternion upright = UprightYaw(_jar.root, transform.forward);
+            Quaternion upright = _shelf.TodayFacing;
             _jar.root.SetPositionAndRotation(p, Quaternion.Slerp(_jar.root.rotation, upright, u));
             if (_shelveAge >= 0.55f)
             {
                 _jar.root.SetPositionAndRotation(target, upright);
                 _shelveAge = -1f;
-                if (sound != null) sound.Landed(target, 60);
+                if (sound != null) sound.Shelved(target);
                 _shelf.Landed(_today, _jar.MouthCenter);
                 Vector3 toEye = Vector3.ProjectOnPlane(_shelf.Eye - target, Vector3.up);
                 toEye = toEye.sqrMagnitude > 1e-6f ? toEye.normalized : -transform.forward;
@@ -2068,7 +2095,7 @@ namespace MoodPicker.Ritual
                 {
                     RitualShelf.ShelfJar j = _shelf.Jars[hit];
                     _shelf.Poke(hit);
-                    if (sound != null) sound.DropChord(j.root.position, IndexOfCategory(j.record.dominant));
+                    if (sound != null) sound.DropChord(j.root.position, IndexOfCategory(j.record.dominant), j.record.dominant);
                     Debug.Log($"{Tag} ritual poke past {j.record.date} \"{j.info}\"");
                 }
                 bool inside = free && _shelved && _shelveAge < 0f && _jar.InBody(hand.index);
@@ -2077,7 +2104,8 @@ namespace MoodPicker.Ritual
                     _todaySwirl.Kick(_config.shelfSwirl);
                     _todayPoke = 1f;
                     _todayPokeCool = 0.5f;
-                    if (sound != null) sound.DropChord(_jar.BodyCenter, Mathf.Max(0, DominantIndex()));
+                    int dom = Mathf.Max(0, DominantIndex());
+                    if (sound != null) sound.DropChord(_jar.BodyCenter, dom, categories != null && dom < categories.Length && categories[dom] != null ? categories[dom].id : null);
                     string info = _shelf.InfoFor(_today);
                     _shelf.ShowNote(info, _jar.MouthCenter + Vector3.up * 0.035f, _config.shelfInfoSeconds);
                     Debug.Log($"{Tag} ritual poke today \"{info}\"");
@@ -2148,6 +2176,7 @@ namespace MoodPicker.Ritual
             _clock.Tick(dt, System.DateTime.Now, _hands, EyePosition());
             ClockPhase after = _clock.Phase;
             if (after != before) Debug.Log($"{Tag} ritual clock {after}");
+            if (after == ClockPhase.Frozen && before != ClockPhase.Frozen && sound != null) sound.ClockTouch(_clock.Center);
             if (after == ClockPhase.Collapsing && pull != null && pull.Heaps != null)
             {
                 if (!_clockSand)
@@ -2166,7 +2195,7 @@ namespace MoodPicker.Ritual
                         if (pull.Heaps[i] != null) pull.Heaps[i].GrowTo(1f);
                 if (sound != null)
                 {
-                    if (_clockSand) sound.PourStop();
+                    if (_clockSand) sound.PourStop(true);
                     sound.HoldBgm(false);
                 }
                 _clockSand = false;
@@ -2176,7 +2205,7 @@ namespace MoodPicker.Ritual
 
         void StepHint(float dt)
         {
-            if (!_config.pullHint || !_clockDone || _everPulled || _sealed || pull == null || pull.Heaps == null) return;
+            if (!_config.pullHint || !_config.tutorial || !_clockDone || _everPulled || _sealed || pull == null || pull.Heaps == null) return;
             bool busy = _grips[0].mode != GripNone || _grips[1].mode != GripNone || _hands[0].pinching || _hands[1].pinching;
             _idle = busy ? 0f : _idle + dt;
             if (_idle < _config.hintIdleSeconds) return;
@@ -2217,6 +2246,8 @@ namespace MoodPicker.Ritual
         {
             float fill = Mathf.Clamp01(_jar.TotalUnits / (float)Mathf.Max(1, _jar.Capacity));
             if (sound != null) sound.PourStart(_jar.MouthCenter, Mathf.Lerp(_config.pourPitchLow, _config.pourPitchHigh, layer.rest ? 1f : fill));
+            if (sound != null && !layer.rest && layer.category != null) sound.Layer(_jar.MouthCenter, layer.category.id);
+            if (!layer.rest) _tutPoured++;
             if (layer.category != null) _labelAccent = layer.category.glowColor;
             _labelGlow = 1f;
             _panelTimer = 0f;
@@ -2231,9 +2262,15 @@ namespace MoodPicker.Ritual
             Debug.Log($"{Tag} ritual pour done {layer.category?.id} total={_jar.TotalUnits}u grains={_jar.TotalGrains} surface={_jar.SurfaceMean:0.000}");
         }
 
+        void OnStreamEnded(RitualJar.Layer layer)
+        {
+            if (sound != null) sound.PourStop();
+            Debug.Log($"{Tag} ritual pour stream end {layer.category?.id} t={layer.landedCount}/{layer.cloud.Count}");
+        }
+
         void OnGrainsLanded(RitualJar.Layer layer, int count)
         {
-            if (sound != null) sound.Landed(_jar.root.position + Vector3.up * _jar.SurfaceMean, count);
+            if (sound != null && _jar.Streaming) sound.GrainsLanded(_jar.root.position + Vector3.up * _jar.SurfaceMean, count, layer.rest || layer.category == null ? null : layer.category.id);
             _labelGlow = Mathf.Max(_labelGlow, 0.65f);
             _panelTimer = 0f;
             if (_jar.Pouring && sound != null && layer.landedCount >= layer.cloud.Count) sound.PourStop();
@@ -2830,6 +2867,7 @@ namespace MoodPicker.Ritual
             _ending?.Dispose();
             RitualUtil.Kill(_labelBorderTagMesh);
             _guideTrails?.Dispose();
+            _tutorial?.Dispose();
             _jar?.Dispose();
         }
 
@@ -2841,15 +2879,76 @@ namespace MoodPicker.Ritual
             bool fresh = g != Microgesture.None && g != _lastRightMicro && now - _lastGuideToggleTime >= 0.35f;
             _lastRightMicro = g;
             if (!fresh || _config == null) return;
+            if (_grips[1].mode != GripNone || _hands[1].pinching)
+            {
+                Debug.Log($"{Tag} ritual tutorial toggle ignored busy gesture={g}");
+                return;
+            }
             _lastGuideToggleTime = now;
-            _config.guideTrails = !_config.guideTrails;
+            SetTutorial(!_config.tutorial);
             if (sound != null)
             {
                 Vector3 anchor = _jar != null ? _jar.Spout : transform.position;
-                sound.Unit(anchor, _config.guideTrails ? 6 : 2, _config.guideTrails, true);
+                sound.Unit(anchor, _config.tutorial ? 6 : 2, _config.tutorial, true);
             }
-            if (_config.timeLabels) ShowRoomNote(_config.guideTrails ? "Light Guide · On" : "Light Guide · Off");
-            Debug.Log($"{Tag} ritual guide trails enabled={_config.guideTrails} gesture={g}");
+            if (_config.timeLabels) ShowRoomNote(_config.tutorial ? "Guide · On" : "Guide · Off");
+            Debug.Log($"{Tag} ritual tutorial enabled={_config.tutorial} guideTrails={_config.guideTrails} gesture={g}");
+        }
+
+        public void SetTutorial(bool on)
+        {
+            if (_config == null) return;
+            _config.tutorial = on;
+            _config.guideTrails = on;
+            _tutorial?.SetEnabled(on);
+            if (Application.isPlaying && _config.tutorialRemember)
+            {
+                PlayerPrefs.SetInt(TutorialPref, on ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
+
+        void StepTutorial(float dt)
+        {
+            if (_tutorial == null || _jar == null) return;
+            if (_tutorial.Enabled != _config.tutorial) _tutorial.SetEnabled(_config.tutorial);
+            bool busy = _grips[0].mode != GripNone || _grips[1].mode != GripNone || _hands[0].pinching || _hands[1].pinching;
+            _tutIdle = busy ? 0f : _tutIdle + dt;
+            int formed = 0;
+            bool pair = false;
+            for (int i = 0; i < _pieces.Count; i++)
+            {
+                TimePieceView p = _pieces[i];
+                if (!p.Alive || (p.state != PieceState.Floating && p.state != PieceState.Held)) continue;
+                formed++;
+                for (int j = 0; j < i && !pair; j++)
+                {
+                    TimePieceView q = _pieces[j];
+                    if (q.Alive && (q.state == PieceState.Floating || q.state == PieceState.Held) && q.categoryIndex == p.categoryIndex) pair = true;
+                }
+            }
+            RitualEnding.Phase end = _ending != null ? _ending.State : RitualEnding.Phase.Hidden;
+            var s = new TutorialState
+            {
+                clockShowing = _clock != null && !_clockDone && _clock.Phase == ClockPhase.Showing,
+                springsReady = (_clock == null || _clockDone) && pull != null && !_sealed,
+                pulling = _grips[0].mode == GripPull || _grips[1].mode == GripPull,
+                pieces = formed,
+                pairOfKind = pair,
+                merged = _tutMerged,
+                poured = _tutPoured,
+                lidClosed = _lidClosed,
+                waxReady = _materialized,
+                vesselSealed = _sealed,
+                sealAge = _sealTime,
+                shelved = _shelved,
+                endOrbReady = end == RitualEnding.Phase.Ready,
+                ended = end == RitualEnding.Phase.Snuffing || end == RitualEnding.Phase.Fading || end == RitualEnding.Phase.Done,
+            };
+            TutorialStep before = _tutorial.Step;
+            TutorialCard cardBefore = _tutorial.Card;
+            _tutorial.Tick(dt, s, _tutIdle, transform.TransformPoint(_config.tutorialOffset), _jar.BodyCenter, EyePosition(), _hands[1]);
+            if (_tutorial.Step != before || _tutorial.Card != cardBefore) Debug.Log($"{Tag} ritual tutorial step={_tutorial.Step} card={_tutorial.Card} enabled={_tutorial.Enabled}");
         }
 
         void StepLabelGesture(float now)

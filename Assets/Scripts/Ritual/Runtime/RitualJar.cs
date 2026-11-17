@@ -46,6 +46,8 @@ namespace MoodPicker.Ritual
         public readonly Transform root;
         public event Action<Layer> PourStarted;
         public event Action<Layer> PourFinished;
+        public event Action<Layer> StreamEnded;
+        public const float SurfaceTau = 0.62f;
         public event Action<Layer, int> GrainsLanded;
 
         readonly TimeRitualConfig _config;
@@ -58,6 +60,13 @@ namespace MoodPicker.Ritual
         readonly MaterialPropertyBlock _glassBlock = new MaterialPropertyBlock();
         MeshRenderer _glass;
         Mesh _glassMesh;
+        Mesh _glassThinMesh;
+        MeshFilter _glassFilter;
+        readonly float _thinKeep;
+        float _glassRadiusScale = 1f;
+        int _glassFull;
+        int _glassThin;
+        bool _thin;
 
         RitualSplatCloud _cap;
         RitualSurface _capSurface;
@@ -75,6 +84,14 @@ namespace MoodPicker.Ritual
         float _pourTime;
         float _pourSeconds;
         float _pourTail;
+        bool _streamEnded;
+        Vector3 _sloshPos;
+        Vector3 _sloshVelW;
+        bool _sloshPrimed;
+        Vector2 _slosh;
+        Vector2 _sloshVel;
+        Vector2 _sloshApplied;
+        bool _sloshLive;
         int _totalUnits;
         int _totalGrains;
         int _seed = 17;
@@ -86,6 +103,12 @@ namespace MoodPicker.Ritual
 
         public IReadOnlyList<Layer> Layers => _layers;
         public bool Pouring => _pouring != null;
+        public bool Streaming => _pouring != null && !_streamEnded;
+        public bool SloshEnabled { get; set; }
+        public bool Sloshing => _sloshLive;
+        public float SloshSpeed => _sloshVel.magnitude;
+        public Vector2 SloshOffset => _slosh;
+        public int SloshMoved { get; private set; }
         public int TotalUnits => _totalUnits;
         public int TotalGrains => _totalGrains;
         public JarShape Shape => _shape;
@@ -98,10 +121,14 @@ namespace MoodPicker.Ritual
         public RitualSplatCloud Cap => _cap;
         public RitualSplatCloud Floor => _floor;
         public Mesh GlassMesh => _glassMesh;
+        public int GlassSplatsFull => _glassFull;
+        public int GlassSplats => _glass == null ? 0 : (_thin ? _glassThin : _glassFull);
+        public bool Thin => _thin;
 
         public RitualJar(Transform parent, TimeRitualConfig config, SplatTuning tuning, Material splatMaterial, Material glassMaterial,
-            Func<TimeCategoryAsset, SplatSurfaceMaterial> lookOf)
+            Func<TimeCategoryAsset, SplatSurfaceMaterial> lookOf, float thinKeep = 1f)
         {
+            _thinKeep = Mathf.Clamp(thinKeep, 0.05f, 1f);
             _config = config;
             _tuning = tuning;
             _splatMaterial = splatMaterial;
@@ -238,8 +265,15 @@ namespace MoodPicker.Ritual
                 }
                 b.Add(p, n, new Vector4(p.x, p.y, p.z, rnd), new Vector4(size, weight, bevel, normY), Vector4.zero);
             }
+            _glassFull = b.Count;
+            if (_thinKeep < 0.999f)
+            {
+                _glassThinMesh = b.ToThinMesh("JarGlassThin", _shape.height, _thinKeep);
+                _glassThin = _glassThinMesh.vertexCount / 4;
+            }
             _glassMesh = b.ToMesh("JarGlass", _shape.height);
             _glass = RitualStaticSplats.Spawn("Glass", root, _glassMesh, material);
+            _glassFilter = _glass.GetComponent<MeshFilter>();
         }
 
         void BuildCap()
@@ -391,6 +425,7 @@ namespace MoodPicker.Ritual
             _pouring = layer;
             _pourPiece = piece;
             _pourTime = 0f;
+            _streamEnded = false;
             _pourSeconds = Mathf.Clamp(_config.pourSecondsMin + layer.units * _config.pourSecondsPerUnit, _config.pourSecondsMin, _config.pourSecondsMax);
             _pourTail = _config.grainFlight * 1.25f + 1f / Mathf.Max(0.2f, _config.landGlowDecay);
             piece.BeginPour(Spout);
@@ -406,6 +441,7 @@ namespace MoodPicker.Ritual
             _pouring = layer;
             _pourPiece = null;
             _pourTime = 0f;
+            _streamEnded = false;
             _pourSeconds = Mathf.Max(0.5f, _config.restSeconds);
             _pourTail = _config.grainFlight * 1.25f + 1f / Mathf.Max(0.2f, _config.landGlowDecay);
             PourStarted?.Invoke(layer);
@@ -591,11 +627,13 @@ namespace MoodPicker.Ritual
             float[] scale = cloud.scale, glow = cloud.glow;
             int n = cloud.Count;
             int landedNow = 0;
+            int reached = 0;
             float3 rest = new float3(0f, TimeRitualLook.RestLift, 0f);
             for (int i = 0; i < n; i++)
             {
                 if (layer.landed[i])
                 {
+                    reached++;
                     if (glow[i] > 0f) glow[i] = math.max(0f, glow[i] - decay);
                     continue;
                 }
@@ -607,6 +645,7 @@ namespace MoodPicker.Ritual
                     layer.landed[i] = true;
                     layer.landedCount++;
                     landedNow++;
+                    reached++;
                     disp[i] = rest;
                     vel[i] = float3.zero;
                     scale[i] = 1f;
@@ -616,15 +655,16 @@ namespace MoodPicker.Ritual
                 float3 src = spout + new float3(layer.source[i].x * meltRadius, (layer.source[i].y - 0.5f) * 0.012f, layer.source[i].z * meltRadius);
                 float3 land = new float3(layer.source[i].z * _config.streamRadius, landY, layer.source[i].x * _config.streamRadius);
                 float3 p;
-                if (tau < 0.62f)
+                if (tau >= SurfaceTau) reached++;
+                if (tau < SurfaceTau)
                 {
-                    float s = tau / 0.62f;
+                    float s = tau / SurfaceTau;
                     float gather = RitualUtil.Smooth(math.min(1f, s * 1.8f));
                     p = new float3(math.lerp(src.x, land.x, gather), math.lerp(src.y, land.y, s * s), math.lerp(src.z, land.z, gather));
                 }
                 else
                 {
-                    float s = (tau - 0.62f) / 0.38f;
+                    float s = (tau - SurfaceTau) / (1f - SurfaceTau);
                     float e = 1f - (1f - s) * (1f - s);
                     p = math.lerp(land, h, e);
                     p.y += math.sin(s * math.PI) * 0.003f;
@@ -636,6 +676,11 @@ namespace MoodPicker.Ritual
                 glow[i] = 0.35f;
             }
             if (landedNow > 0) GrainsLanded?.Invoke(layer, landedNow);
+            if (!_streamEnded && reached >= n)
+            {
+                _streamEnded = true;
+                StreamEnded?.Invoke(layer);
+            }
             cloud.MarkSim();
 
             fraction = n > 0 ? (float)layer.landedCount / n : 1f;
@@ -719,6 +764,15 @@ namespace MoodPicker.Ritual
             _floorSurface.MarkDirty();
         }
 
+        public void SetThin(bool thin)
+        {
+            if (_glassThinMesh == null || _glassFilter == null || thin == _thin) return;
+            _thin = thin;
+            _glassFilter.sharedMesh = thin ? _glassThinMesh : _glassMesh;
+            _glassRadiusScale = thin ? RitualStaticSplats.ThinRadius(_thinKeep) : 1f;
+            _glassDirty = true;
+        }
+
         public void SetInnerGlow(Color glow)
         {
             if (glow == _innerGlow) return;
@@ -742,6 +796,7 @@ namespace MoodPicker.Ritual
         public void Tick(float now, float dt)
         {
             if (_pouring != null) StepPour(Mathf.Min(dt, 1f / 45f));
+            else StepSlosh(dt);
             for (int i = 0; i < _layers.Count; i++)
             {
                 Layer layer = _layers[i];
@@ -759,11 +814,105 @@ namespace MoodPicker.Ritual
                 _glassBlock.SetFloat(RimId, _config.glassRim);
                 _glassBlock.SetFloat(SpecId, _config.glassSpec);
                 _glassBlock.SetFloat(BodyId, _config.glassBody);
-                _glassBlock.SetFloat(RadiusId, _config.glassSplatRadius);
+                _glassBlock.SetFloat(RadiusId, _config.glassSplatRadius * _glassRadiusScale);
                 _glassBlock.SetFloat(PulseId, _pulse);
                 _glass.SetPropertyBlock(_glassBlock);
                 _glassDirty = false;
             }
+        }
+
+        void StepSlosh(float dt)
+        {
+            if (_layers.Count == 0 || (!SloshEnabled && !_sloshLive))
+            {
+                _sloshPrimed = false;
+                return;
+            }
+            dt = Mathf.Clamp(dt, 1e-4f, 1f / 30f);
+            Vector3 pos = root.position;
+            Vector3 accel = Vector3.zero;
+            if (_sloshPrimed)
+            {
+                Vector3 v = Vector3.Lerp(_sloshVelW, (pos - _sloshPos) / dt, 1f - Mathf.Exp(-dt * 25f));
+                accel = Vector3.ClampMagnitude((v - _sloshVelW) / dt, _config.sloshAccelMax);
+                _sloshVelW = v;
+            }
+            else
+            {
+                _sloshVelW = Vector3.zero;
+                _sloshPrimed = true;
+            }
+            _sloshPos = pos;
+            Vector3 down = root.InverseTransformDirection(Vector3.down);
+            var flow = new Vector2(down.x, down.z);
+            float tilt = Vector3.Angle(root.up, Vector3.up);
+            float lean = SloshEnabled ? RitualUtil.Smooth(Mathf.InverseLerp(_config.sloshRepose, _config.sloshRepose + Mathf.Max(1f, _config.sloshRange), tilt)) : 0f;
+            Vector2 target = flow.sqrMagnitude > 1e-6f ? flow.normalized * (_config.sloshMaxShift * lean) : Vector2.zero;
+            Vector3 aLocal = root.InverseTransformDirection(accel);
+            float w = 2f * Mathf.PI * Mathf.Max(0.1f, _config.sloshFrequency);
+            Vector2 force = (target - _slosh) * (w * w) - _sloshVel * (2f * _config.sloshDamping * w) - new Vector2(aLocal.x, aLocal.z) * _config.sloshCoupling;
+            _sloshVel += force * dt;
+            _slosh += _sloshVel * dt;
+            float limit = _config.sloshMaxShift * 1.5f;
+            if (_slosh.magnitude > limit) _slosh = _slosh.normalized * limit;
+            bool still = (_slosh - target).magnitude < 2e-5f && _sloshVel.magnitude < 2e-4f;
+            if (still)
+            {
+                _slosh = target;
+                _sloshVel = Vector2.zero;
+            }
+            if ((_slosh - _sloshApplied).magnitude > 2e-5f || (still && (_sloshApplied.x != _slosh.x || _sloshApplied.y != _slosh.y))) ApplySlosh();
+            _sloshLive = !(still && target.sqrMagnitude < 1e-12f);
+        }
+
+        void ApplySlosh()
+        {
+            _sloshApplied = _slosh;
+            float surface = SurfaceMean;
+            float band = Mathf.Max(0.002f, _config.sloshBand);
+            float radius = Mathf.Max(0.01f, _shape.bodyRadius);
+            float mag = _slosh.magnitude;
+            Vector2 dir = mag > 1e-6f ? _slosh / mag : Vector2.zero;
+            var rot = new float3x3((quaternion)root.rotation);
+            var rest = new float3(0f, TimeRitualLook.RestLift, 0f);
+            int moved = 0;
+            for (int li = _layers.Count - 1; li >= 0; li--)
+            {
+                Layer layer = _layers[li];
+                if (li < _layers.Count - 1 && Strata.Mean(layer.top) < surface - band) break;
+                moved += Shift(layer.cloud, surface, band, radius, dir, mag, rot, rest, _config.sloshLift);
+            }
+            moved += Shift(_cap, surface, band, radius, dir, mag, rot, rest, _config.sloshLift);
+            SloshMoved = moved;
+        }
+
+        static int Shift(RitualSplatCloud cloud, float surface, float band, float radius, Vector2 dir, float mag, float3x3 rot, float3 rest, float lift)
+        {
+            if (cloud == null) return 0;
+            int n = cloud.Count;
+            float3[] home = cloud.home;
+            float3[] disp = cloud.disp;
+            int moved = 0;
+            for (int i = 0; i < n; i++)
+            {
+                float3 h = home[i];
+                float depth = surface - h.y;
+                if (depth >= band)
+                {
+                    disp[i] = rest;
+                    continue;
+                }
+                float w = depth <= 0f ? 1f : 1f - depth / band;
+                w *= w;
+                float side = (h.x * dir.x + h.z * dir.y) / radius;
+                float rr = math.sqrt(h.x * h.x + h.z * h.z) / radius;
+                float slide = mag * w * math.saturate(1.2f - rr);
+                var local = new float3(dir.x * slide, mag * lift * w * side, dir.y * slide);
+                disp[i] = rest + math.mul(rot, local);
+                moved++;
+            }
+            cloud.MarkSim();
+            return moved;
         }
 
         public void Dispose()
@@ -773,6 +922,7 @@ namespace MoodPicker.Ritual
             _cap?.Dispose();
             _floor?.Dispose();
             RitualUtil.Kill(_glassMesh);
+            RitualUtil.Kill(_glassThinMesh);
             if (root != null) RitualUtil.Kill(root.gameObject);
         }
     }

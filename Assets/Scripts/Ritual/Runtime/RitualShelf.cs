@@ -110,6 +110,16 @@ namespace MoodPicker.Ritual
         public Vector3 TodaySeat => TodayPosition;
         public Vector3 Slot(int i) => _root.transform.TransformPoint(_slots[i]);
         public Vector3 Eye => _eye;
+
+        public Quaternion TodayFacing
+        {
+            get
+            {
+                if (_slots == null || _slots.Length == 0) return Quaternion.LookRotation(_forward, Vector3.up);
+                SideAt(_slots[TodaySlot], out Vector3 toEye);
+                return Quaternion.LookRotation(-toEye, Vector3.up);
+            }
+        }
         public float SurfaceY => _surfaceY;
         public bool TodayFilled => _filled;
         public float Brightness => _brightness;
@@ -199,8 +209,14 @@ namespace MoodPicker.Ritual
             if (far == _farQuality) return;
             _farQuality = far;
             float q = Mathf.Clamp(_config.shelfPastQuality * (far ? 0.6f : 1f), 0.25f, 1f);
+            bool thin = far && _config.shelfMiniDetail < 0.999f;
             foreach (ShelfJar j in _jars)
-                if (j.vessel != null) j.vessel.SetQuality(q);
+            {
+                if (j.vessel == null) continue;
+                j.vessel.SetQuality(q);
+                j.vessel.SetThin(thin);
+                j.wax?.SetThin(thin);
+            }
         }
 
         float AngleOf(float slot)

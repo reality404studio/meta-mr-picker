@@ -503,6 +503,7 @@ namespace MoodPicker.Tests
                     ritual.Tick(now, Dt, default);
                 }
                 Assert.That(ritual.GuideTrailsEnabled, Is.False, "오른손 마이크로제스쳐로 가이드를 끈다");
+                Assert.That(ritual.TutorialEnabled, Is.False, "오른손 마이크로제스쳐 하나로 튜토리얼(카드)과 빛 궤적을 같이 끈다 = 녹화 모드");
                 Assert.That(ritual.GuideTrails.Visible, Is.False);
 
                 micro.right = Microgesture.None;
@@ -1194,7 +1195,8 @@ namespace MoodPicker.Tests
                 Assert.That(rest.rest && rest.category == null, Is.True, "고운 옅은 모래");
                 Finish(jar, ref now);
                 Assert.That(jar.Room, Is.EqualTo(0), "얼마나 꺼냈든 병은 항상 가득 찬다");
-                Assert.That(jar.SurfaceMean, Is.GreaterThan(jar.Shape.FillCeiling - 0.006f));
+                Assert.That(jar.TotalUnits, Is.EqualTo(RitualFill.DayUnits), "가득 = 하루 24시간 (사람 11-17)");
+                Assert.That(jar.SurfaceMean, Is.EqualTo(jar.Shape.bodyTop).Within(0.004f), "몸통 꼭대기까지, 목은 비어 있다");
                 Assert.That(jar.BeginRest(), Is.Null, "이미 가득하면 더 붓지 않는다");
             }
             finally
@@ -2269,6 +2271,436 @@ namespace MoodPicker.Tests
             Assert.That(audio.Hushed, Is.False);
         }
 
+        [Test]
+        public void TutorialCardsWalkTheRitualInOrderAndNeverGoBack()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                var s = new TutorialState();
+                TutorialStep step = TutorialStep.Start;
+                TutorialStep Go(TutorialState st, float idle) => step = RitualTutorial.Advance(step, st, idle, cfg);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.None));
+                s.clockShowing = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Clock));
+                s.clockShowing = false;
+                s.springsReady = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Pull));
+                s.pulling = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Pulling), "당기는 동안에는 놓을 때를 알려 준다");
+                s.pulling = false;
+                s.pieces = 1;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.PullMore));
+                Go(s, cfg.tutorialPourIdle);
+                Assert.That(step, Is.EqualTo(TutorialStep.PullMore), "조각 하나에 잠깐 쉰 것으로는 붓기로 넘어가지 않는다");
+                s.pieces = 2;
+                s.pairOfKind = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Merge));
+                Assert.That(RitualTutorial.Show(step, s, false, cfg), Is.EqualTo(TutorialCard.PullMore), "합치기 카드는 정해진 시간만");
+                s.merged = true;
+                s.pairOfKind = false;
+                s.pieces = 1;
+                Go(s, cfg.tutorialPourIdle * 2f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Pour));
+                s.poured = 1;
+                s.pieces = 0;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.PourMore));
+                Go(s, 1.2f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Lid));
+                s.pieces = 3;
+                Go(s, 0f);
+                Assert.That(step, Is.EqualTo(TutorialStep.Lid), "뒤로 가지 않는다");
+                s.lidClosed = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.None), "밀랍이 생기기 전엔 비워 둔다");
+                s.waxReady = true;
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Wax));
+                s.vesselSealed = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.None), "봉인 절정 동안엔 카드가 없다");
+                s.sealAge = cfg.tutorialShelfDelay + 0.1f;
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Shelf));
+                s.shelved = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.Look));
+                s.endOrbReady = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.End));
+                s.ended = true;
+                Go(s, 0f);
+                Assert.That(RitualTutorial.Show(step, s, true, cfg), Is.EqualTo(TutorialCard.None));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void TutorialCardsAreOneEnglishSentenceWithoutScoresOrNumbers()
+        {
+            foreach (TutorialCard card in RitualTutorial.Cards)
+            {
+                string line = RitualTutorial.Line(card);
+                Assert.That(line, Is.Not.Empty, card.ToString());
+                Assert.That(line.Contains("\n"), Is.False, "카드 문구는 한 줄 (사람 11-17)");
+                Assert.That(line.EndsWith("."), Is.True, line);
+                Assert.That(line.IndexOf('!') < 0, Is.True, "느낌표·칭찬 없음");
+                foreach (char c in line)
+                {
+                    Assert.That(c < 128, Is.True, "영어 100% (사람 11-17): " + line);
+                    Assert.That(char.IsDigit(c), Is.False, "숫자 없음: " + line);
+                }
+            }
+            foreach (string foot in new[] { RitualTutorial.HideFull, RitualTutorial.HideShort, RitualTutorial.HoursLine })
+                foreach (char c in foot) Assert.That(c < 128 || c == '·', Is.True, foot);
+            Assert.That(RitualTutorial.Foot(TutorialStep.Clock, true), Does.Contain("Right hand"), "처음 카드에 끄는 법을 풀어 쓴다");
+            Assert.That(RitualTutorial.Foot(TutorialStep.Pull, false), Does.Not.Contain("Left"), "왼손 안내는 붓기부터");
+            Assert.That(RitualTutorial.Foot(TutorialStep.Pour, false), Does.Contain("Left thumb"));
+        }
+
+        [Test]
+        public void TutorialCardHoldsItsTextAndFoldsAwayWhenTurnedOff()
+        {
+            Font font = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Fraunces/Fraunces_72pt-Black.ttf");
+            Material frost = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualFrost.mat");
+            Assert.That(font, Is.Not.Null);
+            Assert.That(frost, Is.Not.Null);
+            var cfg = Object.Instantiate(_config);
+            var host = new GameObject("TutorialHost").transform;
+            host.SetParent(_root.transform, false);
+            var tut = new RitualTutorial(host, cfg, font, frost);
+            try
+            {
+                var s = new TutorialState { clockShowing = true };
+                var right = new RitualHand { tracked = true, thumb = new Vector3(0.1f, 1f, 0.3f), index = new Vector3(0.11f, 1f, 0.31f) };
+                Vector3 anchor = new Vector3(-0.08f, 0.8f, 0.3f);
+                Vector3 jar = new Vector3(0.17f, 0.75f, 0.36f);
+                Vector3 eye = new Vector3(0f, 1.15f, 0f);
+                for (int i = 0; i < 60; i++) tut.Tick(Dt, s, 0f, anchor, jar, eye, right);
+                Assert.That(tut.Card, Is.EqualTo(TutorialCard.Clock));
+                Assert.That(tut.Openness, Is.EqualTo(1f).Within(1e-4f));
+                Assert.That(Vector3.Distance(tut.Root.position, anchor), Is.LessThan(0.002f), "다 펼쳐지면 병 왼쪽 자리에");
+                Assert.That(tut.MainText.Replace("\n", " "), Is.EqualTo(RitualTutorial.Line(TutorialCard.Clock)));
+                Assert.That(tut.FootText.Replace("\n", " "), Does.Contain("Right hand"));
+                Assert.That(tut.WidestLine, Is.LessThanOrEqualTo(tut.Width), "글자가 카드 폭 안에");
+                Assert.That(tut.Height, Is.InRange(0.03f, 0.14f));
+                Assert.That(tut.FrameRenderer.gameObject.activeInHierarchy, Is.True, "카드 가장자리 안쪽에 얇은 선 테두리 (사람 11-17)");
+                Bounds frame = tut.FrameBounds;
+                Assert.That(frame.size.x, Is.LessThan(tut.Width).And.GreaterThan(tut.Width - 0.02f), "테두리는 카드 가장자리 안쪽을 두른다");
+                Assert.That(frame.size.y, Is.LessThan(tut.Height).And.GreaterThan(tut.Height - 0.02f));
+                Assert.That(cfg.tutorialFrameWidth, Is.InRange(0.0005f, 0.0015f), "얇은 선 한 줄");
+                Assert.That(cfg.tutorialFrameInset + cfg.tutorialFrameWidth, Is.LessThan(RitualTutorial.TextPad), "선이 글자에 닿지 않는다");
+
+                tut.SetEnabled(false);
+                for (int i = 0; i < 60; i++) tut.Tick(Dt, s, 0f, anchor, jar, eye, right);
+                Assert.That(tut.Openness, Is.EqualTo(0f), "끄면 병 쪽으로 접혀 들어간다");
+                Assert.That(tut.Card, Is.EqualTo(TutorialCard.None));
+                bool glowed = false;
+                for (int i = 0; i < 72 * 10; i++)
+                {
+                    tut.Tick(Dt, s, i * Dt, anchor, jar, eye, right);
+                    glowed |= tut.OffHintShowing;
+                }
+                Assert.That(glowed, Is.True, "꺼진 뒤 가만히 있으면 오른손 엄지·검지 끝이 한 번 숨 쉰다");
+                Assert.That(tut.OffHintShown, Is.True);
+                Assert.That(tut.OffHintShowing, Is.False, "한 번만");
+
+                tut.SetEnabled(true);
+                for (int i = 0; i < 60; i++) tut.Tick(Dt, s, 0f, anchor, jar, eye, right);
+                Assert.That(tut.Card, Is.EqualTo(TutorialCard.Clock), "다시 켜면 그 단계 카드가 펼쳐진다");
+                Assert.That(tut.FootText, Does.Not.Contain("Right hand:"), "두 번째부터는 짧은 안내");
+            }
+            finally
+            {
+                tut.Dispose();
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        RitualAudio SampledAudio(TimeRitualConfig cfg)
+        {
+            var go = new GameObject("SampledAudio");
+            go.transform.SetParent(_root.transform, false);
+            var audio = go.AddComponent<RitualAudio>();
+            audio.Init(0.7f, cfg);
+            return audio;
+        }
+
+        [Test]
+        public void TheRitualSoundFolderHoldsExactlyTheSoundsThePersonPicked()
+        {
+            var names = new System.Collections.Generic.HashSet<string>();
+            foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Ritual/Audio/Resources/" + RitualAudio.SfxFolder }))
+                names.Add(System.IO.Path.GetFileNameWithoutExtension(UnityEditor.AssetDatabase.GUIDToAssetPath(guid)));
+            Assert.That(names, Is.EquivalentTo(RitualAudio.SfxNames), "고른 파일만, 빠짐없이");
+            foreach (string n in names)
+            {
+                Assert.That(n.StartsWith("hand_sand"), Is.False, "알갱이 속 손 소리는 쓰지 않는다 (건드리기로 통일)");
+                Assert.That(n.Contains("harp_oct"), Is.False, "봉인 여운은 open5 만");
+            }
+            Assert.That(RitualAudio.WarmTouchNames, Is.EqualTo(new[] { "touch_warm_chime_08_soft", "touch_warm_chime_06_soft" }), "빨강·노랑 건드리기는 차임 8번·6번을 무디게");
+            foreach (string n in RitualAudio.SfxNames)
+            {
+                AudioClip clip = Resources.Load<AudioClip>(RitualAudio.SfxFolder + "/" + n);
+                Assert.That(clip, Is.Not.Null, n);
+                Assert.That(clip.channels, Is.EqualTo(1), n);
+                Assert.That(clip.length, Is.GreaterThan(0.2f), n);
+            }
+            TextAsset table = Resources.Load<TextAsset>(RitualAudio.SfxFolder + "/sfx_gains");
+            Assert.That(table, Is.Not.Null, "음량 보정표");
+            var gains = JsonUtility.FromJson<RitualAudio.SfxGains>(table.text);
+            Assert.That(gains.names, Is.EquivalentTo(RitualAudio.SfxNames), "음원마다 보정값이 있다");
+            foreach (float g in gains.gains) Assert.That(g, Is.InRange(0.25f, 4f));
+        }
+
+        [Test]
+        public void TouchingAPieceAndMovingThroughItsGrainsSoundTheSame()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                RitualAudio audio = SampledAudio(cfg);
+                Assert.That(audio.Sampled, Is.True);
+                for (int i = 0; i < 4; i++)
+                {
+                    audio.Knead(new Vector3(0.1f * i, 1f, 0.3f), PieceFeel.Jelly, true, 0.2f + 0.3f * i);
+                    Assert.That(RitualAudio.WarmTouchNames, Has.Member(audio.LastSampled));
+                }
+                audio.Knead(Vector3.one, PieceFeel.Water, false, 0.4f);
+                Assert.That(audio.LastSampled, Is.EqualTo("touch_cool_drop"));
+                audio.Knead(Vector3.one, PieceFeel.Fur, false);
+                Assert.That(audio.LastSampled, Is.EqualTo("touch_cool_drop"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void ThePulledChainRisesInPitchAndTheStickyMergeClimbsThenResolves()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                float prev = 0f;
+                for (int u = 1; u <= cfg.maxUnits; u++)
+                {
+                    float p = RitualAudio.PullPitch(u, cfg.pullUnitsPerStep, cfg.pullBaseSemitones, cfg.pullRiseSemitones);
+                    Assert.That(p, Is.GreaterThanOrEqualTo(prev), "길어질수록 음이 올라간다");
+                    Assert.That(p, Is.LessThanOrEqualTo(RitualAudio.Semi(cfg.pullBaseSemitones + cfg.pullRiseSemitones) + 1e-4f));
+                    prev = p;
+                }
+                Assert.That(RitualAudio.PullPitch(6, cfg.pullUnitsPerStep, cfg.pullBaseSemitones, cfg.pullRiseSemitones),
+                    Is.GreaterThan(RitualAudio.PullPitch(1, cfg.pullUnitsPerStep, cfg.pullBaseSemitones, cfg.pullRiseSemitones) * 1.1f), "한 시간 길이면 귀에 띄게 오른다");
+                for (int warm = 0; warm < 2; warm++)
+                    for (int beat = 1; beat <= cfg.bondBeats; beat++)
+                        Assert.That(RitualAudio.BondPitch(beat, warm == 1), Is.GreaterThan(RitualAudio.BondPitch(beat - 1, warm == 1)), "다리가 이어지는 동안 오르고 합쳐질 때 그 위에서 끝난다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void EachLayerHasItsOwnNoteAndTheSealRingsTheLowGlassHarp()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                RitualAudio audio = SampledAudio(cfg);
+                var heard = new System.Collections.Generic.HashSet<string>();
+                for (int i = 0; i < RitualAudio.NoteIds.Length; i++)
+                {
+                    audio.Layer(Vector3.zero, RitualAudio.NoteIds[i]);
+                    Assert.That(audio.LastSampled, Is.EqualTo(RitualAudio.NoteNames[i]));
+                    heard.Add(audio.LastSampled);
+                }
+                Assert.That(heard.Count, Is.EqualTo(5), "카테고리마다 음이 다르다");
+                Assert.That(cfg.sealVoice, Is.EqualTo(1), "봉인은 B안: 싱잉볼 없이 낮춘 글라스 하프 open5 만 (사람 11-17 \"b가 훨씬 나음\")");
+                float full = 12f - cfg.afterglowLead;
+                float harp = RitualAudio.HarpLength(cfg, 12f);
+                Assert.That(harp, Is.EqualTo(full * 0.6f).Within(0.05f), "여운은 지금 길이의 60% (사람 11-17)");
+                float prevFade = 1f;
+                for (float t = 0f; t <= harp + 0.1f; t += 0.1f)
+                {
+                    float f = RitualAudio.HarpFade(t, harp, cfg.afterglowHoldShare);
+                    Assert.That(f, Is.LessThanOrEqualTo(prevFade + 1e-5f), "잦아들기만 한다");
+                    prevFade = f;
+                }
+                Assert.That(RitualAudio.HarpFade(0f, harp, cfg.afterglowHoldShare), Is.EqualTo(1f));
+                Assert.That(RitualAudio.HarpFade(harp, harp, cfg.afterglowHoldShare), Is.EqualTo(0f), "60% 지점에서 끝난다");
+                audio.ClockTouch(Vector3.zero);
+                Assert.That(audio.LastSampled, Is.EqualTo("clock_touch_cymbal"), "시계를 건드리면 핑거 심벌");
+                audio.Shelved(Vector3.zero);
+                Assert.That(audio.LastSampled, Is.EqualTo("shelf_glass_touch"), "유리 닿는 소리로 닫는다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void WaterKindsMergeWithBubblesThatDifferFromTheBridgeBeats()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                RitualAudio audio = SampledAudio(cfg);
+                audio.Bond(Vector3.zero, false, 1);
+                string beat = audio.LastSampled;
+                audio.Chimes(Vector3.zero, 3, 4, cfg.chimeInterval, false);
+                Assert.That(audio.LastSampled, Is.EqualTo("merge_cool_bubbles"), "물방울 계열이 합쳐지는 순간은 거품 소리 (사람 11-17)");
+                Assert.That(audio.LastSampled, Is.Not.EqualTo(beat), "다리 박자와 귀로 구분된다");
+                audio.Chimes(Vector3.zero, 3, 4, cfg.chimeInterval, true);
+                Assert.That(audio.LastSampled, Is.EqualTo("obj_warm_ping"), "빨강·노랑은 그대로 (사람 11-17 통과)");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void PouringStopsWithoutATailWhileTheCrumblingClockKeepsIts()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                Assert.That(RitualAudio.PourTail(cfg, false), Is.EqualTo(0f), "다 부으면 소리도 끝난다, 꼬리 없음 (사람 11-17)");
+                Assert.That(RitualAudio.PourTail(cfg, true), Is.GreaterThan(0.5f), "시계가 무너지는 소리는 꼬리까지");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void ThePourStreamEndsWhenTheLastGrainReachesTheSandLongBeforeThePourSettles()
+        {
+            RitualJar jar = Jar();
+            float now = 0f;
+            int units = 12;
+            TimePieceView piece = Pulled(_move, 0, units, new Vector3(0.3f, 0.3f, 0f), Vector3.forward);
+            float streamEnd = -1f;
+            float finished = -1f;
+            jar.StreamEnded += l => streamEnd = now;
+            jar.PourFinished += l => finished = now;
+            Assert.That(jar.BeginPour(piece), Is.Not.Null);
+            Assert.That(jar.Streaming, Is.True);
+            Finish(jar, ref now);
+            float pourSeconds = Mathf.Clamp(_config.pourSecondsMin + units * _config.pourSecondsPerUnit, _config.pourSecondsMin, _config.pourSecondsMax);
+            Assert.That(streamEnd, Is.GreaterThan(0f), "흐름이 끝나는 순간이 있다");
+            Assert.That(streamEnd, Is.LessThanOrEqualTo(pourSeconds + _config.grainFlight * 1.2f * RitualJar.SurfaceTau + 2f * Dt), "마지막 알갱이가 모래 면에 닿을 때");
+            Assert.That(finished, Is.GreaterThan(streamEnd + 0.3f), "붓기 소리는 층이 가라앉기를 기다리지 않는다");
+            Assert.That(jar.Streaming, Is.False);
+            jar.Dispose();
+        }
+
+        [Test]
+        public void TiltingOrShakingTheSealedJarMovesOnlyTheTopOfTheSandThenSettles()
+        {
+            RitualJar jar = Jar();
+            float now = 0f;
+            Assert.That(jar.BeginPour(Pulled(_move, 0, 24, new Vector3(0.3f, 0.3f, 0f), Vector3.forward)), Is.Not.Null);
+            Finish(jar, ref now);
+            Assert.That(jar.BeginPour(Pulled(_work, 1, 24, new Vector3(0.3f, 0.3f, 0f), Vector3.forward)), Is.Not.Null);
+            Finish(jar, ref now);
+            RitualJar.Layer bottom = jar.Layers[0];
+            RitualJar.Layer top = jar.Layers[1];
+            var rest = new Vector3(0f, TimeRitualLook.RestLift, 0f);
+            Quaternion upright = jar.root.rotation;
+            Vector3 home = jar.root.position;
+            jar.SloshEnabled = true;
+            for (int i = 0; i < 72; i++) { now += Dt; jar.Tick(now, Dt); }
+            Assert.That(jar.Sloshing, Is.False, "세워 두면 가만히 있다 (비용 0)");
+
+            jar.root.rotation = Quaternion.AngleAxis(55f, Vector3.right) * upright;
+            for (int i = 0; i < 72 * 2; i++) { now += Dt; jar.Tick(now, Dt); }
+            Vector3 down = jar.root.InverseTransformDirection(Vector3.down);
+            var flow = new Vector2(down.x, down.z).normalized;
+            Assert.That(jar.SloshOffset.magnitude, Is.GreaterThan(_config.sloshMaxShift * 0.8f), "기울이면 윗면이 낮은 쪽으로 흐른다");
+            Assert.That(Vector2.Dot(jar.SloshOffset.normalized, flow), Is.GreaterThan(0.95f));
+            Assert.That(jar.SloshMoved, Is.GreaterThan(0));
+            Assert.That(jar.SloshMoved, Is.LessThan(top.cloud.Count + _config.capGrains + 1), "움직이는 건 윗면 띠뿐");
+            float surface = jar.SurfaceMean;
+            bool rose = false;
+            for (int i = 0; i < top.cloud.Count; i++)
+            {
+                Vector3 h = top.cloud.home[i];
+                Vector3 d = top.cloud.disp[i];
+                if (surface - h.y >= _config.sloshBand) Assert.That(Vector3.Distance(d, rest), Is.LessThan(1e-6f), "띠 아래 알갱이는 그대로");
+                else if (new Vector2(h.x, h.z).normalized.x * flow.x + new Vector2(h.x, h.z).normalized.y * flow.y > 0.7f) rose |= jar.root.InverseTransformDirection(d - rest).y > 0.001f;
+            }
+            Assert.That(rose, Is.True, "낮은 쪽 표면은 쌓여 올라간다");
+            for (int i = 0; i < bottom.cloud.Count; i++)
+                Assert.That(Vector3.Distance(bottom.cloud.disp[i], rest), Is.LessThan(1e-6f), "아래 층(그날의 기록)은 섞이지 않는다");
+
+            jar.root.rotation = upright;
+            float fastest = 0f;
+            for (int i = 0; i < 72; i++)
+            {
+                now += Dt;
+                jar.root.position = home + Vector3.right * (0.03f * Mathf.Sin(now * 2f * Mathf.PI * 3f));
+                jar.Tick(now, Dt);
+                fastest = Mathf.Max(fastest, jar.SloshSpeed);
+            }
+            Assert.That(fastest, Is.GreaterThan(0.002f), "흔들면 출렁인다");
+            jar.root.position = home;
+            jar.SloshEnabled = false;
+            for (int i = 0; i < 72 * 4; i++) { now += Dt; jar.Tick(now, Dt); }
+            Assert.That(jar.Sloshing, Is.False, "놓으면 가라앉고 멈춘다");
+            for (int i = 0; i < top.cloud.Count; i++)
+                Assert.That(Vector3.Distance(top.cloud.disp[i], rest), Is.LessThan(1e-5f), "제자리로");
+            jar.Dispose();
+        }
+
+        [Test]
+        public void SandShiftSoundsOnlyWhileTheSandMovesAndStaysUnderThePour()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                Assert.That(RitualAudio.SandShiftVolume(cfg, 0f), Is.EqualTo(0f), "가만히 있으면 무음");
+                Assert.That(RitualAudio.SandShiftVolume(cfg, 3f), Is.EqualTo(cfg.sandShiftVolume));
+                Assert.That(cfg.sandShiftVolume, Is.LessThan(cfg.pourBedVolume), "붓기보다 작게");
+                Assert.That(cfg.sandSlosh, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void SampledSoundCanBeSwitchedBackToTheSynthesizedSet()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                RitualAudio audio = SampledAudio(cfg);
+                Assert.That(audio.Sampled, Is.True);
+                cfg.sampledSound = false;
+                Assert.That(audio.Sampled, Is.False);
+                audio.ClockTouch(Vector3.zero);
+                Assert.That(audio.LastSampled, Is.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
 
         [Test]
         public void MeltingSpringsSpreadIntoTheSpaceThenCurlIntoTheWaxLikeSmoke()
@@ -2656,6 +3088,7 @@ namespace MoodPicker.Tests
                 Assert.That(ritual.Store.Find(System.DateTime.Now).TotalUnits, Is.EqualTo(36));
                 float lightBefore = ritual.PassthroughLight;
 
+                ritual.Jar.root.rotation = Quaternion.AngleAxis(140f, Vector3.up) * ritual.Jar.root.rotation;
                 Vector3 grab = ritual.Jar.BodyCenter + new Vector3(0.06f, 0f, 0f);
                 Run(ritual, ref now, Dt, new HandFrame { right = PinchPose(grab, false) });
                 Run(ritual, ref now, 8 * Dt, new HandFrame { right = PinchPose(grab, true) });
@@ -2670,6 +3103,9 @@ namespace MoodPicker.Tests
                 Assert.That(ritual.Shelf.NoteText, Is.EqualTo(RitualShelf.LoggedLabel(System.DateTime.Now)), "November 15, Logged.");
                 Assert.That(ritual.Shelf.Rippling, Is.True, "단에 물결이 한 번 퍼진다");
                 Assert.That(Vector3.Dot(ritual.Jar.root.up, Vector3.up), Is.GreaterThan(0.99f));
+                Vector3 toEye = Vector3.ProjectOnPlane(ritual.Shelf.Eye - ritual.Jar.root.position, Vector3.up).normalized;
+                Assert.That(Vector3.Dot(-ritual.Jar.root.forward, toEye), Is.GreaterThan(0.995f), "병을 돌려 들고 와도 라벨은 무조건 정면 (사람 11-17)");
+                Assert.That(Quaternion.Angle(ritual.Jar.root.rotation, ritual.Shelf.TodayFacing), Is.LessThan(0.5f), "지난 병들과 같은 방향");
                 Run(ritual, ref now, cfg.shelfLightBack + 0.5f, default);
                 Assert.That(lightBefore, Is.LessThan(0.5f));
                 Assert.That(ritual.PassthroughLight, Is.EqualTo(1f).Within(0.01f), "방의 밝기가 돌아온다");
@@ -2684,6 +3120,103 @@ namespace MoodPicker.Tests
             {
                 Object.DestroyImmediate(cfg);
             }
+        }
+
+        [Test]
+        public void PastJarsOnTheMiniatureShelfDrawAQuarterOfTheirGlassAndLidAndAllOfItOnceTheShelfComesForward()
+        {
+            Material glowMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlow.mat");
+            Material glassMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualGlass.mat");
+            Material waxMat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Ritual/RitualWax.mat");
+            Assert.That(glassMat, Is.Not.Null);
+            Assert.That(waxMat, Is.Not.Null);
+            TimeCategoryAsset[] cats = ShippedCategories();
+            var cfg = Object.Instantiate(_config);
+            cfg.shelfDemo = true;
+            Assert.That(cfg.shelfMiniDetail, Is.LessThanOrEqualTo(0.3f), "미니어처 선반의 지난 병은 솎아서 그린다 (성능 측정 11-16, build-2c40)");
+            try
+            {
+                var go = new GameObject("MiniShelf");
+                go.transform.SetParent(_root.transform, false);
+                var ritual = go.AddComponent<TimeRitual>();
+                var so = new UnityEditor.SerializedObject(ritual);
+                so.FindProperty("config").objectReferenceValue = cfg;
+                so.FindProperty("glowMaterial").objectReferenceValue = glowMat;
+                so.FindProperty("glassMaterial").objectReferenceValue = glassMat;
+                so.FindProperty("waxMaterial").objectReferenceValue = waxMat;
+                so.FindProperty("piecesRoot").objectReferenceValue = go.transform;
+                so.FindProperty("autoPlace").boolValue = false;
+                var cp = so.FindProperty("categories");
+                cp.arraySize = cats.Length;
+                for (int i = 0; i < cats.Length; i++) cp.GetArrayElementAtIndex(i).objectReferenceValue = cats[i];
+                so.ApplyModifiedPropertiesWithoutUndo();
+                ritual.Init();
+                ritual.PlaceAt(new Vector3(0f, 1.0f, 0.42f), Quaternion.identity);
+
+                Assert.That(ritual.Shelf.Stage, Is.EqualTo(0f), "만드는 동안 선반은 미니어처");
+                Assert.That(ritual.Shelf.Jars.Count, Is.GreaterThanOrEqualTo(2), "지난 병 둘");
+                foreach (RitualShelf.ShelfJar past in ritual.Shelf.Jars)
+                {
+                    Assert.That(past.vessel, Is.Not.Null);
+                    Assert.That(past.wax, Is.Not.Null);
+                    Assert.That(past.vessel.GlassSplatsFull, Is.EqualTo(Mathf.Max(200, cfg.glassSplats)));
+                    Assert.That(past.wax.LidSplatsFull, Is.GreaterThan(cfg.coverSplats));
+                    Assert.That(past.vessel.Thin, Is.True, "미니어처일 때 유리를 솎는다");
+                    Assert.That(past.wax.Thin, Is.True, "미니어처일 때 밀랍·덮개·끈을 솎는다");
+                    Assert.That(past.vessel.GlassSplats, Is.InRange(past.vessel.GlassSplatsFull * 0.15f, past.vessel.GlassSplatsFull * 0.35f));
+                    Assert.That(past.wax.LidSplats, Is.InRange(past.wax.LidSplatsFull * 0.15f, past.wax.LidSplatsFull * 0.35f));
+                    Assert.That(past.vessel.root.Find("Glass").GetComponent<MeshFilter>().sharedMesh.vertexCount, Is.EqualTo(past.vessel.GlassSplats * 4), "실제로 그리는 메시가 솎은 것");
+                }
+                Assert.That(ritual.Jar.Thin, Is.False, "오늘 병은 솎지 않는다");
+                ritual.Jar.SetThin(true);
+                Assert.That(ritual.Jar.GlassSplats, Is.EqualTo(ritual.Jar.GlassSplatsFull));
+
+                ritual.Shelf.SetStage(1f);
+                foreach (RitualShelf.ShelfJar past in ritual.Shelf.Jars)
+                {
+                    Assert.That(past.vessel.Thin, Is.False, "앞으로 나오면 원래대로");
+                    Assert.That(past.wax.Thin, Is.False);
+                    Assert.That(past.vessel.GlassSplats, Is.EqualTo(past.vessel.GlassSplatsFull));
+                    Assert.That(past.wax.LidSplats, Is.EqualTo(past.wax.LidSplatsFull));
+                    Assert.That(past.vessel.root.Find("Glass").GetComponent<MeshFilter>().sharedMesh.vertexCount, Is.EqualTo(past.vessel.GlassSplatsFull * 4));
+                }
+                ritual.Shelf.SetStage(0f);
+                Assert.That(ritual.Shelf.Jars[0].vessel.Thin, Is.True, "다시 미니어처가 되면 다시 솎는다");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
+        public void EveryShippedLookStaysInsideWhatTheLeanRitualShaderStillDraws()
+        {
+            foreach (TimeCategoryAsset c in ShippedCategories())
+            {
+                Assert.That(c.look, Is.Not.Null, c.id);
+                SplatSurfaceMaterial look = SplatSurfaceMaterial.FromAsset(c.look);
+                Assert.That(look, Is.Not.Null, c.id);
+                int mode = look.ResolveMode(-1);
+                Assert.That(mode == (int)SplatShaderMode.Raw || mode == (int)SplatShaderMode.Light, c.id + " 모드 " + mode + ": 의식 변형은 모드 0·5 만 그린다 (SPLAT_RITUAL)");
+            }
+            Assert.That(SplatSurfaceMaterial.Clay("none").ResolveMode(-1), Is.EqualTo(0));
+            foreach (PieceFeel feel in System.Enum.GetValues(typeof(PieceFeel)))
+                Assert.That(TimeRitualLook.Piece(null, feel).fluff, Is.EqualTo(0f), "의식 변형에는 털이 없다");
+            Assert.That(TimeRitualLook.Sand(null, null, true, 1f).fluff, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void ThinningKeepsRoughlyTheAskedShareAndGrowsEachSplatToCoverTheSameArea()
+        {
+            int kept = 0;
+            const int total = 4000;
+            for (int q = 0; q < total; q++)
+                if (RitualStaticSplats.Keeps(q, 0.25f)) kept++;
+            Assert.That(kept, Is.InRange(total * 0.2f, total * 0.3f));
+            Assert.That(RitualStaticSplats.Keeps(7, 1f), Is.True);
+            Assert.That(RitualStaticSplats.ThinRadius(0.25f), Is.EqualTo(2f).Within(1e-4f), "1/4 만 남기면 반지름 2배 = 같은 넓이");
+            Assert.That(RitualStaticSplats.ThinRadius(1f), Is.EqualTo(1f).Within(1e-5f));
         }
 
         TimeRitual SealedShelfRitual(string name, TimeRitualConfig cfg, TimeCategoryAsset[] cats, Material glowMat, ref float now)

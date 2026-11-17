@@ -40,8 +40,79 @@ namespace MoodPicker.Ritual
         [SerializeField, Range(0f, 1f)] float pressVolume = 0.14f;
 
         [Header("Voices")]
-        [SerializeField] int voices = 8;
+        [SerializeField] int voices = 12;
         [SerializeField, Range(0f, 1f)] float spatialBlend = 0.55f;
+
+        struct Delayed
+        {
+            public float at;
+            public AudioClip clip;
+            public Vector3 position;
+            public float volume;
+            public float pitch;
+        }
+
+        public const string SfxFolder = "RitualSfx";
+        public static readonly string[] NoteIds = { "sleep", "move", "work", "drift", "play" };
+        public static readonly string[] NoteNames = { "note_sleep_C", "note_move_G", "note_work_E", "note_drift_A", "note_play_D" };
+        public static readonly string[] WarmTouchNames = { "touch_warm_chime_08_soft", "touch_warm_chime_06_soft" };
+        public static readonly string[] SfxNames =
+        {
+            "clock_touch_cymbal", "clock_touch_cymbal_short",
+            "pull_warm_shimmer_1", "pull_warm_shimmer_2", "pull_warm_shimmer_3",
+            "pull_cool_drop_1", "pull_cool_drop_layered", "pull_cool_pour_end",
+            "touch_warm_chime_08_soft", "touch_warm_chime_06_soft", "touch_cool_drop",
+            "obj_warm_ping", "drop_layer", "merge_cool_bubbles",
+            "pour_bed_sugar_loop", "pour_bed_sugar_tail",
+            "seal_press_sparkle", "seal_bloom_glitter_1", "seal_bloom_glitter_2", "seal_afterglow_harp_open5",
+            "shelf_glass_touch",
+            "note_sleep_C", "note_move_G", "note_work_E", "note_drift_A", "note_play_D",
+        };
+
+        [Serializable]
+        public sealed class SfxGains
+        {
+            public string[] names;
+            public float[] gains;
+        }
+
+        readonly Dictionary<AudioClip, float> _gains = new Dictionary<AudioClip, float>();
+        AudioSource _afterVoice;
+        TimeRitualConfig _cfg;
+        bool _samplesReady;
+        AudioClip _cymbal;
+        AudioClip _cymbalShort;
+        AudioClip[] _pullWarm;
+        AudioClip[] _pullCool;
+        AudioClip _formCool;
+        AudioClip[] _touchWarm;
+        AudioClip[] _touchCool;
+        AudioClip _objWarm;
+        AudioClip _objCool;
+        AudioClip _mergeCool;
+        AudioClip _pourLoop;
+        AudioClip _pourTail;
+        AudioClip _sparkle;
+        AudioClip[] _bloom;
+        AudioClip _afterglow;
+        AudioClip _shelfClip;
+        AudioClip[] _notes;
+        AudioClip _sandSynth;
+        AudioReverbZone _zone;
+        bool _zoneOn;
+        float _zoneDecay;
+        int _zoneRoom;
+        int _zoneLevel;
+        int _rr;
+        float _lastPull = -1f;
+        float _lastGrainNote = -1f;
+        bool _grainLow;
+        bool _pressOn;
+        float _pressLevel;
+        readonly List<Delayed> _delayed = new List<Delayed>(16);
+
+        public bool Sampled => _samplesReady && _cfg != null && _cfg.sampledSound;
+        public string LastSampled { get; private set; }
 
         readonly List<Queued> _queue = new List<Queued>(64);
         static readonly int[] Pentatonic = { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24 };
@@ -49,6 +120,9 @@ namespace MoodPicker.Ritual
         AudioSource _sand;
         AudioSource _press;
         AudioSource _bowlVoice;
+        float _harpAge = -1f;
+        float _harpLength;
+        float _harpVolume;
         AudioClip _bowl;
         AudioClip _clockTick;
         AudioClip _clockTock;
@@ -94,9 +168,11 @@ namespace MoodPicker.Ritual
         };
         static readonly float[] ChordStagger = { 0.075f, 0.05f, 0.09f, 0.065f, 0.045f };
 
-        public void Init(float master)
+        public void Init(float master, TimeRitualConfig config = null)
         {
             _master = master;
+            if (config != null) _cfg = config;
+            if (_cfg != null && !_samplesReady) LoadSamples();
             if (_ready || !Application.isPlaying) return;
             _ready = true;
             int rate = Mathf.Max(8000, AudioSettings.outputSampleRate);
@@ -229,7 +305,8 @@ namespace MoodPicker.Ritual
             _pool = new AudioSource[Mathf.Max(2, voices)];
             for (int i = 0; i < _pool.Length; i++) _pool[i] = Voice("Voice" + i, false);
             _sand = Voice("Sand", true);
-            _sand.clip = BakeSand(rate);
+            _sandSynth = BakeSand(rate);
+            _sand.clip = _sandSynth;
             _press = Voice("Press", true);
             _press.clip = Bake("ritual-press", rate, 1f, (t, n) => (Mathf.Sin(2f * Mathf.PI * 132f * t) + 0.5f * Mathf.Sin(2f * Mathf.PI * 198f * t)) * 0.32f);
             _bowl = BakeBowl(rate);
@@ -241,11 +318,197 @@ namespace MoodPicker.Ritual
             _bowlVoice = Voice("Bowl", false);
             _bowlVoice.spatialBlend = spatialBlend * 0.5f;
             _bowlVoice.maxDistance = 6f;
+            _afterVoice = Voice("Afterglow", false);
+            _afterVoice.spatialBlend = spatialBlend * 0.5f;
+            _afterVoice.maxDistance = 6f;
             _bgm = Voice("Bgm", true);
             _bgm.spatialBlend = 0f;
+            _bgm.reverbZoneMix = 0f;
             _bgm.clip = bgmClip != null ? bgmClip : BakeBgm(rate);
             _bgm.volume = Mathf.Clamp01(bgmVolume * _master);
             _bgm.Play();
+            _zone =gameObject.AddComponent<AudioReverbZone>();
+            _zone.reverbPreset = AudioReverbPreset.User;
+            _zone.minDistance = 4f;
+            _zone.maxDistance = 8f;
+            _zone.roomHF = -700;
+            _zone.decayHFRatio = 0.55f;
+            _zone.reflections = -1500;
+            _zone.reflectionsDelay = 0.025f;
+            _zone.reverbDelay = 0.045f;
+            _zone.diffusion = 100f;
+            _zone.density = 100f;
+            _zone.enabled = false;
+            SyncReverb(true);
+        }
+
+        static AudioClip Sfx(string name) => Resources.Load<AudioClip>(SfxFolder + "/" + name);
+
+        void LoadSamples()
+        {
+            _cymbal = Sfx("clock_touch_cymbal");
+            _cymbalShort = Sfx("clock_touch_cymbal_short");
+            _pullWarm = new[] { Sfx("pull_warm_shimmer_1"), Sfx("pull_warm_shimmer_2"), Sfx("pull_warm_shimmer_3") };
+            _pullCool = new[] { Sfx("pull_cool_drop_1"), Sfx("pull_cool_drop_layered") };
+            _formCool = Sfx("pull_cool_pour_end");
+            _touchWarm = new AudioClip[WarmTouchNames.Length];
+            for (int i = 0; i < WarmTouchNames.Length; i++) _touchWarm[i] = Sfx(WarmTouchNames[i]);
+            _touchCool = new[] { Sfx("touch_cool_drop") };
+            _objWarm = Sfx("obj_warm_ping");
+            _objCool = Sfx("drop_layer");
+            _mergeCool = Sfx("merge_cool_bubbles");
+            _pourLoop = Sfx("pour_bed_sugar_loop");
+            _pourTail = Sfx("pour_bed_sugar_tail");
+            _sparkle = Sfx("seal_press_sparkle");
+            _bloom = new[] { Sfx("seal_bloom_glitter_1"), Sfx("seal_bloom_glitter_2") };
+            _afterglow = Sfx("seal_afterglow_harp_open5");
+            _shelfClip = Sfx("shelf_glass_touch");
+            _notes = new AudioClip[NoteNames.Length];
+            for (int i = 0; i < NoteNames.Length; i++) _notes[i] = Sfx(NoteNames[i]);
+            int missing = 0;
+            for (int i = 0; i < SfxNames.Length; i++)
+                if (Sfx(SfxNames[i]) == null) missing++;
+            _gains.Clear();
+            TextAsset table = Resources.Load<TextAsset>(SfxFolder + "/sfx_gains");
+            SfxGains g = table != null ? JsonUtility.FromJson<SfxGains>(table.text) : null;
+            for (int i = 0; g != null && g.names != null && g.gains != null && i < g.names.Length && i < g.gains.Length; i++)
+            {
+                AudioClip c = Sfx(g.names[i]);
+                if (c != null) _gains[c] = Mathf.Clamp(g.gains[i], 0.1f, 8f);
+            }
+            _samplesReady = missing == 0;
+            Debug.Log($"[MP] ritual sound samples={SfxNames.Length - missing}/{SfxNames.Length} gains={_gains.Count} sampled={Sampled}");
+        }
+
+        public float Gain(AudioClip clip) => clip != null && _gains.TryGetValue(clip, out float g) ? g : 1f;
+
+        public float GainOf(string name) => Gain(Sfx(name));
+
+        void SyncReverb(bool force)
+        {
+            if (_zone == null || _cfg == null) return;
+            bool on = _cfg.reverb && Sampled;
+            if (!force && on == _zoneOn && Mathf.Approximately(_cfg.reverbDecay, _zoneDecay) && _cfg.reverbRoom == _zoneRoom && _cfg.reverbLevel == _zoneLevel) return;
+            _zoneOn = on;
+            _zoneDecay = _cfg.reverbDecay;
+            _zoneRoom = _cfg.reverbRoom;
+            _zoneLevel = _cfg.reverbLevel;
+            _zone.decayTime = Mathf.Clamp(_zoneDecay, 0.1f, 20f);
+            _zone.room = Mathf.Clamp(_zoneRoom, -10000, 0);
+            _zone.reverb = Mathf.Clamp(_zoneLevel, -10000, 2000);
+            _zone.enabled = on;
+            Debug.Log($"[MP] ritual sound reverb on={on} decay={_zone.decayTime:0.0}s room={_zone.room} level={_zone.reverb}");
+        }
+
+        public static float Semi(float semitones) => Mathf.Pow(2f, semitones / 12f);
+
+        public static float PullPitch(int units, float unitsPerStep, float baseSemitones, float riseSemitones)
+        {
+            float per = Mathf.Max(0.25f, unitsPerStep);
+            int idx = Mathf.Clamp(Mathf.FloorToInt(Mathf.Max(0, units - 1) / per), 0, Pentatonic.Length - 1);
+            return Semi(baseSemitones + Mathf.Min(Pentatonic[idx], Mathf.Max(0f, riseSemitones)));
+        }
+
+        public static float BondPitch(int beat, bool warm)
+        {
+            int idx = Mathf.Clamp(beat, 0, Pentatonic.Length - 1);
+            return Semi(Pentatonic[idx] - (warm ? 7f : 0f));
+        }
+
+        AudioClip Pick(AudioClip[] clips)
+        {
+            if (clips == null || clips.Length == 0) return null;
+            _rr = (_rr + 1) & 0x7fffffff;
+            return clips[_rr % clips.Length];
+        }
+
+        AudioClip Note(string id)
+        {
+            if (_notes == null || string.IsNullOrEmpty(id)) return null;
+            int i = Array.IndexOf(NoteIds, id);
+            return i >= 0 ? _notes[i] : null;
+        }
+
+        static float Hash01(Vector3 p)
+        {
+            float h = Mathf.Sin(p.x * 127.1f + p.y * 311.7f + p.z * 74.7f) * 43758.547f;
+            return h - Mathf.Floor(h);
+        }
+
+        void Sample(AudioClip clip, Vector3 position, float volume, float pitch)
+        {
+            if (clip == null) return;
+            LastSampled = clip.name;
+            Play(clip, position, volume * Gain(clip), pitch);
+        }
+
+        void Delay(AudioClip clip, Vector3 position, float volume, float pitch, float seconds)
+        {
+            if (clip == null) return;
+            _delayed.Add(new Delayed { at = _clock + seconds, clip = clip, position = position, volume = volume, pitch = pitch });
+        }
+
+        public void ClockTouch(Vector3 position)
+        {
+            if (!Sampled) return;
+            Sample(_cfg.clockCymbalShort ? _cymbalShort : _cymbal, position, _cfg.clockTouchVolume, 1f);
+        }
+
+        public void Form(Vector3 position, bool warm, bool crumpled)
+        {
+            if (!Sampled)
+            {
+                if (crumpled && warm) Knead(position, PieceFeel.Jelly, true);
+                return;
+            }
+            if (warm) Sample(Pick(_pullWarm), position, _cfg.formVolume, Semi(_cfg.pullBaseSemitones));
+            else Sample(_formCool, position, _cfg.formVolume, 1f);
+        }
+
+        public void Bond(Vector3 position, bool warm, int beat)
+        {
+            if (!Sampled) return;
+            Sample(warm ? _objWarm : _objCool, position, _cfg.bondVolume * (beat == 0 ? 0.6f : 1f), BondPitch(beat, warm));
+        }
+
+        public void Layer(Vector3 position, string categoryId)
+        {
+            if (!Sampled) return;
+            Sample(Note(categoryId), position, _cfg.noteVolume, 1f);
+        }
+
+        public void GrainsLanded(Vector3 position, int grains, string categoryId)
+        {
+            if (!Sampled)
+            {
+                Landed(position, grains);
+                return;
+            }
+            AudioClip note = Note(categoryId);
+            if (note == null || _clock - _lastGrainNote < _cfg.grainNoteInterval) return;
+            _lastGrainNote = _clock;
+            _grainLow = !_grainLow;
+            Sample(note, position, _cfg.grainNoteVolume, _grainLow ? 0.5f : 1f);
+        }
+
+        public void LidClosed(Vector3 position)
+        {
+            if (!Sampled)
+            {
+                Landed(position, 40);
+                return;
+            }
+            Sample(_objWarm, position, _cfg.lidVolume, Semi(-2f));
+        }
+
+        public void Shelved(Vector3 position)
+        {
+            if (!Sampled)
+            {
+                Landed(position, 60);
+                return;
+            }
+            Sample(_shelfClip, position, _cfg.shelfVolume, 1f);
         }
 
         public static AudioClip BakeBowl(int rate)
@@ -296,15 +559,50 @@ namespace MoodPicker.Ritual
         }
 
         public float BowlLength => _bowl != null ? _bowl.length : 0f;
+
+        public static float HarpLength(TimeRitualConfig cfg, float clipLength)
+        {
+            float lead = Mathf.Clamp(cfg.afterglowLead, 0f, clipLength * 0.5f);
+            return Mathf.Max(0.5f, (clipLength - lead) * cfg.afterglowLengthScale);
+        }
+
+        public static float HarpFade(float age, float length, float holdShare)
+        {
+            float hold = length * Mathf.Clamp01(holdShare);
+            if (age <= hold) return 1f;
+            if (age >= length) return 0f;
+            float u = (age - hold) / Mathf.Max(1e-3f, length - hold);
+            return (1f - u) * (1f - u);
+        }
         public bool Hushed => _hush > 0f;
 
         public void Bowl(Vector3 position)
         {
             if (!_ready || _bowlVoice == null) return;
+            _pressOn = false;
+            _pressLevel = 0f;
+            bool harpOnly = Sampled && _cfg.sealVoice == 1;
             _bowlVoice.transform.position = position;
-            _bowlVoice.clip = _bowl;
-            _bowlVoice.volume = Mathf.Clamp01(bowlVolume * _master);
+            _bowlVoice.clip = harpOnly ? _afterglow : _bowl;
+            _bowlVoice.volume = Mathf.Clamp01((harpOnly ? _cfg.afterglowVolume * Gain(_afterglow) : bowlVolume) * _master);
+            _bowlVoice.time = harpOnly ? Mathf.Clamp(_cfg.afterglowLead, 0f, _afterglow.length * 0.5f) : 0f;
             _bowlVoice.Play();
+            _harpAge = harpOnly ? 0f : -1f;
+            _harpVolume = _bowlVoice.volume;
+            _harpLength = harpOnly ? HarpLength(_cfg, _afterglow.length) : 0f;
+            if (Sampled)
+            {
+                Sample(Pick(_bloom), position, _cfg.bloomVolume, 1f);
+                if (!harpOnly && _afterVoice != null)
+                {
+                    _afterVoice.transform.position = position;
+                    _afterVoice.clip = _afterglow;
+                    _afterVoice.volume = Mathf.Clamp01(_cfg.afterglowVolume * Gain(_afterglow) * _master);
+                    _afterVoice.time = 0f;
+                    _afterVoice.Play();
+                }
+            }
+            Debug.Log($"[MP] ritual sound seal voice={(_bowlVoice.clip != null ? _bowlVoice.clip.name : "none")} afterglow={(Sampled && !harpOnly)}");
         }
 
         public void Hush(float seconds)
@@ -312,6 +610,7 @@ namespace MoodPicker.Ritual
             _hush = Mathf.Max(_hush, seconds);
             _pressTarget = 0f;
             _sandTarget = 0f;
+            _pressLevel = 0f;
             if (_bgm != null) _bgm.volume = 0f;
         }
 
@@ -353,9 +652,17 @@ namespace MoodPicker.Ritual
             });
         }
 
-        public void DropChord(Vector3 position, int category)
+        public void DropChord(Vector3 position, int category, string categoryId = null)
         {
             ChordsPlayed++;
+            AudioClip note = Sampled ? Note(categoryId) : null;
+            if (note != null)
+            {
+                Sample(note, position, _cfg.noteVolume, 1f);
+                Delay(note, position, _cfg.noteVolume * 0.7f, 2f / 3f, 0.07f);
+                Delay(note, position, _cfg.noteVolume * 0.5f, 0.5f, 0.14f);
+                return;
+            }
             if (!_ready || _chords == null) return;
             Play(_chords[Mathf.Clamp(category, 0, _chords.Length - 1)], position, chimeVolume * 1.1f, 1f);
         }
@@ -617,13 +924,36 @@ namespace MoodPicker.Ritual
         void Play(AudioClip clip, Vector3 position, float volume, float pitch)
         {
             if (!_ready || clip == null || volume * _master <= 0.001f) return;
-            AudioSource source = _pool[_next];
-            _next = (_next + 1) % _pool.Length;
+            AudioSource source = FreeVoice();
             source.transform.position = position;
             source.clip = clip;
             source.pitch = Mathf.Clamp(pitch, 0.3f, 3f);
             source.volume = Mathf.Clamp01(volume * _master);
+            source.spatialBlend = Sampled ? _cfg.soundSpatial : spatialBlend;
             source.Play();
+        }
+
+        AudioSource FreeVoice()
+        {
+            AudioSource oldest = _pool[_next];
+            float most = -1f;
+            for (int k = 0; k < _pool.Length; k++)
+            {
+                int i = (_next + k) % _pool.Length;
+                AudioSource s = _pool[i];
+                if (!s.isPlaying)
+                {
+                    _next = (i + 1) % _pool.Length;
+                    return s;
+                }
+                float done = s.clip != null && s.clip.length > 0f ? s.time / s.clip.length : 1f;
+                if (done > most)
+                {
+                    most = done;
+                    oldest = s;
+                }
+            }
+            return oldest;
         }
 
         float PitchFor(int units)
@@ -640,8 +970,15 @@ namespace MoodPicker.Ritual
             return ChimeTunings[idx];
         }
 
-        public void Knead(Vector3 position, PieceFeel feel, bool windChime = false)
+        public void Knead(Vector3 position, PieceFeel feel, bool windChime = false, float speed = -1f)
         {
+            if (Sampled)
+            {
+                float k = speed < 0f ? 1f : Mathf.Clamp01(speed / Mathf.Max(0.05f, _cfg.touchFullSpeed));
+                float jitter = 0.97f + 0.06f * Hash01(position);
+                Sample(Pick(windChime ? _touchWarm : _touchCool), position, _cfg.touchVolume * Mathf.Lerp(0.35f, 1f, k), (windChime ? _cfg.touchWarmPitch : 1f) * jitter);
+                return;
+            }
             if (windChime)
             {
                 int idx = Mathf.Abs(Mathf.RoundToInt((position.x + position.y + position.z) * 43f)) % ChimeTunings.Length;
@@ -655,6 +992,14 @@ namespace MoodPicker.Ritual
 
         public void Unit(Vector3 position, int units, bool up, bool windChime = false)
         {
+            if (Sampled)
+            {
+                if (_clock - _lastPull < _cfg.pullInterval) return;
+                _lastPull = _clock;
+                float vol = _cfg.pullVolume * (!up ? 0.45f : TimeUnits.NodeStrength(units) > 0 ? 1f : 0.75f);
+                Sample(Pick(windChime ? _pullWarm : _pullCool), position, vol, PullPitch(units, _cfg.pullUnitsPerStep, _cfg.pullBaseSemitones, _cfg.pullRiseSemitones));
+                return;
+            }
             if (windChime)
             {
                 float pitch = ChimePitchFor(units);
@@ -682,19 +1027,40 @@ namespace MoodPicker.Ritual
 
         public void Chimes(Vector3 position, int firstUnit, int count, float interval, bool windChime = false)
         {
+            if (Sampled && !windChime && _mergeCool != null)
+            {
+                Sample(_mergeCool, position, _cfg.mergeCoolVolume, _cfg.mergeCoolPitch);
+                return;
+            }
+            if (Sampled)
+            {
+                Sample(windChime ? _objWarm : _objCool, position, _cfg.mergeVolume, BondPitch(Mathf.Max(1, _cfg.bondBeats), windChime));
+                Delay(Pick(windChime ? _touchWarm : _touchCool), position, _cfg.mergeVolume * 0.7f, (windChime ? _cfg.touchWarmPitch : 1f) * 0.84f, 0.06f);
+                return;
+            }
             int maxCount = windChime ? Mathf.Min(count, 3) : count;
             float step = windChime ? Mathf.Max(interval, 0.14f) : interval;
             for (int i = 0; i < maxCount; i++)
                 _queue.Add(new Queued { at = _clock + i * step, position = position, units = firstUnit + i + 1, volume = 0.85f, windChime = windChime });
         }
 
-        public void Snap(Vector3 position)
+        public void Snap(Vector3 position, bool warm = false)
         {
+            if (Sampled)
+            {
+                Sample(warm ? _objWarm : _objCool, position, _cfg.bondVolume * 0.8f, Semi(warm ? -9f : -3f));
+                return;
+            }
             Play(_soft, position, downVolume * 0.85f, 1.32f);
         }
 
         public void Cancel(Vector3 position, bool windChime = false)
         {
+            if (Sampled)
+            {
+                Sample(Pick(windChime ? _touchWarm : _touchCool), position, _cfg.touchVolume * 0.4f, (windChime ? _cfg.touchWarmPitch : 1f) * 0.8f);
+                return;
+            }
             if (windChime) Play(_chimeSoft, position, downVolume * 1.2f, 0.94f);
             else Play(_soft, position, downVolume, 0.8f);
         }
@@ -702,14 +1068,46 @@ namespace MoodPicker.Ritual
         public void PourStart(Vector3 position, float pitch = 1f)
         {
             if (!_ready) return;
+            AudioClip bed = Sampled ? _pourLoop : _sandSynth;
+            if (_sand.clip != bed)
+            {
+                _sand.Stop();
+                _sand.clip = bed;
+            }
             _sand.pitch = Mathf.Clamp(pitch, 0.5f, 2f);
             _sand.transform.position = position;
-            _sandTarget = sandVolume;
+            _sandTarget = Sampled ? _cfg.pourBedVolume : sandVolume;
             if (!_sand.isPlaying) _sand.Play();
         }
 
-        public void PourStop()
+        public static float SandShiftVolume(TimeRitualConfig cfg, float amount) => Mathf.Clamp01(amount) * cfg.sandShiftVolume;
+
+        public void SandShift(Vector3 position, float amount)
         {
+            if (!_ready || !Sampled || _pourLoop == null) return;
+            float target = SandShiftVolume(_cfg, amount);
+            if (target <= 0.002f)
+            {
+                _sandTarget = 0f;
+                return;
+            }
+            if (_sand.clip != _pourLoop)
+            {
+                _sand.Stop();
+                _sand.clip = _pourLoop;
+            }
+            _sand.pitch = _cfg.sandShiftPitch;
+            _sand.transform.position = position;
+            _sandTarget = target;
+            if (!_sand.isPlaying) _sand.Play();
+        }
+
+        public static float PourTail(TimeRitualConfig cfg, bool clock) => clock ? cfg.clockSandTailVolume : cfg.pourTailVolume;
+
+        public void PourStop(bool clock = false)
+        {
+            float tail = PourTail(_cfg, clock);
+            if (_ready && _sandTarget > 0f && Sampled && tail > 0f) Sample(_pourTail, _sand.transform.position, _cfg.pourBedVolume * tail, _sand.pitch);
             _sandTarget = 0f;
         }
 
@@ -728,6 +1126,10 @@ namespace MoodPicker.Ritual
             _pressTarget = progress > 0.01f ? pressVolume * progress : 0f;
             _press.pitch = 0.8f + 0.35f * progress;
             if (_pressTarget > 0f && !_press.isPlaying) _press.Play();
+            bool on = progress > 0.01f;
+            if (on && !_pressOn && Sampled) Sample(_sparkle, position, _cfg.pressSparkleVolume, 1f);
+            _pressOn = on;
+            _pressLevel = on ? Mathf.Clamp01(progress) : 0f;
         }
 
         public void Seal(Vector3 position)
@@ -742,7 +1144,26 @@ namespace MoodPicker.Ritual
             _master = master * _out;
             _clock += dt;
             if (_hush > 0f) _hush = Mathf.Max(0f, _hush - dt);
+            if (_harpAge >= 0f && _bowlVoice != null)
+            {
+                _harpAge += dt;
+                float fade = HarpFade(_harpAge, _harpLength, _cfg.afterglowHoldShare);
+                _bowlVoice.volume = _harpVolume * fade;
+                if (fade <= 0f)
+                {
+                    _bowlVoice.Stop();
+                    _harpAge = -1f;
+                }
+            }
             if (!_ready) return;
+            SyncReverb(false);
+            for (int i = _delayed.Count - 1; i >= 0; i--)
+            {
+                if (_delayed[i].at > _clock) continue;
+                Delayed d = _delayed[i];
+                _delayed.RemoveAt(i);
+                Sample(d.clip, d.position, d.volume, d.pitch);
+            }
             for (int i = _queue.Count - 1; i >= 0; i--)
             {
                 if (_queue[i].at > _clock) continue;
@@ -771,7 +1192,7 @@ namespace MoodPicker.Ritual
             }
             else if (_bgm != null)
             {
-                float target = bgmVolume * _master;
+                float target = bgmVolume * _master * (Sampled ? 1f - _cfg.pressDuck * _pressLevel : 1f);
                 _bgm.volume = Mathf.MoveTowards(_bgm.volume, target, dt * (_bgm.volume < target ? 0.1f : 0.25f));
             }
         }

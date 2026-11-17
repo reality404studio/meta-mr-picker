@@ -65,14 +65,15 @@ namespace MoodPicker.Tests
         }
 
         [Test]
-        public void MoreThanADayRisesIntoTheNeckAndStopsBelowTheLip()
+        public void AJarHoldsAtMostOneDayThoughItsNeckHasRoom()
         {
             JarShape jar = JarShape.Default;
+            Assert.That(jar.Volume(jar.FillCeiling) / RitualFill.VolumePerUnit(jar, Hours), Is.GreaterThan(Day), "병 자체는 목까지 여유가 있다");
             int capacity = RitualFill.Capacity(jar, Hours);
-            Assert.That(capacity, Is.GreaterThan(Day), "24시간이 다 들어가고도 목까지 여유가 있다");
+            Assert.That(capacity, Is.EqualTo(Day), "담을 수 있는 상한은 24시간 (사람 11-17)");
+            Assert.That(RitualFill.Capacity(jar, 30f), Is.EqualTo(Day), "몸통이 하루보다 커도 하루를 넘지 않는다");
             float top = RitualFill.HeightAfter(jar, Hours, capacity);
-            Assert.That(top, Is.GreaterThan(jar.bodyTop));
-            Assert.That(top, Is.LessThanOrEqualTo(jar.FillCeiling + 1e-4f));
+            Assert.That(top, Is.EqualTo(jar.bodyTop).Within(0.0005f), "하루면 몸통 꼭대기까지, 목은 비어 있다");
         }
 
         [Test]

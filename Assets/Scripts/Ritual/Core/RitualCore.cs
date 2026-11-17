@@ -98,6 +98,7 @@ namespace MoodPicker.Ritual
     public static class RitualFill
     {
         public const int UnitsPerHour = 6;
+        public const int DayUnits = 24 * UnitsPerHour;
 
         public static float VolumePerUnit(in JarShape jar, float hoursWhenFull)
         {
@@ -111,7 +112,7 @@ namespace MoodPicker.Ritual
 
         public static int Capacity(in JarShape jar, float hoursWhenFull)
         {
-            return (int)Math.Floor(jar.Volume(jar.FillCeiling) / VolumePerUnit(jar, hoursWhenFull));
+            return Math.Min(DayUnits, (int)Math.Floor(jar.Volume(jar.FillCeiling) / VolumePerUnit(jar, hoursWhenFull)));
         }
     }
 

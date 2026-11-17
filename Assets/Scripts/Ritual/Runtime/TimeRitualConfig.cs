@@ -140,6 +140,19 @@ namespace MoodPicker.Ritual
         public float pourSecondsMax = 1.8f;
         public float pourSecondsPerUnit = 0.04f;
         public float grainFlight = 0.5f;
+        public bool sandSlosh = true;
+        public float sloshBand = 0.015f;
+        public float sloshRepose = 20f;
+        public float sloshRange = 40f;
+        public float sloshMaxShift = 0.009f;
+        public float sloshLift = 0.8f;
+        public float sloshFrequency = 1.6f;
+        [Range(0.05f, 1f)] public float sloshDamping = 0.35f;
+        public float sloshCoupling = 0.05f;
+        public float sloshAccelMax = 30f;
+        [Range(0f, 1f)] public float sandShiftVolume = 0.16f;
+        public float sandShiftFullSpeed = 0.05f;
+        public float sandShiftPitch = 0.8f;
         public float spoutHeight = 0.035f;
         public float streamRadius = 0.007f;
         public float rejectBounce = 0.45f;
@@ -211,6 +224,7 @@ namespace MoodPicker.Ritual
         public float shelfApproachDelay = 1.5f;
         public float shelfApproachSeconds = 2.5f;
         [Range(0.25f, 1f)] public float shelfPastQuality = 0.7f;
+        [Range(0.1f, 1f)] public float shelfMiniDetail = 0.25f;
 
         [Header("Ending")]
         public bool ending = true;
@@ -395,6 +409,65 @@ namespace MoodPicker.Ritual
 
         [Header("Sound")]
         [Range(0f, 1f)] public float volume = 0.7f;
+        public bool sampledSound = true;
+        [Range(0f, 1f)] public float soundSpatial = 0.7f;
+        [Range(0f, 1f)] public float clockTouchVolume = 0.55f;
+        public bool clockCymbalShort = false;
+        [Range(0f, 1f)] public float pullVolume = 0.26f;
+        public float pullInterval = 0.09f;
+        public float pullBaseSemitones = -5f;
+        public float pullRiseSemitones = 12f;
+        public float pullUnitsPerStep = 2f;
+        [Range(0f, 1f)] public float formVolume = 0.4f;
+        [Range(0f, 1f)] public float touchVolume = 0.3f;
+        public float touchWarmPitch = 0.94f;
+        public float touchFullSpeed = 0.6f;
+        [Range(0f, 1f)] public float bondVolume = 0.3f;
+        public int bondBeats = 3;
+        [Range(0f, 1f)] public float mergeVolume = 0.45f;
+        [Range(0f, 1f)] public float mergeCoolVolume = 0.45f;
+        public float mergeCoolPitch = 1f;
+        [Range(0f, 1f)] public float pourBedVolume = 0.3f;
+        [Range(0f, 1f)] public float pourTailVolume = 0f;
+        [Range(0f, 1f)] public float clockSandTailVolume = 0.8f;
+        [Range(0f, 1f)] public float noteVolume = 0.42f;
+        [Range(0f, 1f)] public float grainNoteVolume = 0.12f;
+        public float grainNoteInterval = 0.24f;
+        [Range(0f, 1f)] public float lidVolume = 0.45f;
+        [Range(0f, 1f)] public float pressSparkleVolume = 0.5f;
+        [Range(0f, 1f)] public float pressDuck = 0.6f;
+        public int sealVoice = 1;
+        [Range(0f, 1f)] public float afterglowVolume = 0.8f;
+        [Range(0.2f, 1f)] public float afterglowLengthScale = 0.6f;
+        [Range(0f, 0.9f)] public float afterglowHoldShare = 0.3f;
+        public float afterglowLead = 1.2f;
+        [Range(0f, 1f)] public float bloomVolume = 0.2f;
+        [Range(0f, 1f)] public float shelfVolume = 0.6f;
+        [Header("Tutorial")]
+        public bool tutorial = true;
+        public bool tutorialRemember = false;
+        public Vector3 tutorialOffset = new Vector3(-0.08f, -0.235f, -0.10f);
+        public float tutorialCardWidth = 0.2f;
+        public float tutorialTextSize = 0.0019f;
+        public float tutorialFootSize = 0.00135f;
+        [Range(0.3f, 1f)] public float tutorialCardBrightness = 0.86f;
+        public float tutorialFrameInset = 0.004f;
+        public float tutorialFrameWidth = 0.0008f;
+        [Range(0f, 1f)] public float tutorialFrameAlpha = 0.55f;
+        public float tutorialFoldSeconds = 0.45f;
+        public float tutorialPourIdle = 5f;
+        public float tutorialLidIdle = 7f;
+        public float tutorialShelfDelay = 4.5f;
+        public float tutorialMergeSeconds = 10f;
+        public float tutorialPulseIdle = 4.5f;
+        public float tutorialOffHintIdle = 6f;
+        public float tutorialOffHintWindow = 60f;
+
+        [Header("Sound Space")]
+        public bool reverb = true;
+        public float reverbDecay = 3.6f;
+        public int reverbRoom = -1100;
+        public int reverbLevel = -500;
 
         [Header("Dev")]
         public bool showMinutesLabel = true;
