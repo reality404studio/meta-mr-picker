@@ -213,6 +213,11 @@ namespace MoodPicker.Ritual
         public float shelfReleaseDistance = 0.22f;
         [Range(0.2f, 1f)] public float shelfDepthTolerance = 0.5f;
         public float shelfLightBack = 3f;
+        [Range(0.05f, 1f)] public float afterShelfLight = 0.34f;
+        [Range(0f, 1f)] public float afterShelfWarmth = 1f;
+        public Color warmTint = new Color(1f, 0.78f, 0.5f, 1f);
+        [Range(0f, 1f)] public float warmSaturation = 0.45f;
+        [Range(0.5f, 2f)] public float warmGamma = 1.05f;
         [Range(0f, 2f)] public float shelfLight = 1f;
         [Range(0f, 0.4f)] public float shelfFrost = 0.1f;
         [Range(0f, 1.5f)] public float shelfMemoryLight = 0.8f;

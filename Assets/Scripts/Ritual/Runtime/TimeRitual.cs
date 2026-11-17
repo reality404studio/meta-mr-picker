@@ -125,6 +125,7 @@ namespace MoodPicker.Ritual
         float _lastLabelToggleTime = -10f;
         RitualLightField _lightField;
         float _light = 1f;
+        float _warm;
         Color _jarGlow = Color.clear;
         float _jarFill;
         float _labelTag = 1f;
@@ -251,6 +252,7 @@ namespace MoodPicker.Ritual
         public int Crumples { get; private set; }
         public int Compactions { get; private set; }
         public float PassthroughDim => _dim;
+        public float PassthroughWarmth => _warm;
         public float PassthroughLight => _light;
         public RitualLightField LightField => _lightField;
         public bool TimeLabels => _config != null && _config.timeLabels;
@@ -341,6 +343,7 @@ namespace MoodPicker.Ritual
             }
             _dim = _config.roomDarkFromStart ? 0f : _config.baseDim;
             _light = 1f;
+            _warm = 0f;
             _labelTag = _config.timeLabels ? 0f : 1f;
             _lightField = new RitualLightField(_config, glowMaterial);
             _sealWave = new RitualSealWave(_config, glowMaterial);
@@ -1607,8 +1610,10 @@ namespace MoodPicker.Ritual
                 }
                 else if (_shelved)
                 {
+                    float rate = dt / Mathf.Max(0.1f, _config.shelfLightBack);
                     _dim = Mathf.MoveTowards(_dim, 0f, dt * 0.5f);
-                    _light = Mathf.MoveTowards(_light, 1f, dt / Mathf.Max(0.1f, _config.shelfLightBack));
+                    _light = Mathf.MoveTowards(_light, _config.afterShelfLight, rate);
+                    _warm = Mathf.MoveTowards(_warm, _config.afterShelfWarmth, rate);
                 }
                 else if (_config.roomDarkFromStart)
                 {

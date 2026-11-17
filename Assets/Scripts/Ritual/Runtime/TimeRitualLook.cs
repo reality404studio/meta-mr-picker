@@ -7,6 +7,29 @@ namespace MoodPicker.Ritual
 {
     public static class TimeRitualLook
     {
+        public const int WarmLutSize = 16;
+
+        public static Color WarmGrade(Color c, Color tint, float saturation, float gamma)
+        {
+            float lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+            float s = Mathf.Clamp01(saturation);
+            float g = Mathf.Max(0.1f, gamma);
+            float r = Mathf.Pow(Mathf.Clamp01(Mathf.Lerp(lum, c.r, s)), g) * tint.r;
+            float gr = Mathf.Pow(Mathf.Clamp01(Mathf.Lerp(lum, c.g, s)), g) * tint.g;
+            float b = Mathf.Pow(Mathf.Clamp01(Mathf.Lerp(lum, c.b, s)), g) * tint.b;
+            return new Color(Mathf.Clamp01(r), Mathf.Clamp01(gr), Mathf.Clamp01(b), 1f);
+        }
+
+        public static void WarmLut(Color[] into, Color tint, float saturation, float gamma)
+        {
+            int n = WarmLutSize;
+            float step = 1f / (n - 1);
+            for (int b = 0; b < n; b++)
+                for (int g = 0; g < n; g++)
+                    for (int r = 0; r < n; r++)
+                        into[r + g * n + b * n * n] = WarmGrade(new Color(r * step, g * step, b * step, 1f), tint, saturation, gamma);
+        }
+
         public const float RestLift = 0.0002f;
         public const string LeanKeyword = "SPLAT_RITUAL";
 

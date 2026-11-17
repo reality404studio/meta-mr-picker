@@ -2683,6 +2683,41 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void TheWarmLightGradeTintsTowardIncandescentAndKeepsDarkDark()
+        {
+            var cfg = Object.Instantiate(_config);
+            try
+            {
+                Color same = TimeRitualLook.WarmGrade(new Color(0.3f, 0.6f, 0.9f), Color.white, 1f, 1f);
+                Assert.That(same.r, Is.EqualTo(0.3f).Within(1e-4f), "흰 색조·채도 1·감마 1 이면 그대로");
+                Assert.That(same.b, Is.EqualTo(0.9f).Within(1e-4f));
+                Color white = TimeRitualLook.WarmGrade(Color.white, cfg.warmTint, cfg.warmSaturation, cfg.warmGamma);
+                Assert.That(white.r, Is.GreaterThan(white.g).And.GreaterThan(white.b), "흰 벽이 백열등 빛으로");
+                Assert.That(white.g, Is.GreaterThan(white.b));
+                Color black = TimeRitualLook.WarmGrade(Color.black, cfg.warmTint, cfg.warmSaturation, cfg.warmGamma);
+                Assert.That(black.r + black.g + black.b, Is.LessThan(1e-4f), "어둠은 어둠으로");
+                Color gray = TimeRitualLook.WarmGrade(new Color(0.5f, 0.5f, 0.5f), cfg.warmTint, cfg.warmSaturation, cfg.warmGamma);
+                Assert.That(0.2126f * gray.r + 0.7152f * gray.g + 0.0722f * gray.b, Is.LessThan(0.5f), "중간 밝기는 조금 가라앉는다");
+                int n = TimeRitualLook.WarmLutSize;
+                var lut = new Color[n * n * n];
+                TimeRitualLook.WarmLut(lut, cfg.warmTint, cfg.warmSaturation, cfg.warmGamma);
+                Color red = lut[(n - 1)];
+                Color blue = lut[(n - 1) * n * n];
+                Assert.That(red.r, Is.GreaterThan(red.b), "LUT 는 r 이 가장 빠르게 바뀐다 (Meta 텍스처 변환과 같은 순서)");
+                Assert.That(blue.b, Is.GreaterThan(red.b));
+                Assert.That(cfg.afterShelfLight, Is.EqualTo(0.34f).Within(1e-4f), "사람 11-17 헤드셋에서 컨펌한 값 (\"딱좋아요\")");
+                Assert.That(cfg.warmTint.g, Is.EqualTo(0.78f).Within(1e-4f), "붉은 쪽이 아니라 주황·전구색 쪽");
+                Assert.That(cfg.warmTint.b, Is.EqualTo(0.5f).Within(1e-4f));
+                Assert.That(cfg.warmSaturation, Is.EqualTo(0.45f).Within(1e-4f), "현실 색을 더 뺀다");
+                Assert.That(cfg.warmGamma, Is.EqualTo(1.05f).Within(1e-4f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cfg);
+            }
+        }
+
+        [Test]
         public void SampledSoundCanBeSwitchedBackToTheSynthesizedSet()
         {
             var cfg = Object.Instantiate(_config);
@@ -3108,7 +3143,9 @@ namespace MoodPicker.Tests
                 Assert.That(Quaternion.Angle(ritual.Jar.root.rotation, ritual.Shelf.TodayFacing), Is.LessThan(0.5f), "지난 병들과 같은 방향");
                 Run(ritual, ref now, cfg.shelfLightBack + 0.5f, default);
                 Assert.That(lightBefore, Is.LessThan(0.5f));
-                Assert.That(ritual.PassthroughLight, Is.EqualTo(1f).Within(0.01f), "방의 밝기가 돌아온다");
+                Assert.That(ritual.PassthroughLight, Is.EqualTo(cfg.afterShelfLight).Within(0.01f), "선반에 올린 뒤에도 방은 어둑하게 (사람 11-17, 날것의 현실이 보이지 않게)");
+                Assert.That(ritual.PassthroughLight, Is.LessThan(0.6f));
+                Assert.That(ritual.PassthroughWarmth, Is.EqualTo(cfg.afterShelfWarmth).Within(0.01f), "어둠 속 백열등처럼 따뜻하게");
 
                 var yesterday = new DayRecord { date = RitualDayStore.Key(System.DateTime.Now.AddDays(-1)), dominant = "sleep" };
                 yesterday.layers.Add(new DayLayer { category = "sleep", units = 42 });

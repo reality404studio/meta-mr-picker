@@ -18,6 +18,12 @@ namespace MoodPicker.Ritual
 
         float _dim = float.NaN;
         float _light = float.NaN;
+        float _warm;
+        OVRPassthroughColorLut _lut;
+        Color[] _lutColors;
+        Color _lutTint;
+        float _lutSaturation = -1f;
+        float _lutGamma = -1f;
         bool _gpuMetric;
         bool _cpuMetric;
         float _probe = 5f;
@@ -79,10 +85,49 @@ namespace MoodPicker.Ritual
                 _light = light;
                 passthroughLayer.textureOpacity = light;
             }
+            float warm = Mathf.Clamp01(ritual.PassthroughWarmth);
+            if (warm > 0.001f && EnsureWarmLut(ritual.Config))
+            {
+                if (Mathf.Abs(warm - _warm) >= 0.01f || warm >= 0.999f && _warm < 0.999f)
+                {
+                    _warm = warm;
+                    passthroughLayer.SetColorLut(_lut, warm);
+                }
+                return;
+            }
+            if (_warm > 0f)
+            {
+                _warm = 0f;
+                _dim = float.NaN;
+            }
             float dim = Mathf.Clamp(ritual.PassthroughDim, -1f, 0f);
             if (!float.IsNaN(_dim) && Mathf.Abs(dim - _dim) < 0.004f) return;
             _dim = dim;
             passthroughLayer.SetBrightnessContrastSaturation(dim, 0f, 0f);
+        }
+
+        bool EnsureWarmLut(TimeRitualConfig cfg)
+        {
+            if (cfg == null) return false;
+            bool same = _lut != null && _lutTint == cfg.warmTint && Mathf.Approximately(_lutSaturation, cfg.warmSaturation) && Mathf.Approximately(_lutGamma, cfg.warmGamma);
+            if (same) return _lut.IsValid;
+            int n = TimeRitualLook.WarmLutSize;
+            _lutColors ??= new Color[n * n * n];
+            TimeRitualLook.WarmLut(_lutColors, cfg.warmTint, cfg.warmSaturation, cfg.warmGamma);
+            _lutTint = cfg.warmTint;
+            _lutSaturation = cfg.warmSaturation;
+            _lutGamma = cfg.warmGamma;
+            if (_lut == null) _lut = new OVRPassthroughColorLut(_lutColors, OVRPassthroughColorLut.ColorChannels.Rgb);
+            else _lut.UpdateFrom(_lutColors);
+            _warm = 0f;
+            Debug.Log($"{Tag} ritual warm light lut valid={_lut.IsValid} tint={cfg.warmTint} sat={cfg.warmSaturation:0.00} gamma={cfg.warmGamma:0.00}");
+            return _lut.IsValid;
+        }
+
+        void OnDestroy()
+        {
+            _lut?.Dispose();
+            _lut = null;
         }
     }
 }
