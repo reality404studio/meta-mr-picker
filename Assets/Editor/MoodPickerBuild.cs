@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -55,6 +56,61 @@ public static class MoodPickerBuild
     public const string TimeRitualReleaseUnsignedPath = "Builds/time-ritual-release-unsigned.apk";
     public const string TimeRitualReleasePackage = "com.reality404.timeritual";
     public const string TimeRitualReleaseProductName = "Ourglass";
+    public const string RitualIconPath = "Assets/Ritual/Icon/ourglass-icon.png";
+    public const string RitualIconBackPath = "Assets/Ritual/Icon/ourglass-icon-adaptive-back.png";
+    public const string RitualIconForePath = "Assets/Ritual/Icon/ourglass-icon-adaptive-fore.png";
+    static readonly PlatformIconKind[] IconKinds = { AndroidPlatformIconKind.Legacy, AndroidPlatformIconKind.Round, AndroidPlatformIconKind.Adaptive };
+
+    static Texture2D IconTexture(string path)
+    {
+        if (AssetImporter.GetAtPath(path) is TextureImporter imp && (imp.textureCompression != TextureImporterCompression.Uncompressed || imp.mipmapEnabled || !imp.isReadable))
+        {
+            imp.textureCompression = TextureImporterCompression.Uncompressed;
+            imp.mipmapEnabled = false;
+            imp.isReadable = true;
+            imp.SaveAndReimport();
+        }
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+    }
+
+    static Texture2D[][][] SaveIcons(UnityEditor.Build.NamedBuildTarget target)
+    {
+        return IconKinds.Select(k => PlayerSettings.GetPlatformIcons(target, k).Select(i => i.GetTextures()).ToArray()).ToArray();
+    }
+
+    static void RestoreIcons(UnityEditor.Build.NamedBuildTarget target, Texture2D[][][] saved)
+    {
+        for (int k = 0; k < IconKinds.Length; k++)
+        {
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(target, IconKinds[k]);
+            for (int i = 0; i < icons.Length && i < saved[k].Length; i++) icons[i].SetTextures(saved[k][i]);
+            PlayerSettings.SetPlatformIcons(target, IconKinds[k], icons);
+        }
+    }
+
+    public static bool ApplyRitualIcon(UnityEditor.Build.NamedBuildTarget target)
+    {
+        Texture2D icon = IconTexture(RitualIconPath);
+        Texture2D back = IconTexture(RitualIconBackPath);
+        Texture2D fore = IconTexture(RitualIconForePath);
+        if (icon == null || back == null || fore == null)
+        {
+            Debug.LogError($"[MP] ritual icon missing icon={icon != null} back={back != null} fore={fore != null}");
+            return false;
+        }
+        foreach (PlatformIconKind kind in IconKinds)
+        {
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(target, kind);
+            foreach (PlatformIcon i in icons)
+            {
+                if (kind == AndroidPlatformIconKind.Adaptive) i.SetTextures(back, fore);
+                else i.SetTextures(icon);
+            }
+            PlayerSettings.SetPlatformIcons(target, kind, icons);
+        }
+        Debug.Log($"[MP] ritual icon applied {icon.width}px adaptive {back.width}px");
+        return true;
+    }
 
     static string Arg(string name, string fallback)
     {
@@ -78,8 +134,10 @@ public static class MoodPickerBuild
         int savedCode = PlayerSettings.Android.bundleVersionCode;
         var savedScenes = EditorBuildSettings.scenes;
         bool savedDev = EditorUserBuildSettings.development;
+        Texture2D[][][] savedIcons = SaveIcons(target);
         try
         {
+            if (!ApplyRitualIcon(target)) return false;
             PlayerSettings.SetApplicationIdentifier(target, package);
             PlayerSettings.productName = productName;
             PlayerSettings.bundleVersion = versionName;
@@ -108,6 +166,7 @@ public static class MoodPickerBuild
             PlayerSettings.Android.bundleVersionCode = savedCode;
             EditorBuildSettings.scenes = savedScenes;
             EditorUserBuildSettings.development = savedDev;
+            RestoreIcons(target, savedIcons);
             AssetDatabase.SaveAssets();
         }
     }

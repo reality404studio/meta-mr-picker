@@ -2718,6 +2718,20 @@ namespace MoodPicker.Tests
         }
 
         [Test]
+        public void TheOurglassIconIsReadyForEveryAndroidIconKind()
+        {
+            Texture2D icon = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Ritual/Icon/ourglass-icon.png");
+            Texture2D back = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Ritual/Icon/ourglass-icon-adaptive-back.png");
+            Texture2D fore = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Ritual/Icon/ourglass-icon-adaptive-fore.png");
+            Assert.That(icon, Is.Not.Null, "사람이 준 앱 아이콘 (11-17)");
+            Assert.That(back, Is.Not.Null, "적응형 아이콘 배경: 가장자리가 잘리지 않게 여백");
+            Assert.That(fore, Is.Not.Null, "적응형 아이콘 앞면: 투명");
+            Assert.That(icon.width, Is.EqualTo(icon.height).And.GreaterThanOrEqualTo(432));
+            Assert.That(back.width, Is.EqualTo(512).And.EqualTo(back.height), "2의 거듭제곱이라 가져오며 늘어나지 않는다");
+            Assert.That(fore.width, Is.EqualTo(512).And.EqualTo(fore.height));
+        }
+
+        [Test]
         public void SampledSoundCanBeSwitchedBackToTheSynthesizedSet()
         {
             var cfg = Object.Instantiate(_config);
