@@ -82,7 +82,7 @@ public static class TimeRitualSceneSetup
         SetProperty(managerSo, "quest3MaxDynamicResolutionScale", p => p.floatValue = config.maxResolutionScale);
         managerSo.ApplyModifiedPropertiesWithoutUndo();
 
-        Material splatMat = SplatterSceneSetup.EnsureSplatMaterial();
+        Material splatMat = EnsureRitualSplatMaterial();
         Material glassMat = EnsureMaterial("RitualGlass", "MoodPicker/RitualGlassSplat");
         Material waxMat = EnsureMaterial("RitualWax", "MoodPicker/RitualWaxSplat");
         Material glowMat = EnsureMaterial("RitualGlow", "MoodPicker/RitualGlowSplat");
@@ -247,6 +247,17 @@ public static class TimeRitualSceneSetup
         smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         smr.receiveShadows = false;
         go.AddComponent<OVRMeshRenderer>();
+    }
+
+    public const string RitualSplatName = "RitualSplat";
+    public const string RitualSplatPath = MatDir + "/" + RitualSplatName + ".mat";
+
+    public static Material EnsureRitualSplatMaterial()
+    {
+        Material mat = EnsureMaterial(RitualSplatName, "MoodPicker/LetterSplatURP");
+        mat.EnableKeyword(TimeRitualLook.LeanKeyword);
+        EditorUtility.SetDirty(mat);
+        return mat;
     }
 
     static Material EnsureMaterial(string name, string shaderName)

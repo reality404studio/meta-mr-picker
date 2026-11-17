@@ -376,6 +376,20 @@ namespace MoodPicker.Ritual
                 indices.Add(v + 2);
             }
 
+            public Mesh ToThinMesh(string name, float boundsRadius, float keep)
+            {
+                int total = Count;
+                Builder thin = Create(Mathf.CeilToInt(total * Mathf.Clamp01(keep)) + 1);
+                for (int q = 0; q < total; q++)
+                {
+                    if (!Keeps(q, keep)) continue;
+                    int v = q * 4;
+                    thin.Add(positions[v], normals[v], a[v], b[v], c[v]);
+                }
+                if (thin.Count == 0 && total > 0) thin.Add(positions[0], normals[0], a[0], b[0], c[0]);
+                return thin.ToMesh(name, boundsRadius);
+            }
+
             public Mesh ToMesh(string name, float boundsRadius)
             {
                 var mesh = new Mesh { name = name, hideFlags = HideFlags.DontSave };
@@ -391,6 +405,16 @@ namespace MoodPicker.Ritual
                 mesh.UploadMeshData(true);
                 return mesh;
             }
+        }
+
+        public static bool Keeps(int quad, float keep)
+        {
+            return keep >= 0.999f || RitualUtil.Hash(quad * 131 + 17) < keep;
+        }
+
+        public static float ThinRadius(float keep)
+        {
+            return 1f / Mathf.Sqrt(Mathf.Clamp(keep, 0.05f, 1f));
         }
 
         public static MeshRenderer Spawn(string name, Transform parent, Mesh mesh, Material material)

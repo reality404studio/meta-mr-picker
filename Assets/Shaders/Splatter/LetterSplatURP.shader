@@ -234,6 +234,7 @@ Shader "MoodPicker/LetterSplatURP"
             o.centerOS = v.centerAndFlags.xyz;
             o.normalOS = normalize(v.normalOS);
 
+            #ifndef SPLAT_RITUAL
             if (isOutline)
             {
                 if (passKind > 0.5 || mode != 1 || _Outline < 0.5 || _SimOn > 0.5)
@@ -259,6 +260,7 @@ Shader "MoodPicker/LetterSplatURP"
                 o.modeOutlineSplashRadius = half4((half)mode, 1.0, 0.0, 0.0);
                 return o;
             }
+            #endif
 
             float3 centerWSActual = TransformObjectToWorld(o.centerOS);
             float3 posWSActual = TransformObjectToWorld(v.positionOS.xyz);
@@ -315,12 +317,17 @@ Shader "MoodPicker/LetterSplatURP"
                 billboardCornerWS = (ax * v.quadUV.x * (1.0 + stretch) + ay * v.quadUV.y) * splatRadiusWS;
             }
 
-            float glint = _GlintParams.x > 0.001
-                ? SplatGlint(o.centerOS, seed3, normalWS, V, _GlintParams, _GlintShape.x, simGlow, detach) * simScale
-                : 0.0;
+            float glint = 0.0;
+            UNITY_BRANCH
+            if (_GlintParams.x > 0.001)
+            {
+                glint = SplatGlint(o.centerOS, seed3, normalWS, V, _GlintParams, _GlintShape.x, simGlow, detach) * simScale;
+            }
 
-            float fluff = _FurParams.x * (1.0 - detach);
+            float fluff = 0.0;
             float3 furOffsetWS = float3(0.0, 0.0, 0.0);
+            #ifndef SPLAT_RITUAL
+            fluff = _FurParams.x * (1.0 - detach);
             if (fluff > 0.001)
             {
                 float sway = sin(_SplatTime * 1.7 + splatHash * 6.28318) * _FurParams.z;
@@ -336,14 +343,20 @@ Shader "MoodPicker/LetterSplatURP"
                 billboardCornerWS = lerp(billboardCornerWS, furCorner, fluff);
                 furOffsetWS = hairWS * (splatRadiusWS * hairLen * fluff);
             }
+            #endif
 
             float billboardBlend = max(max(max(detach, saturate(stretch * 2.0)), saturate(glint * 2.0)), fluff);
             float grain = lerp(1.0, _DropParams.w * (0.65 + 0.7 * frac(splatHash * 19.0)), detach) * (1.0 + glint * _GlintShape.y);
             float3 morphedCornerWS = lerp(cornerOffsetWS, billboardCornerWS, billboardBlend) * (grain * simScale);
 
-            float applyFront = ApplyFront(o.centerOS);
-            float3 applyWS = normalWS * (_ApplyShape.y * applyFront);
-            o.applyNF = float2(1.0 - smoothstep(_Apply.w - _ApplyShape.x, _Apply.w, distance(o.centerOS, _Apply.xyz)), applyFront);
+            float3 applyWS = float3(0.0, 0.0, 0.0);
+            UNITY_BRANCH
+            if (_Slot2.y > 0.5)
+            {
+                float applyFront = ApplyFront(o.centerOS);
+                applyWS = normalWS * (_ApplyShape.y * applyFront);
+                o.applyNF = float2(1.0 - smoothstep(_Apply.w - _ApplyShape.x, _Apply.w, distance(o.centerOS, _Apply.xyz)), applyFront);
+            }
             float3 finalPosWS = centerWSActual + simDisp + flowWS + applyWS + furOffsetWS + morphedCornerWS + V * (splatRadiusWS * 1.5 * saturate(glint * 2.0));
             float3 finalNormalWS = normalize(lerp(normalWS, V, detach * 0.6));
 
@@ -419,6 +432,7 @@ Shader "MoodPicker/LetterSplatURP"
             {
                 col = ShadeLight(TEXTURE2D_ARGS(_Calm, sampler_Calm), TEXTURE2D_ARGS(_Spark, sampler_Spark), _Layout, _Frame, samplePos, sampleNrm, normalWS, V, texSRGB, _HasSlot > 0.5 ? _LightGlint : 0.0);
             }
+            #ifndef SPLAT_RITUAL
             else if (mode == 1)
             {
                 float lumaSRGB = PigmentLuma(texSRGB);
@@ -451,6 +465,7 @@ Shader "MoodPicker/LetterSplatURP"
                 col = float3(0.05, 0.06, 0.09) * (0.35 + 0.65 * d)
                     + float3(0.45, 0.82, 1.0) * (CausticTerm(h, 3.0) * (0.35 + 0.65 * d)) * _Intensity;
             }
+            #endif
 
             UNITY_BRANCH
             if (_Slot2.y > 0.5)
@@ -510,6 +525,7 @@ Shader "MoodPicker/LetterSplatURP"
             #pragma vertex VertCore
             #pragma fragment FragCore
             #pragma multi_compile_instancing
+            #pragma shader_feature_local __ SPLAT_RITUAL
 
             Varyings VertCore(Attributes v)
             {
@@ -530,12 +546,14 @@ Shader "MoodPicker/LetterSplatURP"
                 {
                     return half4(shaded.rgb, 1.0);
                 }
+                #ifndef SPLAT_RITUAL
                 if (mode == 2)
                 {
                     float alpha = exp(-2.2 * r2) * shaded.a;
                     if (alpha < 0.22) clip(-1.0);
                     return half4(shaded.rgb, saturate(alpha * 1.35));
                 }
+                #endif
                 float detach = saturate((float)i.modeOutlineSplashRadius.z);
                 float dropletEdge = lerp(1.0, saturate((1.0 - r2) * 3.5), detach);
                 dropletEdge = lerp(dropletEdge, saturate((1.0 - r2) * 1.6), saturate((float)i.glint * 3.0));

@@ -8,6 +8,7 @@ namespace MoodPicker.Ritual
     public static class TimeRitualLook
     {
         public const float RestLift = 0.0002f;
+        public const string LeanKeyword = "SPLAT_RITUAL";
 
         public static SplatLook Piece(SplatTuning tuning, PieceFeel feel = PieceFeel.Jelly)
         {
